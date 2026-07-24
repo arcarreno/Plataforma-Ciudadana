@@ -74,8 +74,13 @@ function detectarCercanos(
     if (gt !== 'Point' && gt !== 'LineString' && gt !== 'MultiLineString') continue
     if (!f.geometry.coordinates) continue
     try {
-      const d = distance(pt, f as GeoJSON.Feature<GeoJSON.Point | GeoJSON.LineString | GeoJSON.MultiLineString>, { units: 'kilometers' })
-      if (d <= RADIO_CERCANIA_KM) {
+      let d: number | null = null
+      if (gt === 'Point') {
+        d = distance(pt, f as GeoJSON.Feature<GeoJSON.Point>, { units: 'kilometers' })
+      } else {
+        d = distance(pt, f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>, { units: 'kilometers' })
+      }
+      if (d !== null && d <= RADIO_CERCANIA_KM) {
         results.push(getProps(f).name || '(sin nombre)')
       }
     } catch (_e) { /* skip */ }
@@ -155,10 +160,14 @@ export function detectarTramo(
   ])
 
   const lineBuffer = buffer(line, RADIO_CERCANIA_KM, { units: 'kilometers' })
+  const dist = haversineDistancia(lat_ini, lng_ini, lat_fin, lng_fin)
+  const ancho = estimarAnchoCalle(lat_ini, lng_ini, lat_fin, lng_fin, capas.stv)
+
   if (!lineBuffer) {
     return {
       colonias: [], juntas_auxiliares: [], zonas_zap: [],
       escuelas_cercanas: [], iglesias_cercanas: [], transportes_cercanos: [],
+      distancia_m: dist, ancho_calle_m: ancho,
       coordenadas: { lat_ini, lng_ini, lat_fin, lng_fin },
     }
   }

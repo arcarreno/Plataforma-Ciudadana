@@ -12,13 +12,23 @@ interface SolicitudDetailProps {
 
 const icon = L.divIcon({
   className: '',
-  html: `<svg viewBox="0 0 32 48" width="24" height="36" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 0C7.16 0 0 7.16 0 16c0 10.6 12.8 26.6 14.6 28.8.6.8 1.8.8 2.4 0C18.8 42.6 32 26.6 32 16 32 7.16 24.84 0 16 0z" fill="#7D2447"/>
-    <circle cx="16" cy="16" r="10" fill="white" opacity="0.9"/>
-    <circle cx="16" cy="16" r="8" fill="#7D2447"/>
-  </svg>`,
+  html: '<svg viewBox="0 0 32 48" width="24" height="36" xmlns="http://www.w3.org/2000/svg"><path d="M16 0C7.16 0 0 7.16 0 16c0 10.6 12.8 26.6 14.6 28.8.6.8 1.8.8 2.4 0C18.8 42.6 32 26.6 32 16 32 7.16 24.84 0 16 0z" fill="#7D2447"/><circle cx="16" cy="16" r="10" fill="white" opacity="0.9"/><circle cx="16" cy="16" r="8" fill="#7D2447"/></svg>',
   iconSize: [24, 36],
   iconAnchor: [12, 36],
+})
+
+const marker1 = L.divIcon({
+  className: 'flex items-center justify-center',
+  html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">1</div>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+})
+
+const marker2 = L.divIcon({
+  className: 'flex items-center justify-center',
+  html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">2</div>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
 })
 
 export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailProps) {
@@ -141,10 +151,7 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                   dragging={false}
                   scrollWheelZoom={false}
                 >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; OSM'
-                  />
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <Marker position={[s.latitud, s.longitud]} icon={icon} />
                 </MapContainer>
               </div>
@@ -168,35 +175,16 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                     dragging={false}
                     scrollWheelZoom={false}
                   >
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='&copy; OSM'
-                    />
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     <Polyline
                       positions={[
                         [s.tramo_lat_ini!, s.tramo_lng_ini!],
                         [s.tramo_lat_fin!, s.tramo_lng_fin!],
                       ]}
-                      color="#7d2447"
-                      weight={4}
-                      dashArray="8 4"
+                      pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
                     />
-                    <Marker position={[s.tramo_lat_ini!, s.tramo_lng_ini!]}
-                      icon={L.divIcon({
-                        className: 'flex items-center justify-center',
-                        html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">1</div>',
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10],
-                      })}
-                    />
-                    <Marker position={[s.tramo_lat_fin!, s.tramo_lng_fin!]}
-                      icon={L.divIcon({
-                        className: 'flex items-center justify-center',
-                        html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">2</div>',
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10],
-                      })}
-                    />
+                    <Marker position={[s.tramo_lat_ini!, s.tramo_lng_ini!]} icon={marker1} />
+                    <Marker position={[s.tramo_lat_fin!, s.tramo_lng_fin!]} icon={marker2} />
                   </MapContainer>
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
