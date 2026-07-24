@@ -3,6 +3,7 @@ import booleanIntersects from '@turf/boolean-intersects'
 import lineIntersect from '@turf/line-intersect'
 import { point, lineString } from '@turf/helpers'
 import distance from '@turf/distance'
+import nearestPointOnLine from '@turf/nearest-point-on-line'
 import buffer from '@turf/buffer'
 import { matchJunta, cleanColoniaName } from '../core/geo'
 import { estimarAnchoCalle, haversineDistancia } from './calle'
@@ -78,7 +79,11 @@ function detectarCercanos(
       if (gt === 'Point') {
         d = distance(pt, f as GeoJSON.Feature<GeoJSON.Point>, { units: 'kilometers' })
       } else {
-        d = distance(pt, f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>, { units: 'kilometers' })
+        const nearest = nearestPointOnLine(
+          f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>,
+          pt
+        )
+        d = nearest.properties.dist != null ? nearest.properties.dist / 1000 : null
       }
       if (d !== null && d <= RADIO_CERCANIA_KM) {
         results.push(getProps(f).name || '(sin nombre)')

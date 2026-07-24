@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet'
+import { useEffect } from 'react'
+import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { X, MapPin, Ruler, FileText, Eye, School, Church, Bus, Calendar, User, Phone, Mail, FileWarning } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -30,6 +31,15 @@ const marker2 = L.divIcon({
   iconSize: [20, 20],
   iconAnchor: [10, 10],
 })
+
+function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: L.DivIcon }) {
+  const map = useMap()
+  useEffect(() => {
+    const m = L.marker(position, { icon }).addTo(map)
+    return () => { m.remove() }
+  }, [map, position, icon])
+  return null
+}
 
 export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailProps) {
   const s = solicitud
@@ -152,7 +162,7 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                   scrollWheelZoom={false}
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <Marker position={[s.latitud, s.longitud]} icon={icon} />
+                  <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
                 </MapContainer>
               </div>
               <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
@@ -168,7 +178,7 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                     center={[
                       (s.tramo_lat_ini! + s.tramo_lat_fin!) / 2,
                       (s.tramo_lng_ini! + s.tramo_lng_fin!) / 2,
-                    ]}
+                    ] as [number, number]}
                     zoom={17}
                     className="h-full w-full"
                     zoomControl={false}
@@ -183,8 +193,8 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                       ]}
                       pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
                     />
-                    <Marker position={[s.tramo_lat_ini!, s.tramo_lng_ini!]} icon={marker1} />
-                    <Marker position={[s.tramo_lat_fin!, s.tramo_lng_fin!]} icon={marker2} />
+                    <DetailMarker position={[s.tramo_lat_ini!, s.tramo_lng_ini!]} icon={marker1} />
+                    <DetailMarker position={[s.tramo_lat_fin!, s.tramo_lng_fin!]} icon={marker2} />
                   </MapContainer>
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
