@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, FileText, Eye, School, Church, Bus, Calendar, User, Phone, Mail, FileWarning } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import Card from '../shared/Card'

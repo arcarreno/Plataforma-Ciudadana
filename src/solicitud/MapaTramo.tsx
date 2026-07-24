@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, GeoJSON } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, Crosshair, Ruler, School, Church, Bus, Layers, Eye, EyeOff, Globe, Map } from 'lucide-react'
 import Button from '../shared/Button'
@@ -33,6 +33,15 @@ const ZONA_ZAP_STYLE = {
 interface MapaTramoProps {
   onConfirm: (data: { lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number }) => void
   onClose: () => void
+}
+
+function TramoMarker({ position, icon }: { position: L.LatLngExpression; icon: L.DivIcon }) {
+  const map = useMap()
+  useEffect(() => {
+    const m = L.marker(position, { icon }).addTo(map)
+    return () => { m.remove() }
+  }, [map, position, icon])
+  return null
 }
 
 function ClickHandler({
@@ -136,18 +145,12 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
             <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
           )}
           {points.map((p, i) => (
-            <Marker
+            <TramoMarker
               key={i}
               position={[p.lat, p.lng]}
               icon={L.divIcon({
                 className: 'flex items-center justify-center',
-                html: `<div style="
-                  width: 24px; height: 24px; border-radius: 50%;
-                  background: #7d2447; color: white;
-                  display: flex; align-items: center; justify-content: center;
-                  font-size: 12px; font-weight: bold; border: 2px solid white;
-                  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                ">${i + 1}</div>`,
+                html: `<div style="width:24px;height:24px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${i + 1}</div>`,
                 iconSize: [24, 24],
                 iconAnchor: [12, 12],
               })}
@@ -159,9 +162,7 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                 [points[0].lat, points[0].lng],
                 [points[1].lat, points[1].lng],
               ]}
-              color="#7d2447"
-              weight={4}
-              dashArray="8 4"
+              pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
             />
           )}
         </MapContainer>
