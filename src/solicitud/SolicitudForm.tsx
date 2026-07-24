@@ -4,7 +4,7 @@ import Button from '../shared/Button'
 import Card from '../shared/Card'
 import { Input, Textarea } from '../shared/Input'
 import Select from '../shared/Select'
-import { CATALOGO_TIPOS_SOLICITUD } from '../core/constants'
+import { CATALOGO_TIPOS_SOLICITUD, JUNTAS_AUXILIARES } from '../core/constants'
 import { crearSolicitud } from '../lib/solicitud'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
 
@@ -17,17 +17,6 @@ const COLONIAS_EJEMPLO = [
   'San Antonio',
   'San Juan',
   'Santa Anita',
-]
-
-const JUNTAS_AUXILIARES = [
-  'San Jerónimo Caleras',
-  'San Felipe Hueyotlipan',
-  'San Miguel Canoa',
-  'San Francisco Totimehuacán',
-  'San Sebastián de Aparicio',
-  'Ignacio Romero Vargas',
-  'La Resurrección',
-  'Santo Tomás Chautla',
 ]
 
 function validarCURP(curp: string): boolean {

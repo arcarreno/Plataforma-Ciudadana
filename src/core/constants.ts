@@ -16,3 +16,23 @@ export const CATALOGO_TIPOS_SOLICITUD = [
   'Recolección de basura',
   'Otro',
 ] as const
+
+export const JUNTAS_AUXILIARES = [
+  'Ignacio Romero Vargas',
+  'Ignacio Zaragoza',
+  'La Libertad',
+  'La Resurrección',
+  'San Andrés Azumiatla',
+  'San Baltazar Campeche',
+  'San Baltazar Tetela',
+  'San Felipe Hueyotlipan',
+  'San Francisco Totimehuacan',
+  'San Jerónimo Caleras',
+  'San Miguel Canoa',
+  'San Pablo Xochimehuacan',
+  'San Pedro Zacachimalpa',
+  'San Sebastián de Aparicio (San Sebastián Aparicio)',
+  'Santa María Guadalupe Tecola',
+  'Santa María Xonacatepec',
+  'Santo Tomás Chautla',
+] as const
