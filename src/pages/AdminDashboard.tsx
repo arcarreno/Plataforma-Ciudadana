@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Solicitud } from '../types/solicitud'
 import { FileText, ArrowUpDown, Search } from 'lucide-react'
-import Card from '../shared/Card'
 import Button from '../shared/Button'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
 
