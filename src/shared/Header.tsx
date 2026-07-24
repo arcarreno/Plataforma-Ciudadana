@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { Accessibility } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Accessibility, LogOut } from 'lucide-react'
 import type { FontSize } from '../core/theme'
 import logoPuebla from '../assets/Puebla.png'
+import mosaico from '../assets/mosaico.svg'
 import AccessibilityPanel from './AccessibilityPanel'
+import LoginModal from './LoginModal'
+import { useAuth } from '../contexts/AuthContext'
 
 interface HeaderProps {
   fontSize: FontSize
@@ -24,22 +27,44 @@ export default function Header({
   talkBackEnabled,
   onTalkBackToggle,
 }: HeaderProps) {
+  const { user, cerrarSesion } = useAuth()
   const [panelOpen, setPanelOpen] = useState(false)
+  const [loginOpen, setLoginOpen] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b-2 border-guinda bg-white/80 shadow-header backdrop-blur-lg">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-4 py-[11px] md:px-8 lg:px-12">
-          <Link
-            to="/"
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <header className="sticky top-0 z-30 bg-white/80 shadow-header backdrop-blur-lg">
+        <div className="relative mx-auto flex max-w-[1400px] items-center justify-between px-4 py-[11px] md:px-8 lg:px-12">
+          <img src={mosaico} alt="" className="pointer-events-none absolute -bottom-[15px] left-0 w-full h-[31px]" />
+          <button
+            type="button"
+            onClick={() => {
+              if (user) { navigate('/admin'); return }
+              setLoginOpen(true)
+            }}
             className="flex shrink-0 transition-opacity hover:opacity-80"
+            title={user ? `Admin: ${user.username}` : 'Iniciar sesión'}
           >
             <img src={logoPuebla} alt="Puebla" className="h-8 w-auto" />
-          </Link>
+          </button>
 
           <div className="flex items-center gap-2">
             <nav className="hidden items-center gap-1 md:flex">
+              {user && (
+                <Link
+                  to="/admin"
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                    location.pathname.startsWith('/admin')
+                      ? 'bg-guinda text-white shadow-button'
+                      : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
+                  }`}
+                >
+                  Admin
+                </Link>
+              )}
               {navLinks.map((link) => {
                 const isActive = location.pathname === link.to
                 return (
@@ -80,6 +105,23 @@ export default function Header({
               })}
             </nav>
 
+
+            {user && (
+              <div className="flex items-center gap-2 border-r border-gray-200 pr-3">
+                <span className="hidden text-xs text-gray-institutional/60 md:inline">
+                  {user.rol === 'admin' ? 'Admin' : 'Revisor'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { cerrarSesion(); navigate('/') }}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-institutional/50 transition-colors hover:bg-red-50 hover:text-red-500"
+                  title="Cerrar sesión"
+                  aria-label="Cerrar sesión"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            )}
 
             <button
               onClick={() => setPanelOpen(!panelOpen)}

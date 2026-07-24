@@ -5,33 +5,47 @@ import {
   RANKING_PUNTOS_CON_EVIDENCIA,
 } from '../core/constants'
 
+function uuidV4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
+const MAX_EVIDENCIA_BYTES = 500 * 1024
+
 async function uploadArchivos(
   archivos: File[],
   folio: string
-): Promise<string[]> {
+): Promise<{ rutas: string[]; errores: string[] }> {
   const rutas: string[] = []
+  const errores: string[] = []
 
   for (const file of archivos) {
+    if (file.size > MAX_EVIDENCIA_BYTES) {
+      errores.push(`"${file.name}" excede el límite de 500 KB`)
+      continue
+    }
     const ext = file.name.split('.').pop()
-    const path = `evidencias/${folio}/${crypto.randomUUID()}.${ext}`
+    const path = `evidencias/${folio}/${uuidV4()}.${ext}`
     const { error } = await supabase.storage
       .from('evidencias')
       .upload(path, file)
 
     if (error) {
-      console.error('Error subiendo archivo:', error.message)
+      errores.push(`${file.name}: ${error.message}`)
       continue
     }
     rutas.push(path)
   }
 
-  return rutas
+  return { rutas, errores }
 }
 
 export async function crearSolicitud(
   data: SolicitudFormData
-): Promise<{ data?: Solicitud; error?: string }> {
-  const { archivos, latitud, longitud, ...rest } = data
+): Promise<{ data?: Solicitud; error?: string; advertencia?: string }> {
+  const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, ...rest } = data
 
   const { data: solicitud, error: insertError } = await supabase
     .from('solicitudes')
@@ -39,6 +53,10 @@ export async function crearSolicitud(
       ...rest,
       latitud: parseFloat(latitud),
       longitud: parseFloat(longitud),
+      tramo_lat_ini: tramo_lat_ini ? parseFloat(tramo_lat_ini) : null,
+      tramo_lng_ini: tramo_lng_ini ? parseFloat(tramo_lng_ini) : null,
+      tramo_lat_fin: tramo_lat_fin ? parseFloat(tramo_lat_fin) : null,
+      tramo_lng_fin: tramo_lng_fin ? parseFloat(tramo_lng_fin) : null,
       peso_ranking:
         archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE,
     })
@@ -56,18 +74,29 @@ export async function crearSolicitud(
   }
 
   let rutas: string[] = []
+  let erroresSubida: string[] = []
   if (archivos.length > 0 && solicitud?.folio_unico) {
-    rutas = await uploadArchivos(archivos, solicitud.folio_unico)
+    const result = await uploadArchivos(archivos, solicitud.folio_unico)
+    rutas = result.rutas
+    erroresSubida = result.errores
 
     if (rutas.length > 0) {
-      await supabase
+      const { error: updateError } = await supabase
         .from('solicitudes')
         .update({ rutas_evidencia: rutas })
         .eq('id_solicitud', solicitud.id_solicitud)
+
+      if (updateError) {
+        erroresSubida.push(`Error al guardar rutas: ${updateError.message}`)
+      }
     }
   }
 
-  return { data: { ...solicitud, rutas_evidencia: rutas } }
+  if (erroresSubida.length > 0) {
+    console.warn('Errores al subir evidencia:', erroresSubida)
+  }
+
+  return { data: { ...solicitud, rutas_evidencia: rutas }, advertencia: erroresSubida.length > 0 ? erroresSubida.join('; ') : undefined }
 }
 
 export async function consultarSolicitud(

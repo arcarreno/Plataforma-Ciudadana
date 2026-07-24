@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { Upload, MapPin, Check } from 'lucide-react'
+import lottie from 'lottie-web'
+import loadingAnimation from '../assets/lottie/landing-construccion.json'
 import Button from '../shared/Button'
 import Card from '../shared/Card'
 import { Input, Textarea } from '../shared/Input'
@@ -7,17 +9,8 @@ import Select from '../shared/Select'
 import { CATALOGO_TIPOS_SOLICITUD, JUNTAS_AUXILIARES } from '../core/constants'
 import { crearSolicitud } from '../lib/solicitud'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
-
-const COLONIAS_EJEMPLO = [
-  'Centro',
-  'San Francisco',
-  'La Paz',
-  'Guadalupe',
-  'San Miguel',
-  'San Antonio',
-  'San Juan',
-  'Santa Anita',
-]
+import MapaPin from './MapaPin'
+import MapaTramo from './MapaTramo'
 
 function validarCURP(curp: string): boolean {
   return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[0-9A-Z]\d$/.test(curp)
@@ -60,14 +53,63 @@ export default function SolicitudForm() {
     junta_auxiliar: '',
     latitud: '',
     longitud: '',
+    tramo_lat_ini: '',
+    tramo_lng_ini: '',
+    tramo_lat_fin: '',
+    tramo_lng_fin: '',
     descripcion: '',
     archivos: [],
   })
 
   const [errors, setErrors] = useState<SolicitudErrors>({})
-  const [submitting, setSubmitting] = useState(false)
-  const [resultado, setResultado] = useState<{ folio?: string; error?: string } | null>(null)
+  const [submittedOnce, setSubmittedOnce] = useState(false)
+  const [showLottie, setShowLottie] = useState(false)
+  const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
+  const [showMapaPin, setShowMapaPin] = useState(false)
+  const [showMapaTramo, setShowMapaTramo] = useState(false)
+  const [extraColonias, setExtraColonias] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const lottieRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showLottie || !lottieRef.current) return
+    const anim = lottie.loadAnimation({
+      container: lottieRef.current,
+      animationData: loadingAnimation,
+      loop: true,
+      autoplay: true,
+    })
+    return () => anim.destroy()
+  }, [showLottie])
+
+  const coloniasOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const all = [...extraColonias, 'Centro', 'San Francisco', 'La Paz', 'Guadalupe', 'San Miguel', 'San Antonio', 'San Juan', 'Santa Anita']
+    return all.filter(c => {
+      if (seen.has(c.toLowerCase())) return false
+      seen.add(c.toLowerCase())
+      return true
+    })
+  }, [extraColonias])
+
+  const handleMapTramoConfirm = (data: { lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number }) => {
+    set('tramo_lat_ini', String(data.lat_ini))
+    set('tramo_lng_ini', String(data.lng_ini))
+    set('tramo_lat_fin', String(data.lat_fin))
+    set('tramo_lng_fin', String(data.lng_fin))
+    setShowMapaTramo(false)
+  }
+
+  const handleMapConfirm = (data: { lat: number; lng: number; colonia: string; junta_auxiliar: string }) => {
+    set('latitud', String(data.lat))
+    set('longitud', String(data.lng))
+    if (data.colonia) {
+      set('colonia', data.colonia)
+      setExtraColonias(prev => prev.includes(data.colonia) ? prev : [...prev, data.colonia])
+    }
+    if (data.junta_auxiliar) set('junta_auxiliar', data.junta_auxiliar)
+    setShowMapaPin(false)
+  }
 
   const set = (field: keyof SolicitudFormData, value: unknown) => {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -82,7 +124,8 @@ export default function SolicitudForm() {
       return
     }
 
-    setSubmitting(true)
+    setSubmittedOnce(true)
+    setShowLottie(true)
     setResultado(null)
 
     const res = await crearSolicitud({
@@ -91,12 +134,14 @@ export default function SolicitudForm() {
       nombre_solicitante: form.nombre_solicitante.trim(),
     })
 
-    setSubmitting(false)
+    await new Promise(r => setTimeout(r, 3000))
+    setShowLottie(false)
 
     if (res.error) {
       setResultado({ error: res.error })
+      setSubmittedOnce(false)
     } else {
-      setResultado({ folio: res.data?.folio_unico })
+      setResultado({ folio: res.data?.folio_unico, advertencia: res.advertencia })
       setForm({
         nombre_solicitante: '',
         curp: '',
@@ -108,6 +153,10 @@ export default function SolicitudForm() {
         junta_auxiliar: '',
         latitud: '',
         longitud: '',
+        tramo_lat_ini: '',
+        tramo_lng_ini: '',
+        tramo_lat_fin: '',
+        tramo_lng_fin: '',
         descripcion: '',
         archivos: [],
       })
@@ -138,7 +187,12 @@ export default function SolicitudForm() {
           <p className="text-xs text-gray-institutional/50">
             Pronto recibirás tu acuse en tu correo electrónico.
           </p>
-          <Button onClick={() => setResultado(null)}>
+          {resultado.advertencia && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+              {resultado.advertencia}
+            </div>
+          )}
+          <Button onClick={() => { setResultado(null); setSubmittedOnce(false) }}>
             Nueva solicitud
           </Button>
         </div>
@@ -148,6 +202,13 @@ export default function SolicitudForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      {showLottie && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-6 bg-white">
+          <div ref={lottieRef} className="w-64" />
+          <p className="text-sm text-gray-institutional/60">Registrando tu solicitud...</p>
+        </div>
+      )}
+
       {resultado?.error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {resultado.error}
@@ -205,45 +266,67 @@ export default function SolicitudForm() {
           <div className="grid gap-4 md:grid-cols-2">
             <Select
               label="Colonia"
-              options={COLONIAS_EJEMPLO}
+              options={coloniasOptions}
               value={form.colonia}
-              onChange={(e) => set('colonia', e.target.value)}
               error={errors.colonia}
+              disabled
             />
             <Select
               label="Junta auxiliar"
               options={JUNTAS_AUXILIARES}
               value={form.junta_auxiliar}
-              onChange={(e) => set('junta_auxiliar', e.target.value)}
               error={errors.junta_auxiliar}
+              disabled
             />
           </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-institutional">
-              Ubicación en el mapa
+              Ubicación
             </label>
-            <div className="flex items-center gap-3 rounded-xl border-2 border-alabaster-dark bg-alabaster/30 p-4">
-              <MapPin className="h-5 w-5 shrink-0 text-guinda" />
-              <span className="text-sm text-gray-institutional/70">
-                {form.latitud && form.longitud
-                  ? `${form.latitud}, ${form.longitud}`
-                  : 'Presiona el botón para abrir el mapa y colocar el marcador'}
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="ml-auto shrink-0"
-                aria-label="Abrir mapa para ubicar"
-              >
-                <MapPin className="mr-1 h-4 w-4" />
-                Mapa
-              </Button>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 p-4">
+                <MapPin className="h-5 w-5 shrink-0 text-guinda" />
+                <span className="text-sm text-gray-institutional/70">
+                  {form.latitud && form.longitud
+                    ? `${form.latitud}, ${form.longitud}`
+                    : 'Presiona para marcar un punto en el mapa'}
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="ml-auto shrink-0"
+                  aria-label="Abrir mapa para colocar marcador"
+                  onClick={() => setShowMapaPin(true)}
+                >
+                  <MapPin className="mr-1 h-4 w-4" />
+                  Punto
+                </Button>
+              </div>
+              {errors.latitud && (
+                <p className="mt-1 text-xs text-red-500">{errors.latitud}</p>
+              )}
+              <div className="flex items-center gap-3 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 p-4">
+                <MapPin className="h-5 w-5 shrink-0 text-guinda" />
+                <span className="text-sm text-gray-institutional/70">
+                  {form.tramo_lat_ini
+                    ? `${form.tramo_lat_ini}, ${form.tramo_lng_ini} → ${form.tramo_lat_fin}, ${form.tramo_lng_fin}`
+                    : 'Presiona para dibujar un tramo en la calle'}
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="ml-auto shrink-0"
+                  aria-label="Abrir mapa para dibujar tramo"
+                  onClick={() => setShowMapaTramo(true)}
+                >
+                  <MapPin className="mr-1 h-4 w-4" />
+                  Tramo
+                </Button>
+              </div>
             </div>
-            {errors.latitud && (
-              <p className="mt-1 text-xs text-red-500">{errors.latitud}</p>
-            )}
           </div>
 
           <Textarea
@@ -317,10 +400,24 @@ export default function SolicitudForm() {
       </Card>
 
       <div className="flex justify-end">
-        <Button type="submit" size="lg" disabled={submitting}>
-          {submitting ? 'Enviando...' : 'Enviar solicitud'}
+        <Button type="submit" size="lg" disabled={submittedOnce}>
+          {submittedOnce ? 'Enviando...' : 'Enviar solicitud'}
         </Button>
       </div>
+      {showMapaPin && (
+        <MapaPin
+          onConfirm={handleMapConfirm}
+          onClose={() => setShowMapaPin(false)}
+          initialLat={form.latitud}
+          initialLng={form.longitud}
+        />
+      )}
+      {showMapaTramo && (
+        <MapaTramo
+          onConfirm={handleMapTramoConfirm}
+          onClose={() => setShowMapaTramo(false)}
+        />
+      )}
     </form>
   )
 }

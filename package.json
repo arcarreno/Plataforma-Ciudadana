@@ -12,11 +12,22 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
     "@tailwindcss/vite": "^4.3.3",
+    "@tmcw/togeojson": "^7.1.2",
+    "@turf/boolean-point-in-polygon": "^7.3.5",
+    "@turf/buffer": "^7.3.5",
+    "@turf/distance": "^7.3.5",
+    "@turf/turf": "^7.3.5",
+    "decompress": "^4.2.1",
+    "fast-xml-parser": "^5.10.1",
+    "leaflet": "^1.9.4",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^1.26.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.1",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "xmldom": "^0.6.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

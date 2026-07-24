@@ -14,6 +14,11 @@ export interface Solicitud {
   latitud: number
   longitud: number
 
+  tramo_lat_ini?: number
+  tramo_lng_ini?: number
+  tramo_lat_fin?: number
+  tramo_lng_fin?: number
+
   descripcion: string
   rutas_evidencia: string[]
 
@@ -34,6 +39,11 @@ export interface SolicitudFormData {
   junta_auxiliar: string
   latitud: string
   longitud: string
+
+  tramo_lat_ini: string
+  tramo_lng_ini: string
+  tramo_lat_fin: string
+  tramo_lng_fin: string
 
   descripcion: string
   archivos: File[]
