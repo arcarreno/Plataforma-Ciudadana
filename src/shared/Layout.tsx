@@ -28,7 +28,7 @@ export default function Layout() {
         talkBackEnabled={talkBackEnabled}
         onTalkBackToggle={() => setTalkBackEnabled((p) => !p)}
       />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8 lg:px-12">
         <Outlet />
       </main>
       <Footer />

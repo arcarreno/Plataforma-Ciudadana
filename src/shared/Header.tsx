@@ -30,7 +30,7 @@ export default function Header({
   return (
     <>
       <header className="sticky top-0 z-30 border-b-2 border-guinda bg-white/80 shadow-header backdrop-blur-lg">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-[11px] md:px-6">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-4 py-[11px] md:px-8 lg:px-12">
           <Link
             to="/"
             className="flex shrink-0 transition-opacity hover:opacity-80"
@@ -58,7 +58,11 @@ export default function Header({
               })}
             </nav>
             <nav className="flex gap-1 md:hidden">
-              {navLinks.map((link) => {
+              {[
+                { to: '/', label: 'Inicio' },
+                { to: '/nueva-solicitud', label: 'Nueva' },
+                { to: '/consultar-folio', label: 'Ver' },
+              ].map((link) => {
                 const isActive = location.pathname === link.to
                 return (
                   <Link
@@ -75,6 +79,7 @@ export default function Header({
                 )
               })}
             </nav>
+
 
             <button
               onClick={() => setPanelOpen(!panelOpen)}

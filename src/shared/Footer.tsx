@@ -4,7 +4,7 @@ import mosaico from '../assets/mosaico.svg'
 export default function Footer() {
   return (
     <footer className="border-t border-alabaster-dark/50 bg-white/50 backdrop-blur-sm">
-      <div className="mx-auto max-w-7xl px-4 py-8 text-center md:px-6">
+      <div className="mx-auto max-w-[1400px] px-4 py-8 text-center md:px-8 lg:px-12">
         <div className="flex flex-col items-center gap-3">
           <img src={slogan} alt="" className="w-[210px] h-auto" />
           <img src={mosaico} alt="" className="w-auto h-auto" />

@@ -94,14 +94,14 @@ export default function Inicio() {
         ))}
       </section>
 
-      <section className="rounded-2xl bg-white p-8 shadow-card md:p-12">
+      <section>
         <h2 className="text-center text-2xl font-bold tracking-tight text-guinda">
           ¿Cómo funciona?
         </h2>
         <p className="mx-auto mt-2 max-w-lg text-center text-gray-institutional/70">
           Tres pasos simples para realizar tu solicitud
         </p>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-8 md:grid-cols-3">
           {steps.map((step, i) => (
             <div key={step.number} className="relative text-center">
               {i < steps.length - 1 && (
