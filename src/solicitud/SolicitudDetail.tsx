@@ -161,7 +161,7 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                   dragging={false}
                   scrollWheelZoom={false}
                 >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
                   <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
                 </MapContainer>
               </div>
@@ -185,7 +185,7 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                     dragging={false}
                     scrollWheelZoom={false}
                   >
-                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
                     <Polyline
                       positions={[
                         [s.tramo_lat_ini!, s.tramo_lng_ini!],
