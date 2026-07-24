@@ -163,14 +163,16 @@ export function detectarTramo(
     }
   }
 
+  const buf = lineBuffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>
+
   function polygonIntersects(fc: GeoJSON.FeatureCollection): string[] {
     const names: string[] = []
     for (const f of fc.features) {
-      if (!f.geometry || !f.geometry.coordinates) continue
-      const gt = f.geometry.type
-      if (gt !== 'Polygon' && gt !== 'MultiPolygon') continue
+      if (!f.geometry) continue
+      if (f.geometry.type !== 'Polygon' && f.geometry.type !== 'MultiPolygon') continue
+      if (!f.geometry.coordinates) continue
       try {
-        if (booleanIntersects(lineBuffer, f as GeoJSON.Feature)) {
+        if (booleanIntersects(f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>, buf)) {
           names.push(getProps(f).name || '')
         }
       } catch (_e) { /* skip invalid geometry */ }
@@ -181,10 +183,11 @@ export function detectarTramo(
   function pointInBuffer(fc: GeoJSON.FeatureCollection): string[] {
     const names: string[] = []
     for (const f of fc.features) {
-      if (!f.geometry || !f.geometry.coordinates) continue
+      if (!f.geometry) continue
       if (f.geometry.type !== 'Point') continue
+      if (!f.geometry.coordinates) continue
       try {
-        if (booleanPointInPolygon(f as GeoJSON.Feature<GeoJSON.Point>, lineBuffer)) {
+        if (booleanPointInPolygon(f as GeoJSON.Feature<GeoJSON.Point>, buf)) {
           names.push(getProps(f).name || '')
         }
       } catch (_e) { /* skip */ }
@@ -195,12 +198,12 @@ export function detectarTramo(
   function lineIntersects(fc: GeoJSON.FeatureCollection): string[] {
     const names: string[] = []
     for (const f of fc.features) {
-      if (!f.geometry || !f.geometry.coordinates) continue
-      const gt = f.geometry.type
-      if (gt !== 'LineString' && gt !== 'MultiLineString') continue
+      if (!f.geometry) continue
+      if (f.geometry.type !== 'LineString' && f.geometry.type !== 'MultiLineString') continue
+      if (!f.geometry.coordinates) continue
       try {
-        const inter = lineIntersect(line, f as GeoJSON.Feature)
-        if (inter.features.length > 0 || booleanIntersects(lineBuffer, f as GeoJSON.Feature)) {
+        const inter = lineIntersect(line, f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>)
+        if (inter.features.length > 0 || booleanIntersects(f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>, buf)) {
           names.push(getProps(f).name || '')
         }
       } catch (_e) { /* skip */ }
