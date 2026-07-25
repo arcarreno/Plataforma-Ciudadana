@@ -31,7 +31,7 @@ export default function Layout() {
         navOpen={navOpen}
         onNavToggle={() => setNavOpen((p) => !p)}
       />
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8 lg:px-12">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 overflow-x-hidden px-4 py-6 md:px-8 lg:px-12">
         <Outlet />
       </main>
       <Footer />

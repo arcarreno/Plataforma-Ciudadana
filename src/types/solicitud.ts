@@ -22,6 +22,14 @@ export interface Solicitud {
   descripcion: string
   rutas_evidencia: string[]
 
+  zona_zap?: boolean
+  cobertura_agua?: boolean
+  escuelas_cercanas?: string[]
+  iglesias_cercanas?: string[]
+  transportes_cercanos?: string[]
+  distancia_tramo_m?: number
+  ancho_calle_m?: number
+
   peso_ranking?: number
   estatus_fase?: string
   fecha_creacion?: string

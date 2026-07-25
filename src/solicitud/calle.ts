@@ -86,6 +86,9 @@ export function estimarAnchoCalle(
 
   if (nearby.length < 2) return 7
 
+  const LAT_COS = Math.cos(lat_ini * Math.PI / 180)
+  const DEG_TO_M = 111320 * LAT_COS
+
   let widths: number[] = []
 
   for (let i = 0; i < nearby.length; i++) {
@@ -96,9 +99,10 @@ export function estimarAnchoCalle(
           (nearby[j].a[0] + nearby[j].b[0]) / 2,
           (nearby[j].a[1] + nearby[j].b[1]) / 2,
         ]
-        const w = perpendicularDistance(nearby[i].a, nearby[i].b, midJ)
-        if (w > 3 && w < 50) {
-          widths.push(w * 111320)
+        const wDeg = perpendicularDistance(nearby[i].a, nearby[i].b, midJ)
+        const wMeters = wDeg * DEG_TO_M
+        if (wMeters > 3 && wMeters < 50) {
+          widths.push(wMeters)
         }
       }
     }
@@ -109,15 +113,18 @@ export function estimarAnchoCalle(
       (lng_ini + lng_fin) / 2,
       (lat_ini + lat_fin) / 2,
     ]
-    let minDist = Infinity
+    // nearestPointOnLine returns dist in km (turf default)
+    let minDistKm = Infinity
     for (const e of nearby) {
       const nearest = nearestPointOnLine(lineString([e.a, e.b]), point(mid))
       if (nearest.properties.dist !== undefined) {
-        minDist = Math.min(minDist, nearest.properties.dist)
+        minDistKm = Math.min(minDistKm, nearest.properties.dist)
       }
     }
-    if (minDist < Infinity) {
-      return Math.max(5, Math.round(minDist * 111320 * 2 * 10) / 10)
+    if (minDistKm < Infinity && minDistKm <= 0.025) {
+      // midpoint-to-edge (km→m) × 2 = full width estimate
+      const fallbackMeters = minDistKm * 2000
+      return Math.max(5, Math.round(fallbackMeters * 10) / 10)
     }
     return 7
   }

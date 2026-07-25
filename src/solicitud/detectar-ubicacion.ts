@@ -15,12 +15,14 @@ export interface CapasGeoJSON {
   escuelas: GeoJSON.FeatureCollection
   iglesias: GeoJSON.FeatureCollection
   stv: GeoJSON.FeatureCollection
+  coberturaAgua: GeoJSON.FeatureCollection
 }
 
 export interface DeteccionPunto {
   colonia: string
   junta_auxiliar: string
-  zona_zap: string
+  zona_zap: boolean
+  cobertura_agua: boolean
   escuelas_cercanas: string[]
   iglesias_cercanas: string[]
   transportes_cercanos: string[]
@@ -31,7 +33,8 @@ export interface DeteccionPunto {
 export interface DeteccionTramo {
   colonias: string[]
   juntas_auxiliares: string[]
-  zonas_zap: string[]
+  zonas_zap: boolean
+  cobertura_agua: boolean
   escuelas_cercanas: string[]
   iglesias_cercanas: string[]
   transportes_cercanos: string[]
@@ -53,11 +56,22 @@ function detectarPIP(
   for (const f of capa.features) {
     if (!f.geometry) continue
     const gt = f.geometry.type
-    if (gt !== 'Polygon' && gt !== 'MultiPolygon') continue
+    if (gt !== 'Polygon' && gt !== 'MultiPolygon' && gt !== 'GeometryCollection') continue
     if (!f.geometry.coordinates) continue
     try {
-      if (booleanPointInPolygon(pt, f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)) {
-        return getProps(f).name || ''
+      if (gt === 'GeometryCollection') {
+        const gc = f.geometry as GeoJSON.GeometryCollection
+        for (const g of gc.geometries) {
+          if (g.type === 'Polygon' || g.type === 'MultiPolygon') {
+            if (booleanPointInPolygon(pt, { type: 'Feature', geometry: g, properties: {} } as any)) {
+              return getProps(f).name || ''
+            }
+          }
+        }
+      } else {
+        if (booleanPointInPolygon(pt, f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)) {
+          return getProps(f).name || ''
+        }
       }
     } catch (_e) { /* skip */ }
   }
@@ -83,7 +97,7 @@ function detectarCercanos(
           f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>,
           pt
         )
-        d = nearest.properties.dist != null ? nearest.properties.dist / 1000 : null
+        d = nearest.properties.dist != null ? nearest.properties.dist : null
       }
       if (d !== null && d <= RADIO_CERCANIA_KM) {
         results.push(getProps(f).name || '(sin nombre)')
@@ -113,8 +127,9 @@ export function cargarCapas(): Promise<CapasGeoJSON> {
     fetchJSON('/data/Escuelas.geojson'),
     fetchJSON('/data/Iglesias.geojson'),
     fetchJSON('/data/STV.geojson'),
-  ]).then(([colonias, juntas, zonasZap, escuelas, iglesias, stv]) => ({
-    colonias, juntas, zonasZap, escuelas, iglesias, stv,
+    fetchJSON('/data/COBERTURA_AGUAS DE PUEBLA.geojson'),
+  ]).then(([colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua]) => ({
+    colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua,
   }))
 }
 
@@ -123,7 +138,8 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
 
   const rawColonia = detectarPIP(pt, capas.colonias)
   const rawJunta = detectarPIP(pt, capas.juntas)
-  const rawZonaZap = detectarPIP(pt, capas.zonasZap)
+  const tieneZonaZap = detectarPIP(pt, capas.zonasZap) !== ''
+  const tieneCoberturaAgua = detectarPIP(pt, capas.coberturaAgua) !== ''
 
   let colonia = rawColonia ? cleanColoniaName(rawColonia) : ''
   let junta_auxiliar = rawJunta ? matchJunta(rawJunta) : ''
@@ -145,7 +161,8 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
   return {
     colonia,
     junta_auxiliar,
-    zona_zap: rawZonaZap,
+    zona_zap: tieneZonaZap,
+    cobertura_agua: tieneCoberturaAgua,
     escuelas_cercanas,
     iglesias_cercanas,
     transportes_cercanos,
@@ -155,24 +172,42 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
 }
 
 export function detectarTramo(
-  lat_ini: number, lng_ini: number,
-  lat_fin: number, lng_fin: number,
+  puntos: { lat: number; lng: number }[],
   capas: CapasGeoJSON
 ): DeteccionTramo {
-  const line = lineString([
-    [lng_ini, lat_ini],
-    [lng_fin, lat_fin],
-  ])
+  const lat_ini = puntos[0].lat
+  const lng_ini = puntos[0].lng
+  const lat_fin = puntos[puntos.length - 1].lat
+  const lng_fin = puntos[puntos.length - 1].lng
+
+  const coords = puntos.map(p => [p.lng, p.lat] as [number, number])
+  const line = lineString(coords)
 
   const lineBuffer = buffer(line, RADIO_CERCANIA_KM, { units: 'kilometers' })
-  const dist = haversineDistancia(lat_ini, lng_ini, lat_fin, lng_fin)
-  const ancho = estimarAnchoCalle(lat_ini, lng_ini, lat_fin, lng_fin, capas.stv)
+
+  let distancia_m = 0
+  for (let i = 1; i < puntos.length; i++) {
+    distancia_m += haversineDistancia(puntos[i - 1].lat, puntos[i - 1].lng, puntos[i].lat, puntos[i].lng)
+  }
+
+  let maxSegLen = -1
+  let segMidLat = lat_ini
+  let segMidLng = lng_ini
+  for (let i = 1; i < puntos.length; i++) {
+    const segLen = haversineDistancia(puntos[i - 1].lat, puntos[i - 1].lng, puntos[i].lat, puntos[i].lng)
+    if (segLen > maxSegLen) {
+      maxSegLen = segLen
+      segMidLat = (puntos[i - 1].lat + puntos[i].lat) / 2
+      segMidLng = (puntos[i - 1].lng + puntos[i].lng) / 2
+    }
+  }
+  const ancho_calle_m = estimarAnchoCalle(segMidLat, segMidLng, puntos[0].lat, puntos[0].lng, capas.stv)
 
   if (!lineBuffer) {
     return {
       colonias: [], juntas_auxiliares: [], zonas_zap: [],
       escuelas_cercanas: [], iglesias_cercanas: [], transportes_cercanos: [],
-      distancia_m: dist, ancho_calle_m: ancho,
+      distancia_m, ancho_calle_m,
       coordenadas: { lat_ini, lng_ini, lat_fin, lng_fin },
     }
   }
@@ -230,18 +265,17 @@ export function detectarTramo(
   if (juntas_auxiliares_raw.length === 0) {
     juntas_auxiliares_raw.push('Zona Metropolitana')
   }
-  const zonas_zap = polygonIntersects(capas.zonasZap)
+  const zonas_zap = polygonIntersects(capas.zonasZap).length > 0
+  const cobertura_agua = polygonIntersects(capas.coberturaAgua).length > 0
   const escuelas_cercanas = pointInBuffer(capas.escuelas)
   const iglesias_cercanas = pointInBuffer(capas.iglesias)
   const transportes_cercanos = lineIntersects(capas.stv)
-
-  const distancia_m = haversineDistancia(lat_ini, lng_ini, lat_fin, lng_fin)
-  const ancho_calle_m = estimarAnchoCalle(lat_ini, lng_ini, lat_fin, lng_fin, capas.stv)
 
   return {
     colonias,
     juntas_auxiliares: juntas_auxiliares_raw.map(matchJunta),
     zonas_zap,
+    cobertura_agua,
     escuelas_cercanas,
     iglesias_cercanas,
     transportes_cercanos,

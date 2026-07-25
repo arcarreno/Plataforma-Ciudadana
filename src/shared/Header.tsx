@@ -40,7 +40,7 @@ export default function Header({
 
   return (
     <>
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <LoginModal key={String(loginOpen)} open={loginOpen} onClose={() => setLoginOpen(false)} />
       <header className="sticky top-0 z-30 bg-white/80 shadow-header backdrop-blur-lg">
         <div className="relative mx-auto flex max-w-[1400px] items-center justify-between px-4 py-[11px] md:px-8 lg:px-12">
           <img src={mosaico} alt="" className="pointer-events-none absolute -bottom-[15px] left-0 w-full h-[31px]" />
@@ -54,20 +54,6 @@ export default function Header({
             title={user ? `Admin: ${user.username}` : 'Iniciar sesión'}
           >
             <img src={logoPuebla} alt="Puebla" className="h-8 w-auto" />
-          </button>
-
-          <button
-            type="button"
-            onClick={onNavToggle}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 md:hidden ${
-              navOpen
-                ? 'bg-guinda text-white shadow-button'
-                : 'text-guinda hover:bg-guinda/10'
-            }`}
-            aria-label="Abrir menú de navegación"
-            aria-expanded={navOpen}
-          >
-            <Menu size={22} />
           </button>
 
           <div className="flex items-center gap-2">
@@ -107,7 +93,7 @@ export default function Header({
             {user && (
               <div className="flex items-center gap-2 border-r border-gray-200 pr-3">
                 <span className="hidden text-xs text-gray-institutional/60 md:inline">
-                  {user.rol === 'admin' ? 'Admin' : 'Revisor'}
+                  {user.rol === 'admin' ? 'Admin' : user.rol === 'diputado' ? 'Diputado' : user.rol === 'senador' ? 'Senador' : 'Revisor'}
                 </span>
                 <button
                   type="button"
@@ -121,6 +107,19 @@ export default function Header({
               </div>
             )}
 
+            <button
+              type="button"
+              onClick={onNavToggle}
+              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 md:hidden ${
+                navOpen
+                  ? 'bg-guinda text-white shadow-button'
+                  : 'text-guinda hover:bg-guinda/10'
+              }`}
+              aria-label="Abrir menú de navegación"
+              aria-expanded={navOpen}
+            >
+              <Menu size={22} />
+            </button>
             <button
               onClick={() => setPanelOpen(!panelOpen)}
               className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 ${

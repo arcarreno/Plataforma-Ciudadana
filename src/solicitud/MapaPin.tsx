@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 
-import { X, Crosshair, MapPin, School, Church, Bus, TriangleAlert, Layers, Eye, EyeOff, Globe, Map } from 'lucide-react'
+import { X, Crosshair, MapPin, School, Church, Bus, Info, Layers, Eye, EyeOff, Globe, Map } from 'lucide-react'
 import Button from '../shared/Button'
 import { cargarCapas, detectarPunto } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionPunto } from './detectar-ubicacion'
@@ -69,6 +69,8 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
   const [showLayers, setShowLayers] = useState(false)
   const [satellite, setSatellite] = useState(false)
   const [hasPicado, setHasPicado] = useState(false)
+  const [manualColonia, setManualColonia] = useState('')
+  const [manualJunta, setManualJunta] = useState('')
   const lastClick = useRef<{ lat: number; lng: number } | null>(null)
 
   useEffect(() => {
@@ -209,10 +211,28 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
                 </div>
 
                 {isOutside ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                    <TriangleAlert className="h-4 w-4 shrink-0" />
-                    <span>Fuera del alcance — esta ubicación no está dentro de ninguna colonia ni junta auxiliar registrada</span>
-                  </div>
+                  <>
+                    <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                      <Info className="h-4 w-4 shrink-0" />
+                      <span>Zona no encontrada en nuestra base de datos. Ingresa los datos de colonia y junta auxiliar de manera manual, por favor.</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={manualColonia}
+                        onChange={e => setManualColonia(e.target.value)}
+                        placeholder="Colonia"
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                      />
+                      <input
+                        type="text"
+                        value={manualJunta}
+                        onChange={e => setManualJunta(e.target.value)}
+                        placeholder="Junta auxiliar"
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                      />
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="flex items-center gap-3 text-xs">
@@ -230,7 +250,13 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
                     {d.zona_zap && (
                       <div className="flex items-center gap-3 text-xs">
                         <span className="font-medium text-gray-institutional">Zona ZAP:</span>
-                        <span className="text-amber-700">{d.zona_zap}</span>
+                        <span className="text-amber-700">Si</span>
+                      </div>
+                    )}
+                    {d.cobertura_agua && (
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-medium text-gray-institutional">Cobertura de agua:</span>
+                        <span className="text-blue-600">Si</span>
                       </div>
                     )}
                     {d.escuelas_cercanas.length > 0 && (
@@ -258,14 +284,14 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
                   type="button"
                   size="sm"
                   className="mt-1"
-                  disabled={isOutside}
+                  disabled={isOutside && (!manualColonia.trim() || !manualJunta.trim())}
                   onClick={() => {
                     if (d) {
                       onConfirm({
                         lat: d.coordenadas.lat,
                         lng: d.coordenadas.lng,
-                        colonia: d.colonia,
-                        junta_auxiliar: d.junta_auxiliar,
+                        colonia: isOutside ? manualColonia.trim() : d.colonia,
+                        junta_auxiliar: isOutside ? manualJunta.trim() : d.junta_auxiliar,
                       })
                     }
                   }}

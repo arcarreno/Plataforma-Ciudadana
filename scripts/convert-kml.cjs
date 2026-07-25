@@ -45,7 +45,9 @@ function extractGeometry(geom) {
       .filter(Boolean)
       .flatMap(b => {
         const r = b.LinearRing || b.linearRing
-        return r ? [coordStrToArray(r.coordinates)] : []
+        if (!r) return []
+        const arr = Array.isArray(r) ? r : [r]
+        return arr.map(lr => coordStrToArray(lr.coordinates))
       })
     return { type: 'Polygon', coordinates: rings }
   }
@@ -59,7 +61,9 @@ function extractGeometry(geom) {
           .filter(Boolean)
           .flatMap(b => {
             const r = b.LinearRing || b.linearRing
-            return r ? [coordStrToArray(r.coordinates)] : []
+            if (!r) return []
+            const arr = Array.isArray(r) ? r : [r]
+            return arr.map(lr => coordStrToArray(lr.coordinates))
           })
         if (rings.length) geoms.push({ type: 'Polygon', coordinates: rings })
       })

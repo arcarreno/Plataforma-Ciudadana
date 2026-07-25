@@ -26,7 +26,7 @@ for (const file of files) {
     let geom = f.geometry
     if (geom.type === 'Polygon' || geom.type === 'MultiPolygon' || geom.type === 'LineString' || geom.type === 'MultiLineString') {
       try {
-        const simplified = turf.simplify(geom, { tolerance: 0.001, highQuality: true })
+        const simplified = turf.simplify(geom, { tolerance: 0.0005, highQuality: true })
         if (simplified) geom = simplified
       } catch (e) {
         // fallback: use original
@@ -37,7 +37,7 @@ for (const file of files) {
       geom.geometries = geom.geometries.map(g => {
         if (g.type === 'Polygon' || g.type === 'MultiPolygon' || g.type === 'LineString') {
           try {
-            const s = turf.simplify(g, { tolerance: 0.001, highQuality: true })
+            const s = turf.simplify(g, { tolerance: 0.0005, highQuality: true })
             return s || g
           } catch { return g }
         }

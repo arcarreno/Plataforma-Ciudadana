@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, MapPin, Check } from 'lucide-react'
 import lottie from 'lottie-web'
 import loadingAnimation from '../assets/lottie/landing-construccion.json'
@@ -6,24 +6,27 @@ import Button from '../shared/Button'
 import Card from '../shared/Card'
 import { Input, Textarea } from '../shared/Input'
 import Select from '../shared/Select'
-import { CATALOGO_TIPOS_SOLICITUD, JUNTAS_AUXILIARES } from '../core/constants'
+import { TIPOS_OBRA_NOMBRES, RANKING_PUNTOS_CARGO_PUBLICO } from '../core/constants'
 import { crearSolicitud } from '../lib/solicitud'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
 import MapaPin from './MapaPin'
 import MapaTramo from './MapaTramo'
+import AvisoPrivacidad from '../shared/AvisoPrivacidad'
 
 function validarCURP(curp: string): boolean {
   return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[0-9A-Z]\d$/.test(curp)
 }
 
-function validarForm(data: SolicitudFormData): SolicitudErrors {
+function validarForm(data: SolicitudFormData, omitirCurp?: boolean): SolicitudErrors {
   const errors: SolicitudErrors = {}
 
   if (!data.nombre_solicitante.trim())
     errors.nombre_solicitante = 'El nombre es obligatorio'
-  if (!data.curp.trim()) errors.curp = 'El CURP es obligatorio'
-  else if (!validarCURP(data.curp.toUpperCase()))
-    errors.curp = 'CURP inválido. Debe tener 18 caracteres.'
+  if (!omitirCurp) {
+    if (!data.curp.trim()) errors.curp = 'El CURP es obligatorio'
+    else if (!validarCURP(data.curp.toUpperCase()))
+      errors.curp = 'CURP inválido. Debe tener 18 caracteres.'
+  }
   if (!data.telefono.trim()) errors.telefono = 'El teléfono es obligatorio'
   else if (!/^\d{10}$/.test(data.telefono))
     errors.telefono = 'El teléfono debe tener 10 dígitos'
@@ -33,17 +36,22 @@ function validarForm(data: SolicitudFormData): SolicitudErrors {
   if (!data.aviso_privacidad_aceptado)
     errors.aviso_privacidad_aceptado = 'Debes aceptar el aviso de privacidad'
   if (!data.tipo_solicitud) errors.tipo_solicitud = 'Selecciona un tipo de obra'
-  if (!data.colonia) errors.colonia = 'Selecciona una colonia'
-  if (!data.junta_auxiliar) errors.junta_auxiliar = 'Selecciona una junta auxiliar'
+  if (!data.colonia) errors.colonia = 'Debes marcar una ubicación en el mapa'
+  if (!data.junta_auxiliar) errors.junta_auxiliar = 'Debes marcar una ubicación en el mapa'
   if (!data.latitud || !data.longitud)
     errors.latitud = 'Debes seleccionar una ubicación en el mapa'
 
   return errors
 }
 
-export default function SolicitudForm() {
+interface SolicitudFormProps {
+  omitirCurp?: boolean
+  nombrePrefilled?: string
+}
+
+export default function SolicitudForm({ omitirCurp, nombrePrefilled }: SolicitudFormProps = {}) {
   const [form, setForm] = useState<SolicitudFormData>({
-    nombre_solicitante: '',
+    nombre_solicitante: nombrePrefilled ?? '',
     curp: '',
     telefono: '',
     correo: '',
@@ -67,7 +75,12 @@ export default function SolicitudForm() {
   const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
   const [showMapaPin, setShowMapaPin] = useState(false)
   const [showMapaTramo, setShowMapaTramo] = useState(false)
-  const [extraColonias, setExtraColonias] = useState<string[]>([])
+  const [showInfoModal, setShowInfoModal] = useState(false)
+  const [showAviso, setShowAviso] = useState(false)
+  const [tramoData, setTramoData] = useState<{
+    distancia_m: number; ancho_calle_m: number
+    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+  } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const lottieRef = useRef<HTMLDivElement>(null)
 
@@ -82,21 +95,24 @@ export default function SolicitudForm() {
     return () => anim.destroy()
   }, [showLottie])
 
-  const coloniasOptions = useMemo(() => {
-    const seen = new Set<string>()
-    const all = [...extraColonias, 'Centro', 'San Francisco', 'La Paz', 'Guadalupe', 'San Miguel', 'San Antonio', 'San Juan', 'Santa Anita']
-    return all.filter(c => {
-      if (seen.has(c.toLowerCase())) return false
-      seen.add(c.toLowerCase())
-      return true
-    })
-  }, [extraColonias])
-
-  const handleMapTramoConfirm = (data: { lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number }) => {
+  const handleMapTramoConfirm = (data: {
+    lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
+    distancia_m: number; ancho_calle_m: number
+    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+  }) => {
     set('tramo_lat_ini', String(data.lat_ini))
     set('tramo_lng_ini', String(data.lng_ini))
     set('tramo_lat_fin', String(data.lat_fin))
     set('tramo_lng_fin', String(data.lng_fin))
+    setTramoData({
+      distancia_m: data.distancia_m,
+      ancho_calle_m: data.ancho_calle_m,
+      zona_zap: data.zona_zap,
+      cobertura_agua: data.cobertura_agua,
+      escuelas_cercanas: data.escuelas_cercanas,
+      iglesias_cercanas: data.iglesias_cercanas,
+      transportes_cercanos: data.transportes_cercanos,
+    })
     setShowMapaTramo(false)
   }
 
@@ -105,7 +121,6 @@ export default function SolicitudForm() {
     set('longitud', String(data.lng))
     if (data.colonia) {
       set('colonia', data.colonia)
-      setExtraColonias(prev => prev.includes(data.colonia) ? prev : [...prev, data.colonia])
     }
     if (data.junta_auxiliar) set('junta_auxiliar', data.junta_auxiliar)
     setShowMapaPin(false)
@@ -118,7 +133,7 @@ export default function SolicitudForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const errs = validarForm(form)
+    const errs = validarForm(form, omitirCurp)
     if (Object.keys(errs).length > 0) {
       setErrors(errs)
       return
@@ -128,11 +143,15 @@ export default function SolicitudForm() {
     setShowLottie(true)
     setResultado(null)
 
-    const res = await crearSolicitud({
-      ...form,
-      curp: form.curp.toUpperCase(),
-      nombre_solicitante: form.nombre_solicitante.trim(),
-    })
+    const res = await crearSolicitud(
+      {
+        ...form,
+        curp: omitirCurp ? 'SIN CURP' : form.curp.toUpperCase(),
+        nombre_solicitante: form.nombre_solicitante.trim(),
+      },
+      omitirCurp ? RANKING_PUNTOS_CARGO_PUBLICO : undefined,
+      tramoData ?? undefined
+    )
 
     await new Promise(r => setTimeout(r, 3000))
     setShowLottie(false)
@@ -142,6 +161,7 @@ export default function SolicitudForm() {
       setSubmittedOnce(false)
     } else {
       setResultado({ folio: res.data?.folio_unico, advertencia: res.advertencia })
+      setTramoData(null)
       setForm({
         nombre_solicitante: '',
         curp: '',
@@ -223,16 +243,21 @@ export default function SolicitudForm() {
             onChange={(e) => set('nombre_solicitante', e.target.value)}
             error={errors.nombre_solicitante}
             placeholder="Juan Pérez García"
+            readOnly={!!nombrePrefilled}
+            tabIndex={nombrePrefilled ? -1 : undefined}
+            className={nombrePrefilled ? 'cursor-default opacity-80' : undefined}
           />
           <div className="grid gap-4 md:grid-cols-2">
-            <Input
-              label="CURP"
-              value={form.curp}
-              onChange={(e) => set('curp', e.target.value.toUpperCase())}
-              error={errors.curp}
-              placeholder="PEGJ900101HDFRRN01"
-              maxLength={18}
-            />
+            {!omitirCurp && (
+              <Input
+                label="CURP"
+                value={form.curp}
+                onChange={(e) => set('curp', e.target.value.toUpperCase())}
+                error={errors.curp}
+                placeholder="PEGJ900101HDFRRN01"
+                maxLength={18}
+              />
+            )}
             <Input
               label="Teléfono"
               type="tel"
@@ -258,27 +283,11 @@ export default function SolicitudForm() {
         <div className="flex flex-col gap-4">
           <Select
             label="Tipo de obra"
-            options={CATALOGO_TIPOS_SOLICITUD}
+            options={TIPOS_OBRA_NOMBRES}
             value={form.tipo_solicitud}
             onChange={(e) => set('tipo_solicitud', e.target.value)}
             error={errors.tipo_solicitud}
           />
-          <div className="grid gap-4 md:grid-cols-2">
-            <Select
-              label="Colonia"
-              options={coloniasOptions}
-              value={form.colonia}
-              error={errors.colonia}
-              disabled
-            />
-            <Select
-              label="Junta auxiliar"
-              options={JUNTAS_AUXILIARES}
-              value={form.junta_auxiliar}
-              error={errors.junta_auxiliar}
-              disabled
-            />
-          </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-institutional">
@@ -326,6 +335,39 @@ export default function SolicitudForm() {
                   Tramo
                 </Button>
               </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-institutional">
+                Colonia
+              </label>
+              <div
+                className="w-full cursor-pointer rounded-xl border-2 border-alabaster-dark bg-alabaster/50 px-4 py-3 text-sm text-gray-institutional/70 transition-all duration-200 hover:border-guinda/30"
+                onClick={() => setShowInfoModal(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowInfoModal(true) }}
+              >
+                {form.colonia || 'Esperando datos'}
+              </div>
+              {errors.colonia && <p className="text-xs text-red-500">{errors.colonia}</p>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-institutional">
+                Junta auxiliar
+              </label>
+              <div
+                className="w-full cursor-pointer rounded-xl border-2 border-alabaster-dark bg-alabaster/50 px-4 py-3 text-sm text-gray-institutional/70 transition-all duration-200 hover:border-guinda/30"
+                onClick={() => setShowInfoModal(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowInfoModal(true) }}
+              >
+                {form.junta_auxiliar || 'Esperando datos'}
+              </div>
+              {errors.junta_auxiliar && <p className="text-xs text-red-500">{errors.junta_auxiliar}</p>}
             </div>
           </div>
 
@@ -385,9 +427,13 @@ export default function SolicitudForm() {
           />
           <span className="text-sm text-gray-institutional">
             He leído y acepto el{' '}
-            <a href="#" className="text-guinda underline hover:no-underline">
+            <button
+              type="button"
+              className="cursor-pointer text-guinda underline hover:no-underline"
+              onClick={() => setShowAviso(true)}
+            >
               Aviso de Privacidad
-            </a>{' '}
+            </button>{' '}
             y el tratamiento de mis datos personales para la gestión de la
             solicitud.
           </span>
@@ -412,12 +458,36 @@ export default function SolicitudForm() {
           initialLng={form.longitud}
         />
       )}
+      {showInfoModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+          <div className="max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-3 text-lg font-semibold text-gray-institutional">
+              Datos automáticos
+            </h3>
+            <p className="text-sm leading-relaxed text-gray-institutional/70">
+              Al ubicar el punto en el mapa, los datos de colonia y junta auxiliar
+              se extraen automáticamente de nuestra base de datos. Pueden haber
+              variaciones en la delimitación, pero al tener las coordenadas
+              exactas podremos llegar a tu calle lo más pronto posible.
+            </p>
+            <button
+              className="mt-4 w-full rounded-xl bg-guinda px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-guinda/90"
+              onClick={() => setShowInfoModal(false)}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
       {showMapaTramo && (
         <MapaTramo
           onConfirm={handleMapTramoConfirm}
           onClose={() => setShowMapaTramo(false)}
         />
       )}
+
+      {showAviso && <AvisoPrivacidad onClose={() => setShowAviso(false)} />}
     </form>
   )
 }

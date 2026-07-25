@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, Crosshair, Ruler, School, Church, Bus, Layers, Eye, EyeOff, Globe, Map } from 'lucide-react'
+import { X, Crosshair, Ruler, School, Church, Bus, Layers, Eye, EyeOff, Globe, Map, Undo2 } from 'lucide-react'
 import Button from '../shared/Button'
 import { cargarCapas, detectarTramo } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionTramo } from './detectar-ubicacion'
@@ -31,7 +31,11 @@ const ZONA_ZAP_STYLE = {
 }
 
 interface MapaTramoProps {
-  onConfirm: (data: { lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number }) => void
+  onConfirm: (data: {
+    lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
+    distancia_m: number; ancho_calle_m: number
+    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+  }) => void
   onClose: () => void
 }
 
@@ -46,14 +50,14 @@ function TramoMarker({ position, icon }: { position: L.LatLngExpression; icon: L
 
 function ClickHandler({
   onMapClick,
-  pointCount,
+  done,
 }: {
   onMapClick: (latlng: { lat: number; lng: number }) => void
-  pointCount: number
+  done: boolean
 }) {
   useMapEvents({
     click(e) {
-      if (pointCount < 2) onMapClick(e.latlng)
+      if (!done) onMapClick(e.latlng)
     },
   })
   return null
@@ -74,19 +78,33 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
     })
   }, [])
 
+  const [done, setDone] = useState(false)
+
   const handleMapClick = (latlng: { lat: number; lng: number }) => {
     const next = [...points, latlng]
     setPoints(next)
-    if (next.length === 2 && capas) {
-      setDetection(detectarTramo(next[0].lat, next[0].lng, next[1].lat, next[1].lng, capas))
+    if (next.length >= 2 && capas) {
+      setDetection(detectarTramo(next, capas))
     } else {
       setDetection(null)
     }
   }
 
-  const handleUndo = () => {
+  const handleUndoLast = () => {
+    if (points.length === 0) return
+    const next = points.slice(0, -1)
+    setPoints(next)
+    if (next.length >= 2 && capas) {
+      setDetection(detectarTramo(next, capas))
+    } else {
+      setDetection(null)
+    }
+  }
+
+  const handleReset = () => {
     setPoints([])
     setDetection(null)
+    setDone(false)
   }
 
   const d = detection
@@ -134,7 +152,7 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
           )}
-          <ClickHandler onMapClick={handleMapClick} pointCount={points.length} />
+          <ClickHandler onMapClick={handleMapClick} done={done} />
           {showLayers && capas?.colonias && (
             <GeoJSON key="colonias" data={capas.colonias} style={COLONIA_STYLE} interactive={false} />
           )}
@@ -156,13 +174,10 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
               })}
             />
           ))}
-          {points.length === 2 && (
+          {points.length >= 2 && (
             <Polyline
-              positions={[
-                [points[0].lat, points[0].lng],
-                [points[1].lat, points[1].lng],
-              ]}
-              pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
+              positions={points.map(p => [p.lat, p.lng])}
+              pathOptions={{ color: '#7d2447', weight: 4 }}
             />
           )}
         </MapContainer>
@@ -199,28 +214,58 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                     <span>Haz clic en el punto de inicio del tramo</span>
                   </div>
                 )}
-                {points.length === 1 && (
+                {points.length >= 1 && (
                   <div className="flex items-center gap-3 text-sm text-gray-institutional/70">
                     <Crosshair className="h-5 w-5 shrink-0 text-guinda" />
-                    <span>Ahora haz clic en el punto final del tramo</span>
+                    <span>
+                      {points.length === 1
+                        ? 'Haz clic en el siguiente punto del tramo'
+                        : `Sigue agregando puntos o presiona "Terminar" para finalizar el tramo (${points.length} puntos)`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleUndoLast}
+                      className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl text-gray-institutional/50 transition-colors hover:bg-gray-100 hover:text-guinda"
+                      aria-label="Deshacer último punto"
+                    >
+                      <Undo2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+                {points.length >= 2 && (
+                  <div className="mt-1 flex gap-2">
+                    <Button type="button" size="sm" variant="secondary" onClick={handleReset}>
+                      Reiniciar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setDone(true)}
+                    >
+                      <Ruler className="mr-1.5 h-4 w-4" />
+                      Terminar tramo
+                    </Button>
                   </div>
                 )}
               </>
             ) : (
               <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-3 text-sm">
-                  <Ruler className="h-5 w-5 shrink-0 text-guinda" />
-                  <span className="text-xs text-gray-institutional">
-                    {d.coordenadas.lat_ini.toFixed(6)}, {d.coordenadas.lng_ini.toFixed(6)} → {d.coordenadas.lat_fin.toFixed(6)}, {d.coordenadas.lng_fin.toFixed(6)}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="font-medium text-gray-institutional">Distancia:</span>
-                  <span className="text-guinda">{d.distancia_m} m</span>
-                  <span className="text-gray-institutional/50">|</span>
-                  <span className="font-medium text-gray-institutional">Ancho calle:</span>
-                  <span className="text-guinda">~{d.ancho_calle_m} m</span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-institutional">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">Distancia:</span>
+                    <span className="text-guinda">{d.distancia_m} m</span>
+                  </div>
+                  <span className="text-gray-institutional/30">|</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">Ancho calle:</span>
+                    <span className="text-guinda">~{d.ancho_calle_m} m</span>
+                  </div>
+                  <span className="text-gray-institutional/30">|</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">Puntos:</span>
+                    <span className="text-guinda">{points.length}</span>
+                  </div>
                 </div>
 
                 {d.colonias.length > 0 && (
@@ -261,7 +306,7 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                 )}
 
                 <div className="mt-1 flex gap-2">
-                  <Button type="button" size="sm" variant="secondary" onClick={handleUndo}>
+                  <Button type="button" size="sm" variant="secondary" onClick={handleReset}>
                     Reiniciar
                   </Button>
                   <Button
@@ -274,6 +319,13 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                         lng_ini: d.coordenadas.lng_ini,
                         lat_fin: d.coordenadas.lat_fin,
                         lng_fin: d.coordenadas.lng_fin,
+                        distancia_m: d.distancia_m,
+                        ancho_calle_m: d.ancho_calle_m,
+                        zona_zap: d.zonas_zap,
+                        cobertura_agua: d.cobertura_agua,
+                        escuelas_cercanas: d.escuelas_cercanas,
+                        iglesias_cercanas: d.iglesias_cercanas,
+                        transportes_cercanos: d.transportes_cercanos,
                       })
                     }
                   >

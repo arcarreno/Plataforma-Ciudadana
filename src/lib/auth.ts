@@ -32,8 +32,14 @@ export async function login(
   if (error) return { error: error.message }
   if (!data || data.length === 0) return { error: 'Usuario o contraseña incorrectos' }
 
-  const row = data[0] as { v_id: number; v_username: string; v_rol: string }
-  const user: Usuario = { id: row.v_id, username: row.v_username, rol: row.v_rol as Usuario['rol'] }
+  const row = data[0] as { v_id: number; v_username: string; v_rol: string; v_nombres: string; v_apellidos: string }
+  const user: Usuario = {
+    id: row.v_id,
+    username: row.v_username,
+    rol: row.v_rol as Usuario['rol'],
+    nombres: row.v_nombres ?? '',
+    apellidos: row.v_apellidos ?? '',
+  }
   guardarStorage(user)
   return { data: user }
 }
@@ -50,13 +56,17 @@ export async function crearUsuario(
   adminId: number,
   username: string,
   password: string,
-  rol: string
+  rol: string,
+  nombres: string = '',
+  apellidos: string = '',
 ): Promise<{ error?: string }> {
   const { data, error } = await supabase.rpc('crear_usuario', {
     p_admin_id: adminId,
     p_username: username,
     p_password: password,
     p_rol: rol,
+    p_nombres: nombres,
+    p_apellidos: apellidos,
   })
 
   if (error) return { error: error.message }
@@ -66,11 +76,17 @@ export async function crearUsuario(
 }
 
 export async function listarUsuarios(): Promise<{ data?: Usuario[]; error?: string }> {
-  const { data, error } = await supabase
-    .from('usuarios')
-    .select('id, username, rol')
-    .order('id', { ascending: true })
+  const { data, error } = await supabase.rpc('listar_usuarios')
 
   if (error) return { error: error.message }
-  return { data: data as Usuario[] }
+  const rows = (data ?? []) as { v_id: number; v_username: string; v_rol: string; v_nombres: string; v_apellidos: string }[]
+  return {
+    data: rows.map(r => ({
+      id: r.v_id,
+      username: r.v_username,
+      rol: r.v_rol as Usuario['rol'],
+      nombres: r.v_nombres ?? '',
+      apellidos: r.v_apellidos ?? '',
+    })),
+  }
 }

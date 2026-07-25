@@ -33,7 +33,7 @@ export function cleanColoniaName(rawName: string): string {
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/(^|\s)\w/g, c => c.toUpperCase())
 }
 
 export function normalizeColoniaForMatch(name: string): string {

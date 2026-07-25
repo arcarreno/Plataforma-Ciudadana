@@ -43,7 +43,12 @@ async function uploadArchivos(
 }
 
 export async function crearSolicitud(
-  data: SolicitudFormData
+  data: SolicitudFormData,
+  pesoRankingOverride?: number,
+  tramoData?: {
+    distancia_m: number; ancho_calle_m: number
+    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+  }
 ): Promise<{ data?: Solicitud; error?: string; advertencia?: string }> {
   const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, ...rest } = data
 
@@ -58,7 +63,15 @@ export async function crearSolicitud(
       tramo_lat_fin: tramo_lat_fin ? parseFloat(tramo_lat_fin) : null,
       tramo_lng_fin: tramo_lng_fin ? parseFloat(tramo_lng_fin) : null,
       peso_ranking:
-        archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE,
+        pesoRankingOverride ??
+        (archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE),
+      zona_zap: tramoData?.zona_zap ?? false,
+      cobertura_agua: tramoData?.cobertura_agua ?? false,
+      escuelas_cercanas: tramoData?.escuelas_cercanas ?? [],
+      iglesias_cercanas: tramoData?.iglesias_cercanas ?? [],
+      transportes_cercanos: tramoData?.transportes_cercanos ?? [],
+      distancia_tramo_m: tramoData?.distancia_m ?? null,
+      ancho_calle_m: tramoData?.ancho_calle_m ?? null,
     })
     .select()
     .single()

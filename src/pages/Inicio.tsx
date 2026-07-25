@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom'
 import { ClipboardList, MapPin, FileText, Shield } from 'lucide-react'
 import Button from '../shared/Button'
 import Card from '../shared/Card'
+import { useAuth } from '../contexts/AuthContext'
+import { nombreCompleto, esCargoPublico } from '../types/auth'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 
 const features = [
@@ -46,8 +48,19 @@ const steps = [
 ]
 
 export default function Inicio() {
+  const { user } = useAuth()
+  const esCargo = user && esCargoPublico(user.rol)
+
   return (
     <div className="flex flex-col gap-12 py-4 md:py-8">
+      {esCargo && (
+        <section className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight text-guinda md:text-4xl">
+            Bienvenido {nombreCompleto(user)}
+          </h1>
+        </section>
+      )}
+
       <section className="text-center">
         <div className="mx-auto mb-6 h-20 w-20 overflow-hidden rounded-full shadow-button">
           <img

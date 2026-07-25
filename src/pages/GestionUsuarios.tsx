@@ -3,9 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { listarUsuarios, crearUsuario } from '../lib/auth'
 import type { Usuario } from '../types/auth'
-import { UserPlus, Shield, ShieldCheck, ArrowLeft } from 'lucide-react'
+import { UserPlus, Shield, ShieldCheck, User, Users, ArrowLeft } from 'lucide-react'
 import Card from '../shared/Card'
 import Button from '../shared/Button'
+
+const ROL_OPTS = [
+  { value: 'revisor', label: 'Revisor', icon: Shield },
+  { value: 'admin', label: 'Administrador', icon: ShieldCheck },
+  { value: 'diputado', label: 'Diputado', icon: Users },
+  { value: 'senador', label: 'Senador', icon: User },
+] as const
 
 export default function GestionUsuarios() {
   const { user } = useAuth()
@@ -15,7 +22,9 @@ export default function GestionUsuarios() {
   const [showForm, setShowForm] = useState(false)
   const [newUsername, setNewUsername] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [newRol, setNewRol] = useState<'admin' | 'revisor'>('revisor')
+  const [newNombres, setNewNombres] = useState('')
+  const [newApellidos, setNewApellidos] = useState('')
+  const [newRol, setNewRol] = useState<string>('revisor')
   const [formError, setFormError] = useState('')
   const [formLoading, setFormLoading] = useState(false)
 
@@ -27,13 +36,17 @@ export default function GestionUsuarios() {
   async function cargarUsuarios() {
     setLoading(true)
     const res = await listarUsuarios()
-    if (res.data) setUsuarios(res.data)
+    if (res.data) {
+      setUsuarios(res.data)
+    } else if (res.error) {
+      console.warn('Error al cargar usuarios:', res.error)
+    }
     setLoading(false)
   }
 
   const handleCrear = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newUsername.trim() || !newPassword.trim()) {
+    if (!newUsername.trim() || !newPassword.trim() || !newNombres.trim() || !newApellidos.trim()) {
       setFormError('Completa todos los campos')
       return
     }
@@ -43,7 +56,7 @@ export default function GestionUsuarios() {
     }
     setFormLoading(true)
     setFormError('')
-    const res = await crearUsuario(user!.id, newUsername.trim(), newPassword, newRol)
+    const res = await crearUsuario(user!.id, newUsername.trim(), newPassword, newRol, newNombres.trim(), newApellidos.trim())
     if (res.error) {
       setFormError(res.error)
       setFormLoading(false)
@@ -51,6 +64,8 @@ export default function GestionUsuarios() {
     }
     setNewUsername('')
     setNewPassword('')
+    setNewNombres('')
+    setNewApellidos('')
     setNewRol('revisor')
     setShowForm(false)
     setFormLoading(false)
@@ -87,6 +102,28 @@ export default function GestionUsuarios() {
           <form onSubmit={handleCrear} className="flex flex-col gap-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-institutional">Nombres</label>
+                <input
+                  type="text"
+                  value={newNombres}
+                  onChange={e => setNewNombres(e.target.value)}
+                  className="rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-4 py-2.5 text-sm text-gray-institutional outline-none transition-colors focus:border-guinda"
+                  placeholder="Nombres"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-gray-institutional">Apellidos</label>
+                <input
+                  type="text"
+                  value={newApellidos}
+                  onChange={e => setNewApellidos(e.target.value)}
+                  className="rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-4 py-2.5 text-sm text-gray-institutional outline-none transition-colors focus:border-guinda"
+                  placeholder="Apellidos"
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-gray-institutional">Usuario</label>
                 <input
                   type="text"
@@ -110,20 +147,20 @@ export default function GestionUsuarios() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-gray-institutional">Rol</label>
-              <div className="flex gap-3">
-                {(['revisor', 'admin'] as const).map(rol => (
+              <div className="flex flex-wrap gap-3">
+                {ROL_OPTS.map(({ value, label, icon: Icon }) => (
                   <button
-                    key={rol}
+                    key={value}
                     type="button"
-                    onClick={() => setNewRol(rol)}
+                    onClick={() => setNewRol(value)}
                     className={`flex items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-medium transition-all ${
-                      newRol === rol
+                      newRol === value
                         ? 'border-guinda bg-guinda/5 text-guinda'
                         : 'border-alabaster-dark/30 text-gray-institutional/60 hover:border-guinda/30'
                     }`}
                   >
-                    {rol === 'admin' ? <ShieldCheck className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
-                    {rol === 'admin' ? 'Administrador' : 'Revisor'}
+                    <Icon className="h-4 w-4" />
+                    {label}
                   </button>
                 ))}
               </div>
@@ -153,6 +190,7 @@ export default function GestionUsuarios() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-xs font-medium text-gray-institutional/60">
+                  <th className="whitespace-nowrap px-3 py-3">Nombre</th>
                   <th className="whitespace-nowrap px-3 py-3">Usuario</th>
                   <th className="whitespace-nowrap px-3 py-3">Rol</th>
                   <th className="whitespace-nowrap px-3 py-3">ID</th>
@@ -162,17 +200,25 @@ export default function GestionUsuarios() {
                 {usuarios.map((u) => (
                   <tr key={u.id} className="border-b border-gray-50 transition-colors hover:bg-gray-50">
                     <td className="whitespace-nowrap px-3 py-3 font-medium text-gray-institutional">
+                      {u.nombres} {u.apellidos}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-gray-institutional/70">
                       {u.username}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3">
-                      <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${
-                        u.rol === 'admin'
-                          ? 'bg-guinda/10 text-guinda'
-                          : 'bg-blue-50 text-blue-600'
-                      }`}>
-                        {u.rol === 'admin' ? <ShieldCheck className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
-                        {u.rol === 'admin' ? 'Admin' : 'Revisor'}
-                      </span>
+                      {(() => {
+                        const opt = ROL_OPTS.find(o => o.value === u.rol)
+                        const Icon = opt?.icon ?? Shield
+                        const colorClass = u.rol === 'admin' ? 'bg-guinda/10 text-guinda'
+                          : u.rol === 'revisor' ? 'bg-blue-50 text-blue-600'
+                          : 'bg-amber-50 text-amber-700'
+                        return (
+                          <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${colorClass}`}>
+                            <Icon className="h-3 w-3" />
+                            {opt?.label ?? u.rol}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-gray-institutional/50">
                       #{u.id}

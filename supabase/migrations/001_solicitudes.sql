@@ -40,6 +40,9 @@ RETURNS TRIGGER AS $$
 DECLARE
   cnt INT;
 BEGIN
+  IF NEW.curp = 'SIN CURP' THEN
+    RETURN NEW;
+  END IF;
   SELECT COUNT(*) INTO cnt
   FROM solicitudes
   WHERE curp = NEW.curp
@@ -59,10 +62,12 @@ CREATE TRIGGER check_curp_limit
 CREATE OR REPLACE FUNCTION calcular_peso_ranking()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.peso_ranking := CASE
-    WHEN NEW.rutas_evidencia IS NOT NULL AND array_length(NEW.rutas_evidencia, 1) > 0 THEN 10
-    ELSE 5
-  END;
+  IF NEW.peso_ranking = 5 THEN
+    NEW.peso_ranking := CASE
+      WHEN NEW.rutas_evidencia IS NOT NULL AND array_length(NEW.rutas_evidencia, 1) > 0 THEN 10
+      ELSE 5
+    END;
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

@@ -13,14 +13,14 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 const fieldClasses =
   'w-full rounded-xl border-2 border-alabaster-dark bg-white px-4 py-3 text-gray-institutional placeholder:text-gray-institutional/40 transition-all duration-200 focus:border-guinda focus:shadow-[0_0_0_3px_rgba(125,36,71,0.1)] focus:outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:shadow-[0_0_0_3px_rgba(239,68,68,0.1)]'
 
-export function Input({ label, error, id, ...props }: InputProps) {
+export function Input({ label, error, id, className, ...props }: InputProps) {
   const inputId = id ?? label.toLowerCase().replace(/\s+/g, '-')
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={inputId} className="text-sm font-medium text-gray-institutional">
         {label}
       </label>
-      <input id={inputId} className={fieldClasses} aria-invalid={!!error} aria-label={label} {...props} />
+      <input id={inputId} className={[fieldClasses, className].filter(Boolean).join(' ')} aria-invalid={!!error} aria-label={label} {...props} />
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   )

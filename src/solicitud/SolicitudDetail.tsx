@@ -1,10 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import Card from '../shared/Card'
+import { cargarCapas, detectarPunto } from './detectar-ubicacion'
+import type { CapasGeoJSON, DeteccionPunto } from './detectar-ubicacion'
 
 interface SolicitudDetailProps {
   solicitud: Solicitud
@@ -44,6 +46,15 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
 export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailProps) {
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
+  const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
+  const [detection, setDetection] = useState<DeteccionPunto | null>(null)
+
+  useEffect(() => {
+    cargarCapas().then(c => {
+      setCapas(c)
+      setDetection(detectarPunto(s.latitud, s.longitud, c))
+    })
+  }, [s.latitud, s.longitud])
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 py-6">
@@ -106,7 +117,10 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-institutional/60">Peso ranking</span>
-                  <span className="font-medium text-gray-institutional">{s.peso_ranking}</span>
+                  <span className={`font-medium ${s.peso_ranking != null && s.peso_ranking >= 15 ? 'rounded-lg bg-amber-100 px-2 py-0.5 text-amber-800' : 'text-gray-institutional'}`}>
+                    {s.peso_ranking}
+                    {s.peso_ranking != null && s.peso_ranking >= 15 && <span className="ml-1">★</span>}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-institutional/60">Fecha</span>
@@ -121,6 +135,59 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                 </div>
               </div>
             </Card>
+
+            {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.escuelas_cercanas && s.escuelas_cercanas.length > 0) || (s.iglesias_cercanas && s.iglesias_cercanas.length > 0) || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
+              <Card title="Información del tramo">
+                <div className="flex flex-col gap-2 text-sm">
+                  {s.distancia_tramo_m != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Distancia del tramo</span>
+                      <span className="font-medium text-guinda">{s.distancia_tramo_m} m</span>
+                    </div>
+                  )}
+                  {s.ancho_calle_m != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Ancho de calle</span>
+                      <span className="font-medium text-guinda">~{s.ancho_calle_m} m</span>
+                    </div>
+                  )}
+                  {s.zona_zap != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Zona ZAP</span>
+                      <span className={`font-medium ${s.zona_zap ? 'text-amber-700' : 'text-gray-institutional'}`}>
+                        {s.zona_zap ? 'Si' : 'No'}
+                      </span>
+                    </div>
+                  )}
+                  {s.cobertura_agua != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Cobertura de agua</span>
+                      <span className={`font-medium ${s.cobertura_agua ? 'text-blue-600' : 'text-gray-institutional'}`}>
+                        {s.cobertura_agua ? 'Si' : 'No aplica'}
+                      </span>
+                    </div>
+                  )}
+                  {s.escuelas_cercanas && s.escuelas_cercanas.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
+                      <span className="text-gray-institutional">{s.escuelas_cercanas.join(', ')}</span>
+                    </div>
+                  )}
+                  {s.iglesias_cercanas && s.iglesias_cercanas.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
+                      <span className="text-gray-institutional">{s.iglesias_cercanas.join(', ')}</span>
+                    </div>
+                  )}
+                  {s.transportes_cercanos && s.transportes_cercanos.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
+                      <span className="text-gray-institutional">{s.transportes_cercanos.join(', ')}</span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
 
             {s.descripcion && (
               <Card title="Descripción">
@@ -204,27 +271,60 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
               </Card>
             )}
 
-            <Card title="Coordenadas">
-              <div className="flex flex-col gap-1.5 text-xs font-mono text-gray-institutional/60">
-                <div className="flex justify-between">
-                  <span>Latitud:</span>
-                  <span>{s.latitud.toFixed(6)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Longitud:</span>
-                  <span>{s.longitud.toFixed(6)}</span>
+            <Card title="Información geo">
+              <div className="flex flex-col gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-3.5 w-3.5 text-guinda" />
+                  <span className="text-gray-institutional/60">
+                    {s.latitud.toFixed(6)}, {s.longitud.toFixed(6)}
+                  </span>
                 </div>
                 {hasTramo && (
+                  <div className="flex items-center gap-2">
+                    <Ruler className="h-3.5 w-3.5 text-guinda" />
+                    <span className="text-gray-institutional/60">
+                      {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
+                    </span>
+                  </div>
+                )}
+
+                {!detection ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
+                ) : (
                   <>
                     <hr className="my-1 border-gray-100" />
-                    <div className="flex justify-between">
-                      <span>Tramo inicio:</span>
-                      <span>{s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Tramo fin:</span>
-                      <span>{s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}</span>
-                    </div>
+
+                    {detection.zona_zap && (
+                      <div className="flex items-start gap-2 text-amber-700">
+                        <MapIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="font-medium">Zona ZAP: <span className="font-normal">{detection.zona_zap}</span></span>
+                      </div>
+                    )}
+
+                    {detection.escuelas_cercanas.length > 0 && (
+                      <div className="flex items-start gap-2 text-blue-600">
+                        <School className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="line-clamp-2">{detection.escuelas_cercanas.join(', ')}</span>
+                      </div>
+                    )}
+
+                    {detection.iglesias_cercanas.length > 0 && (
+                      <div className="flex items-start gap-2 text-purple-600">
+                        <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="line-clamp-2">{detection.iglesias_cercanas.join(', ')}</span>
+                      </div>
+                    )}
+
+                    {detection.transportes_cercanos.length > 0 && (
+                      <div className="flex items-start gap-2 text-orange-600">
+                        <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="line-clamp-2">{detection.transportes_cercanos.join(', ')}</span>
+                      </div>
+                    )}
+
+                    {detection.fuera_alcance && (
+                      <p className="text-xs text-red-500">Fuera del área de cobertura</p>
+                    )}
                   </>
                 )}
               </div>
