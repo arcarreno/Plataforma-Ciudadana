@@ -101,28 +101,7 @@ export default function Header({
                 )
               })}
             </nav>
-            <nav className="flex gap-1 md:hidden">
-              {[
-                { to: '/', label: 'Inicio' },
-                { to: '/nueva-solicitud', label: 'Nueva' },
-                { to: '/consultar-folio', label: 'Ver' },
-              ].map((link) => {
-                const isActive = location.pathname === link.to
-                return (
-                  <Link
-                    key={link.to}
-                    to={link.to}
-                    className={`rounded-xl px-3 py-2 text-xs font-medium transition-all duration-200 ${
-                      isActive
-                        ? 'bg-guinda text-white shadow-button'
-                        : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                )
-              })}
-            </nav>
+
 
 
             {user && (
