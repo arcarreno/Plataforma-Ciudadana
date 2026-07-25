@@ -1,93 +1,7 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 import type { Solicitud } from '../types/solicitud'
-
-// ── Page geometry (Letter: 21.59 x 27.94 cm) ──
-const PTS_PER_CM = 72 / 2.54
-const PAGE_W = 21.59 * PTS_PER_CM
-const PAGE_H = 27.94 * PTS_PER_CM
-const LEFT = 3.0 * PTS_PER_CM
-const RIGHT = LEFT
-const CONTENT_W = PAGE_W - LEFT - RIGHT
-
-// Y-coordinates in pdf-lib (y=0 at bottom of page)
-const TOP_P1 = 1.5 * PTS_PER_CM       // first page content starts at 1.5cm from top
-const TOP_CONT = 4.5 * PTS_PER_CM      // continuation pages start at 4.5cm from top
-const FOOTER_TOP_Y = PAGE_H - 22 * PTS_PER_CM       // footer div starts at 22cm from top → y≈167
-const FOOTER_TEXT_Y = PAGE_H - 24.75 * PTS_PER_CM   // footer text at 24.75cm from top → y≈89
-
-const FONT_SIZES = {
-  year: 9, oficioNum: 10.5, destinatario: 10.5, cargo: 10.5,
-  fundamento: 10.5, table: 9, cuerpo: 10.5, firma: 11, ccp: 7, footer: 8.5,
-}
-
-const LINE_H = { cuerpo: 1.45, firma: 1.3, table: 1.2, ccp: 1.2 }
-
-const COLOR = {
-  headerBg: rgb(0.9059, 0.9020, 0.9020),
-  black: rgb(0, 0, 0),
-  footerText: rgb(0.6784, 0.6392, 0.4941),
-  gray: rgb(0.5, 0.5, 0.5),
-}
-
-// ── Helpers ──
-function formatDate(): string {
-  const d = new Date()
-  const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
-  return `${String(d.getDate()).padStart(2, '0')} DE ${meses[d.getMonth()]} DE ${d.getFullYear()}`
-}
-
-function formatYearTag(): string {
-  return `${new Date().getFullYear()}, Año de Margarita Maza Parada`
-}
-
-function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
-  if (!text) return ['']
-  const lines: string[] = []
-  for (const para of text.split('\n')) {
-    const words = para.split(/\s+/)
-    let cur = ''
-    for (const word of words) {
-      const test = cur ? cur + ' ' + word : word
-      if (font.widthOfTextAtSize(test, fontSize) > maxWidth && cur) {
-        lines.push(cur)
-        cur = word
-      } else {
-        cur = test
-      }
-    }
-    if (cur) lines.push(cur)
-  }
-  return lines.length > 0 ? lines : ['']
-}
-
-function blockHeight(text: string, font: any, fontSize: number, maxWidth: number, lh: number): number {
-  if (!text) return 0
-  return wrapText(text, font, fontSize, maxWidth).length * fontSize * lh
-}
-
-function drawTextBlock(page: any, text: string, font: any, fontSize: number, x: number, y: number, maxWidth: number, lh: number): number {
-  const lines = wrapText(text, font, fontSize, maxWidth)
-  let dy = y
-  for (const line of lines) {
-    page.drawText(line, { x, y: dy, size: fontSize, font, color: COLOR.black })
-    dy -= fontSize * lh
-  }
-  return lines.length * fontSize * lh
-}
-
-function drawTableRow(page: any, font: any, cells: string[], colWidths: number[], rowH: number, x: number, y: number, fillColor?: any) {
-  let cx = x
-  for (let i = 0; i < cells.length; i++) {
-    const cw = colWidths[i]
-    if (fillColor) {
-      page.drawRectangle({ x: cx, y: y - rowH, width: cw, height: rowH, color: fillColor })
-    }
-    page.drawRectangle({ x: cx, y: y - rowH, width: cw, height: rowH, borderColor: COLOR.black, borderWidth: 0.5 })
-    const pad = 4 / 2.54 * PTS_PER_CM
-    drawTextBlock(page, cells[i], font, FONT_SIZES.table, cx + pad, y - pad - (rowH - pad * 2 - FONT_SIZES.table * LINE_H.table) / 2, cw - pad * 2, LINE_H.table)
-    cx += cw
-  }
-}
+import letterhead from '../assets/letterhead.jpg'
 
 const CONTACTOS = [
   { area: 'Atención Ciudadana de la SEMOVINFRA', telefono: '222 309 4400 Ext. 5776 y 5744' },
@@ -98,209 +12,370 @@ const CONTACTOS = [
   { area: 'Dirección Jurídica', telefono: '222 309 4400 Ext. 5693' },
 ]
 
-// ── Main generator ──
+function formatDate(): string {
+  const d = new Date()
+  const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+  return `${String(d.getDate()).padStart(2, '0')} DE ${meses[d.getMonth()]} DE ${d.getFullYear()}`
+}
+
+function formatYearTag(): string {
+  return `${new Date().getFullYear()}, Año de Margarita Maza Parada`
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function buildOficioHTML(solicitud: Solicitud): { page1: string; page2: string } {
+  const fecha = solicitud.fecha_creacion
+    ? new Date(solicitud.fecha_creacion).toLocaleDateString('es-MX')
+    : '—'
+
+  const tablaRow = `
+    <tr>
+      <td>${escapeHtml(fecha)}</td>
+      <td>${escapeHtml(solicitud.tipo_solicitud)}</td>
+      <td>${escapeHtml(solicitud.folio_unico || '—')}</td>
+      <td>${escapeHtml(solicitud.estatus_fase || '—')}</td>
+    </tr>`
+
+  const contactosRows = CONTACTOS.map(c => `
+    <tr>
+      <td>${escapeHtml(c.area)}</td>
+      <td>${escapeHtml(c.telefono)}</td>
+    </tr>`).join('')
+
+  const page1 = `
+    <div class="oficio-header">
+      <div class="header-year">${escapeHtml(formatYearTag())}</div>
+      <div class="header-oficio-num">OFICIO Núm. SEMOVINFRA-${escapeHtml(solicitud.folio_unico)}/2026</div>
+    </div>
+    <div class="oficio-body">
+      <div class="destinatario-line">${escapeHtml(solicitud.nombre_solicitante.toUpperCase())}</div>
+      <div class="destinatario-line cargo-line">CIUDADANO(A)</div>
+      <div class="destinatario-line presente-line">P R E S E N T E</div>
+      <div class="texto-cuerpo">
+        <p>Con fundamento en lo dispuesto por los artículos 8 de la Constitución Política de los Estados Unidos Mexicanos; 3, 4, 5, 6 fracción I.2 y 12 fracción I, IV y X del Reglamento Interior de la Secretaría de Movilidad e Infraestructura del Honorable Ayuntamiento del Municipio de Puebla, por este medio respetuosamente me permito informarle que sus solicitudes han sido remitidas a las áreas correspondientes para su análisis, programación y en su caso atención de las mismas.</p>
+      </div>
+      <table class="tabla-oficio">
+        <thead>
+          <tr>
+            <th>N° Control</th>
+            <th>Solicitud/Petición</th>
+            <th>Oficio Recibido</th>
+            <th>Turnado A:</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${escapeHtml(solicitud.folio_unico || '—')}</td>
+            <td>${escapeHtml(solicitud.tipo_solicitud)}</td>
+            <td>${escapeHtml(fecha)}</td>
+            <td>${escapeHtml(solicitud.estatus_fase || '—')}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="texto-cuerpo">
+        <p>Reiteramos nuestro compromiso de trabajar en beneficio de la comunidad, asegurando que los recursos sean utilizados de manera óptima para la mejora de la infraestructura urbana.</p>
+      </div>
+      <div class="texto-cuerpo">
+        <p>Asimismo, se informa que esta Secretaría se encuentra a su disposición para contribuir en la atención a la ciudadanía, dentro de las facultades conferidas por su reglamento. En razón de lo antes expuesto, y con el objetivo de facilitar la colaboración, se proporcionan los siguientes números de contacto de la dependencia:</p>
+      </div>
+    </div>`
+
+  const page2 = `
+    <table class="tabla-contactos">
+      <thead>
+        <tr>
+          <th>ÁREA</th>
+          <th>Número de contacto</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${contactosRows}
+      </tbody>
+    </table>
+    <div class="texto-cuerpo">
+      <p>Sin otro particular, agradezco su atención y reitero mi distinguida consideración.</p>
+    </div>
+    <div class="oficio-firma">
+      <div class="firma-atentamente">ATENTAMENTE</div>
+      <div class="firma-ciudad">CUATRO VECES HEROICA PUEBLA DE ZARAGOZA, A ${escapeHtml(formatDate())}</div>
+      <div class="firma-lema">"LA CAPITAL IMPARABLE"</div>
+      <div class="firma-nombre">ANA MARÍA VALENCIA PACHECO</div>
+      <div class="firma-cargo">SECRETARIA TÉCNICA DE LA SECRETARÍA DE MOVILIDAD E INFRAESTRUCTURA</div>
+    </div>
+    <div class="oficio-ccp">
+      <div>Archivo.</div>
+      <div>c.c.p. Julio César Gil Torres- Director Jurídico de la SEMOVINFRA-para su conocimiento-Presente.</div>
+      <div>AAMVP/jol</div>
+    </div>`
+
+  return { page1, page2 }
+}
+
+// ── CSS exacta del Generador_Oficios (App.css) ──
+function getOficioCSS(): string {
+  return `
+    /* Reset */
+    .oficio-gen *, .oficio-gen *::before, .oficio-gen *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    .oficio-gen {
+      font-family: 'Poppins', 'Calibri', sans-serif;
+      color: #000;
+      line-height: 1.4;
+    }
+
+    /* Page wrapper — 21.6×27.9cm exacto */
+    .oficio-gen .oficio-wrapper {
+      width: 21.6cm;
+      height: 27.9cm;
+      background: #fff;
+      position: relative;
+      overflow: hidden;
+      font-family: 'Poppins', 'Calibri', sans-serif;
+      background-size: 21.6cm 27.9cm;
+      background-repeat: no-repeat;
+      background-position: top center;
+    }
+
+    /* Overlay translúcido */
+    .oficio-gen .oficio-wrapper::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.18);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Content — padding exacto del reference */
+    .oficio-gen .oficio-content {
+      position: relative;
+      z-index: 1;
+      padding: 1.5cm 3.0cm 6.5cm;
+    }
+
+    /* Header */
+    .oficio-gen .oficio-header {
+      text-align: right;
+      margin-bottom: 32px;
+    }
+    .oficio-gen .header-year {
+      font-size: 9pt;
+      font-style: italic;
+      color: #000;
+      margin-top: 1.6cm;
+      opacity: 0.75;
+    }
+    .oficio-gen .header-oficio-num {
+      font-size: 10.5pt;
+      font-weight: 700;
+      margin-top: 2px;
+      opacity: 0.75;
+    }
+
+    /* Destinatario */
+    .oficio-gen .destinatario-line {
+      font-size: 10.5pt;
+      margin-bottom: 2px;
+      line-height: 1.3;
+    }
+    .oficio-gen .cargo-line {
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .oficio-gen .presente-line {
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+
+    /* Body text */
+    .oficio-gen .texto-cuerpo {
+      font-size: 10.5pt;
+      text-align: justify;
+      line-height: 1.45;
+    }
+    .oficio-gen .texto-cuerpo p {
+      margin-bottom: 10px;
+      text-indent: 0.5in;
+    }
+
+    /* Table oficio */
+    .oficio-gen .tabla-oficio {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 9pt;
+    }
+    .oficio-gen .tabla-oficio th {
+      background: #E7E6E6;
+      border: 1px solid #000;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 9pt;
+    }
+    .oficio-gen .tabla-oficio td {
+      border: 1px solid #000;
+      padding: 4px 8px;
+      text-align: center;
+      font-size: 9pt;
+    }
+
+    /* Table contactos */
+    .oficio-gen .tabla-contactos {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2.54cm 0 14px;
+    }
+    .oficio-gen .tabla-contactos th {
+      background: #E7E6E6;
+      border: 1px solid #000;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 10pt;
+    }
+    .oficio-gen .tabla-contactos td {
+      border: 1px solid #000;
+      padding: 4px 8px;
+      text-align: center;
+      font-size: 10pt;
+    }
+
+    /* Firma */
+    .oficio-gen .oficio-firma {
+      text-align: center;
+      margin-top: 30px;
+    }
+    .oficio-gen .firma-atentamente {
+      font-size: 11pt;
+      font-weight: 700;
+    }
+    .oficio-gen .firma-ciudad {
+      font-size: 11pt;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .oficio-gen .firma-lema {
+      font-size: 11pt;
+      font-weight: 700;
+      font-style: italic;
+      margin-top: 2px;
+    }
+    .oficio-gen .firma-nombre {
+      font-size: 11pt;
+      font-weight: 700;
+      margin-top: 28px;
+    }
+    .oficio-gen .firma-cargo {
+      font-size: 11pt;
+      font-weight: 700;
+    }
+
+    /* CCP */
+    .oficio-gen .oficio-ccp {
+      font-size: 7pt;
+      margin-top: 24px;
+      line-height: 1.4;
+    }
+
+    /* Footer — posición fija a 22cm del tope */
+    .oficio-gen .oficio-footer {
+      position: absolute;
+      top: 22cm;
+      left: 0;
+      width: 100%;
+      text-align: left;
+      z-index: 1;
+      padding: 2.75cm 0 0 12.99cm;
+      pointer-events: none;
+      opacity: 0.75;
+    }
+    .oficio-gen .footer-text {
+      font-family: 'Poppins', 'Calibri', sans-serif;
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: #ADA37E;
+      line-height: 1.5;
+    }
+  `
+}
+
+const FOOTER_HTML = `
+  <div class="footer-text">
+    GOBIERNO DE LA CIUDAD 2024 - 2027<br/>
+    TEL +52 (222) 309 46 00 EXT. 5748<br/>
+    PROL. REFORMA #3308, COL. AMOR, C.P. 72140<br/>
+    PUEBLA, PUE., MÉXICO
+  </div>`
+
 export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
-  const pdfDoc = await PDFDocument.create()
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+  const { page1, page2 } = buildOficioHTML(solicitud)
 
-  let letterheadImg = null
-  try {
-    const resp = await fetch('/src/assets/letterhead.jpg')
-    const buf = await resp.arrayBuffer()
-    letterheadImg = await pdfDoc.embedJpg(buf)
-  } catch { /* continue without background */ }
+  // Create hidden container
+  const container = document.createElement('div')
+  container.className = 'oficio-gen'
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;'
+  document.body.appendChild(container)
 
-  const colW = Array(4).fill(CONTENT_W / 4)
-  const colLabels = ['OFICIO RECIBIDO', 'SOLICITUD', 'FOLIO ST', 'OFICIO DE RESPUESTA Y/O SEGUIMIENTO']
+  // Build both pages as separate wrappers (matching reference DOM structure)
+  container.innerHTML = `
+    <style>${getOficioCSS()}</style>
+    <div class="oficio-wrapper" data-page="1" style="background-image:url(${letterhead})">
+      <div class="oficio-content">${page1}</div>
+      <div class="oficio-footer">${FOOTER_HTML}</div>
+    </div>
+    <div class="oficio-wrapper" data-page="2" style="background-image:url(${letterhead})">
+      <div class="oficio-content">${page2}</div>
+      <div class="oficio-footer">${FOOTER_HTML}</div>
+    </div>`
 
-  // ── Page management ──
-  let currentPage: any = null
-  let isFirst = true
-  let y = 0
+  // Wait for fonts + images
+  await document.fonts.ready
+  await new Promise(r => setTimeout(r, 200))
 
-  function addPage(): any {
-    const p = pdfDoc.addPage([PAGE_W, PAGE_H])
-    if (letterheadImg) {
-      p.drawImage(letterheadImg, { x: 0, y: 0, width: PAGE_W, height: PAGE_H })
-    }
-    // Footer text at 24.75cm from top (y=0 is bottom in pdf-lib)
-    const footerX = 12.99 * PTS_PER_CM
-    const footerLines = [
-      'GOBIERNO DE LA CIUDAD 2024 - 2027',
-      'TEL +52 (222) 309 46 00 EXT. 5748',
-      'PROL. REFORMA #3308, COL. AMOR, C.P. 72140',
-      'PUEBLA, PUE., MÉXICO',
-    ]
-    let dy = FOOTER_TEXT_Y
-    for (const line of footerLines) {
-      p.drawText(line, { x: footerX, y: dy, size: FONT_SIZES.footer, font, color: COLOR.footerText })
-      dy -= FONT_SIZES.footer * 1.5
-    }
-    return p
-  }
-
-  function newPage() {
-    currentPage = addPage()
-    isFirst = false
-    y = PAGE_H - TOP_CONT
-  }
-
-  function ensureSpace(needPts: number) {
-    if (y - needPts < FOOTER_TOP_Y) {
-      newPage()
-    }
-  }
-
-  // ── Start first page ──
-  currentPage = addPage()
-  y = PAGE_H - TOP_P1
-  const hx = LEFT
-
-  // ── HEADER ──
-  const headerH = FONT_SIZES.year * 1.2 + FONT_SIZES.oficioNum * 1.2 + 12
-  ensureSpace(headerH)
-  currentPage.drawText(`"${formatYearTag()}"`, { x: hx, y, size: FONT_SIZES.year, font, color: COLOR.gray })
-  y -= FONT_SIZES.year * 1.2
-
-  const oficioNum = `OFICIO Núm. SEMOVINFRA-${solicitud.folio_unico}/2026`
-  currentPage.drawText(oficioNum, { x: hx, y, size: FONT_SIZES.oficioNum, font: fontBold, color: COLOR.gray })
-  y -= FONT_SIZES.oficioNum * 1.2 + 12
-
-  // ── DESTINATARIO ──
-  const destinatario = solicitud.nombre_solicitante.toUpperCase()
-  const destH = blockHeight(destinatario, font, FONT_SIZES.destinatario, CONTENT_W * 0.7, LINE_H.cuerpo)
-  ensureSpace(destH)
-  drawTextBlock(currentPage, destinatario, font, FONT_SIZES.destinatario, hx, y, CONTENT_W * 0.7, LINE_H.cuerpo)
-  y -= destH
-
-  // ── CARGO ──
-  const cargo = 'CIUDADANO(A)'
-  const cargoH = blockHeight(cargo, fontBold, FONT_SIZES.cargo, CONTENT_W * 0.7, LINE_H.cuerpo)
-  ensureSpace(cargoH)
-  drawTextBlock(currentPage, cargo, fontBold, FONT_SIZES.cargo, hx, y, CONTENT_W * 0.7, LINE_H.cuerpo)
-  y -= cargoH
-
-  // ── PRESENTE ──
-  ensureSpace(FONT_SIZES.destinatario * LINE_H.cuerpo + 18 / 2.54 * PTS_PER_CM)
-  currentPage.drawText('P R E S E N T E', { x: hx, y, size: FONT_SIZES.destinatario, font: fontBold, color: COLOR.black })
-  y -= FONT_SIZES.destinatario * LINE_H.cuerpo + 18 / 2.54 * PTS_PER_CM
-
-  // ── FUNDAMENTO ──
-  const fundamento = `Con fundamento en lo dispuesto por los artículos 8 de la Constitución Política de los Estados Unidos Mexicanos; 3, 4, 5, 6 fracción I.2 y 12 fracción I, IV y X del Reglamento Interior de la Secretaría de Movilidad e Infraestructura del Honorable Ayuntamiento del Municipio de Puebla, por este medio respetuosamente me permito informarle que sus solicitudes han sido remitidas a las áreas correspondientes para su análisis, programación y en su caso atención de las mismas.`
-  const fundH = blockHeight(fundamento, font, FONT_SIZES.fundamento, CONTENT_W, LINE_H.cuerpo)
-  ensureSpace(fundH)
-  drawTextBlock(currentPage, fundamento, font, FONT_SIZES.fundamento, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= fundH + 5.1
-
-  // ── TABLE (1 row) ──
-  const rowData = [
-    solicitud.fecha_creacion ? new Date(solicitud.fecha_creacion).toLocaleDateString('es-MX') : '—',
-    solicitud.tipo_solicitud,
-    solicitud.folio_unico || '—',
-    solicitud.estatus_fase || '—',
-  ]
-
-  const theadH = FONT_SIZES.table * LINE_H.table + 12 / 2.54 * PTS_PER_CM
-  ensureSpace(theadH)
-  drawTableRow(currentPage, fontBold, colLabels, colW, theadH, hx, y, COLOR.headerBg)
-  y -= theadH
-
-  let rowH = FONT_SIZES.table * LINE_H.table + 8 / 2.54 * PTS_PER_CM
-  const pad = 8 / 2.54 * PTS_PER_CM
-  for (let i = 0; i < 4; i++) {
-    const cellW = colW[i] - pad * 2
-    const h = blockHeight(rowData[i], font, FONT_SIZES.table, cellW, LINE_H.table) + pad * 2
-    rowH = Math.max(rowH, h)
-  }
-  ensureSpace(rowH)
-  drawTableRow(currentPage, font, rowData, colW, rowH, hx, y, null)
-  y -= rowH + 5.1
-
-  // ── COMPROMISO ──
-  const compromiso = 'Reiteramos nuestro compromiso de trabajar en beneficio de la comunidad, asegurando que los recursos sean utilizados de manera óptima para la mejora de la infraestructura urbana.'
-  const compH = blockHeight(compromiso, font, FONT_SIZES.cuerpo, CONTENT_W, LINE_H.cuerpo)
-  ensureSpace(compH)
-  drawTextBlock(currentPage, compromiso, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= compH + 3.7
-
-  // ── CONTACTO paragraph ──
-  const contacto = 'Asimismo, se informa que esta Secretaría se encuentra a su disposición para contribuir en la atención a la ciudadanía, dentro de las facultades conferidas por su reglamento. En razón de lo antes expuesto, y con el objetivo de facilitar la colaboración, se proporcionan los siguientes números de contacto de la dependencia:'
-  const contactH = blockHeight(contacto, font, FONT_SIZES.cuerpo, CONTENT_W, LINE_H.cuerpo)
-  ensureSpace(contactH)
-  drawTextBlock(currentPage, contacto, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= contactH + 3.7
-
-  // ── CONTACTS TABLE ──
-  const cpad = 4 / 2.54 * PTS_PER_CM
-  const ctheadH = FONT_SIZES.table * LINE_H.table + cpad * 2
-  const ctW = CONTENT_W / 2
-
-  // Draw thead
-  ensureSpace(ctheadH)
-  currentPage.drawRectangle({ x: hx, y: y - ctheadH, width: ctW, height: ctheadH, color: COLOR.headerBg })
-  currentPage.drawRectangle({ x: hx + ctW, y: y - ctheadH, width: ctW, height: ctheadH, color: COLOR.headerBg })
-  currentPage.drawRectangle({ x: hx, y: y - ctheadH, width: ctW, height: ctheadH, borderColor: COLOR.black, borderWidth: 0.5 })
-  currentPage.drawRectangle({ x: hx + ctW, y: y - ctheadH, width: ctW, height: ctheadH, borderColor: COLOR.black, borderWidth: 0.5 })
-  currentPage.drawText('ÁREA', { x: hx + cpad, y: y - cpad - (ctheadH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2, size: FONT_SIZES.table, font: fontBold, color: COLOR.black })
-  currentPage.drawText('Número de contacto', { x: hx + ctW + cpad, y: y - cpad - (ctheadH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2, size: FONT_SIZES.table, font: fontBold, color: COLOR.black })
-  y -= ctheadH
-
-  // Draw each row with page-break support
-  for (const c of CONTACTOS) {
-    const cRowH = Math.max(
-      blockHeight(c.area, font, 10, ctW - cpad * 2, LINE_H.table) + cpad * 2,
-      blockHeight(c.telefono, font, 10, ctW - cpad * 2, LINE_H.table) + cpad * 2,
-      10 * LINE_H.table + cpad * 2
+  const wrapperEls = container.querySelectorAll('.oficio-wrapper') as NodeListOf<HTMLElement>
+  const canvases = await Promise.all(
+    Array.from(wrapperEls).map(el =>
+      html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      })
     )
-    ensureSpace(cRowH)
-    currentPage.drawRectangle({ x: hx, y: y - cRowH, width: ctW, height: cRowH, borderColor: COLOR.black, borderWidth: 0.5 })
-    currentPage.drawRectangle({ x: hx + ctW, y: y - cRowH, width: ctW, height: cRowH, borderColor: COLOR.black, borderWidth: 0.5 })
-    const aY = y - cpad - (cRowH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2
-    drawTextBlock(currentPage, c.area, font, 10, hx + cpad, aY, ctW - cpad * 2, LINE_H.table)
-    drawTextBlock(currentPage, c.telefono, font, 10, hx + ctW + cpad, aY, ctW - cpad * 2, LINE_H.table)
-    y -= cRowH
-  }
-  y -= 3.7
+  )
 
-  // ── CIERRE ──
-  const cierre = 'Sin otro particular, agradezco su atención y reitero mi distinguida consideración.'
-  const cierreH = blockHeight(cierre, font, FONT_SIZES.cuerpo, CONTENT_W, LINE_H.cuerpo)
-  ensureSpace(cierreH)
-  drawTextBlock(currentPage, cierre, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= cierreH + 3.7
+  // Build PDF — Letter size matching reference (612x792 pts)
+  const firstCanvas = canvases[0]
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'px',
+    format: [firstCanvas.width / 2, firstCanvas.height / 2],
+    hotfixes: ['px_scaling'],
+  })
 
-  // ── FIRMA ──
-  const firmaX = CONTENT_W * 0.35 + LEFT
-  const firmaElements = [
-    { text: 'ATENTAMENTE', bold: true },
-    { text: `CUATRO VECES HEROICA PUEBLA DE ZARAGOZA, A ${formatDate()}`, bold: false },
-    { text: '"LA CAPITAL IMPARABLE"', bold: false },
-    { text: 'ANA MARÍA VALENCIA PACHECO', bold: true },
-    { text: 'SECRETARIA TÉCNICA DE LA SECRETARÍA DE MOVILIDAD E INFRAESTRUCTURA', bold: true },
-  ]
+  canvases.forEach((canvas, i) => {
+    const imgData = canvas.toDataURL('image/png')
+    const w = canvas.width / 2
+    const h = canvas.height / 2
+    if (i > 0) pdf.addPage([w, h])
+    pdf.addImage(imgData, 'PNG', 0, 0, w, h)
+  })
 
-  // Calculate firma + ccp total height
-  let firmaTotalH = 0
-  for (const fe of firmaElements) {
-    firmaTotalH += blockHeight(fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, CONTENT_W * 0.6, LINE_H.firma) + 4 / 2.54 * PTS_PER_CM
-  }
-  const ccpLines = ['Archivo.', 'c.c.p. Julio César Gil Torres- Director Jurídico de la SEMOVINFRA-para su conocimiento-Presente.', 'AAMVP/jol']
-  const ccpH = blockHeight(ccpLines.join('\n'), font, FONT_SIZES.ccp, CONTENT_W, LINE_H.ccp)
+  // Cleanup
+  document.body.removeChild(container)
 
-  ensureSpace(firmaTotalH + ccpH)
-
-  for (const fe of firmaElements) {
-    const h = blockHeight(fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, CONTENT_W * 0.6, LINE_H.firma)
-    drawTextBlock(currentPage, fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, firmaX, y, CONTENT_W * 0.6, LINE_H.firma)
-    y -= h + 4 / 2.54 * PTS_PER_CM
-  }
-
-  // ── CCP at bottom of last page ──
-  drawTextBlock(currentPage, ccpLines.join('\n'), font, FONT_SIZES.ccp, hx, FOOTER_TEXT_Y + FONT_SIZES.footer * 1.5 * 4 + 10, CONTENT_W, LINE_H.ccp)
-
-  // ── Return blob URL for in-browser rendering ──
-  const bytes = await pdfDoc.save()
-  const blob = new Blob([bytes], { type: 'application/pdf' })
+  const blob = pdf.output('blob')
   return URL.createObjectURL(blob)
 }
