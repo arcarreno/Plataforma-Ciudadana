@@ -13,6 +13,7 @@ export default function Layout() {
   })
 
   const [talkBackEnabled, setTalkBackEnabled] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
 
   useTalkBack(talkBackEnabled)
 
@@ -27,6 +28,8 @@ export default function Layout() {
         onFontSizeChange={setFontSize}
         talkBackEnabled={talkBackEnabled}
         onTalkBackToggle={() => setTalkBackEnabled((p) => !p)}
+        navOpen={navOpen}
+        onNavToggle={() => setNavOpen((p) => !p)}
       />
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8 lg:px-12">
         <Outlet />

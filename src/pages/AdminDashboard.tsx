@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Solicitud } from '../types/solicitud'
-import { FileText, ArrowUpDown, Search } from 'lucide-react'
+import { FileText, ArrowUpDown, Search, Home, FilePlus, FileSearch } from 'lucide-react'
 import Button from '../shared/Button'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
 
@@ -50,7 +50,7 @@ export default function AdminDashboard() {
         <SolicitudDetail solicitud={selected} onClose={() => setSelected(null)} />
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-guinda">Panel de administración</h1>
           <p className="text-sm text-gray-institutional/60">
@@ -84,6 +84,39 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      <nav className="flex gap-2 overflow-x-auto pb-1 md:hidden">
+        <Link
+          to="/"
+          className="flex shrink-0 items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 px-4 py-2.5 text-xs font-medium text-gray-institutional transition-all duration-200 hover:border-guinda/30 hover:text-guinda"
+        >
+          <Home className="h-4 w-4" />
+          Inicio
+        </Link>
+        <Link
+          to="/nueva-solicitud"
+          className="flex shrink-0 items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 px-4 py-2.5 text-xs font-medium text-gray-institutional transition-all duration-200 hover:border-guinda/30 hover:text-guinda"
+        >
+          <FilePlus className="h-4 w-4" />
+          Nueva
+        </Link>
+        <Link
+          to="/consultar-folio"
+          className="flex shrink-0 items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 px-4 py-2.5 text-xs font-medium text-gray-institutional transition-all duration-200 hover:border-guinda/30 hover:text-guinda"
+        >
+          <FileSearch className="h-4 w-4" />
+          Consultar
+        </Link>
+        {user?.rol === 'admin' && (
+          <Link
+            to="/admin/usuarios"
+            className="flex shrink-0 items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 px-4 py-2.5 text-xs font-medium text-gray-institutional transition-all duration-200 hover:border-guinda/30 hover:text-guinda"
+          >
+            <FileText className="h-4 w-4" />
+            Usuarios
+          </Link>
+        )}
+      </nav>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">

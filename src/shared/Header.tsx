@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Accessibility, LogOut } from 'lucide-react'
+import { Menu, Accessibility, LogOut } from 'lucide-react'
 import type { FontSize } from '../core/theme'
 import logoPuebla from '../assets/Puebla.png'
 import mosaico from '../assets/mosaico.svg'
 import AccessibilityPanel from './AccessibilityPanel'
+import NavigationPanel from './NavigationPanel'
 import LoginModal from './LoginModal'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -13,6 +14,8 @@ interface HeaderProps {
   onFontSizeChange: (size: FontSize) => void
   talkBackEnabled: boolean
   onTalkBackToggle: () => void
+  navOpen: boolean
+  onNavToggle: () => void
 }
 
 const navLinks = [
@@ -26,6 +29,8 @@ export default function Header({
   onFontSizeChange,
   talkBackEnabled,
   onTalkBackToggle,
+  navOpen,
+  onNavToggle,
 }: HeaderProps) {
   const { user, cerrarSesion } = useAuth()
   const [panelOpen, setPanelOpen] = useState(false)
@@ -49,6 +54,20 @@ export default function Header({
             title={user ? `Admin: ${user.username}` : 'Iniciar sesión'}
           >
             <img src={logoPuebla} alt="Puebla" className="h-8 w-auto" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onNavToggle}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 md:hidden ${
+              navOpen
+                ? 'bg-guinda text-white shadow-button'
+                : 'text-guinda hover:bg-guinda/10'
+            }`}
+            aria-label="Abrir menú de navegación"
+            aria-expanded={navOpen}
+          >
+            <Menu size={22} />
           </button>
 
           <div className="flex items-center gap-2">
@@ -138,6 +157,11 @@ export default function Header({
           </div>
         </div>
       </header>
+
+      <NavigationPanel
+        open={navOpen}
+        onClose={() => onNavToggle()}
+      />
 
       <AccessibilityPanel
         open={panelOpen}
