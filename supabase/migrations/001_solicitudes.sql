@@ -2,11 +2,11 @@
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 
-CREATE SEQUENCE IF NOT EXISTS folio_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS folio_st_seq START 1;
 
 CREATE TABLE solicitudes (
   id_solicitud BIGSERIAL PRIMARY KEY,
-  folio_unico TEXT UNIQUE NOT NULL DEFAULT ('OP-' || to_char(NOW(), 'YYYY') || '-' || LPAD(nextval('folio_seq')::TEXT, 4, '0')),
+  folio_unico TEXT UNIQUE NOT NULL DEFAULT ('ST-' || LPAD(nextval('folio_st_seq')::TEXT, 6, '0')),
 
   nombre_solicitante TEXT NOT NULL,
   curp TEXT NOT NULL,
@@ -21,8 +21,21 @@ CREATE TABLE solicitudes (
   latitud DOUBLE PRECISION NOT NULL,
   longitud DOUBLE PRECISION NOT NULL,
 
+  tramo_lat_ini DOUBLE PRECISION,
+  tramo_lng_ini DOUBLE PRECISION,
+  tramo_lat_fin DOUBLE PRECISION,
+  tramo_lng_fin DOUBLE PRECISION,
+
   descripcion TEXT,
   rutas_evidencia TEXT[] DEFAULT '{}',
+
+  zona_zap BOOLEAN DEFAULT false,
+  cobertura_agua BOOLEAN DEFAULT false,
+  escuelas_cercanas TEXT[] DEFAULT '{}',
+  iglesias_cercanas TEXT[] DEFAULT '{}',
+  transportes_cercanos TEXT[] DEFAULT '{}',
+  distancia_tramo_m DOUBLE PRECISION,
+  ancho_calle_m DOUBLE PRECISION,
 
   peso_ranking INTEGER NOT NULL DEFAULT 5,
 

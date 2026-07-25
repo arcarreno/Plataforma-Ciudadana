@@ -1,3 +1,5 @@
+import type { EstatusFase } from '../core/constants'
+
 export interface Solicitud {
   id_solicitud?: number
   folio_unico?: string
@@ -31,7 +33,7 @@ export interface Solicitud {
   ancho_calle_m?: number
 
   peso_ranking?: number
-  estatus_fase?: string
+  estatus_fase?: EstatusFase
   fecha_creacion?: string
 }
 

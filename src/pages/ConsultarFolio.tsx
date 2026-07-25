@@ -34,7 +34,7 @@ export default function ConsultarFolio() {
             label="Número de folio"
             value={folio}
             onChange={(e) => setFolio(e.target.value)}
-            placeholder="OP-2026-0001"
+            placeholder="ST-000001"
           />
           <Button type="submit" disabled={loading || !folio.trim()}>
             <Search className="mr-2 h-4 w-4" />
@@ -77,7 +77,13 @@ export default function ConsultarFolio() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-institutional/60">Estatus</span>
-              <span className="rounded-lg bg-guinda/10 px-2 py-0.5 text-xs font-medium text-guinda">
+              <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${
+                resultado.data.estatus_fase === 'Concluido favorable'
+                  ? 'bg-green-100 text-green-700'
+                  : resultado.data.estatus_fase === 'Concluido no favorable'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-guinda/10 text-guinda'
+              }`}>
                 {resultado.data.estatus_fase}
               </span>
             </div>

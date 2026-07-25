@@ -3,9 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Solicitud } from '../types/solicitud'
-import { FileText, ArrowUpDown, Search, Ruler } from 'lucide-react'
+import { ESTATUS_OPCIONES } from '../core/constants'
+import type { EstatusFase } from '../core/constants'
+import { FileText, ArrowUpDown, Search, Ruler, Filter } from 'lucide-react'
 import Button from '../shared/Button'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
+
+const ESTATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  'Planeacion - Evaluacion': { bg: 'bg-gray-100', text: 'text-gray-700' },
+  'Concluido favorable': { bg: 'bg-green-100', text: 'text-green-700' },
+  'Concluido no favorable': { bg: 'bg-red-100', text: 'text-red-700' },
+}
 
 export default function AdminDashboard() {
   const { user } = useAuth()
@@ -15,6 +23,7 @@ export default function AdminDashboard() {
   const [selected, setSelected] = useState<Solicitud | null>(null)
   const [search, setSearch] = useState('')
   const [sortAsc, setSortAsc] = useState(false)
+  const [filtroEstatus, setFiltroEstatus] = useState<string>('')
 
   useEffect(() => {
     if (!user) { navigate('/'); return }
@@ -32,22 +41,46 @@ export default function AdminDashboard() {
   }
 
   const filtradas = solicitudes.filter(s => {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return (
-      s.folio_unico?.toLowerCase().includes(q) ||
-      s.nombre_solicitante.toLowerCase().includes(q) ||
-      s.curp.toLowerCase().includes(q) ||
-      s.tipo_solicitud.toLowerCase().includes(q) ||
-      s.colonia.toLowerCase().includes(q) ||
-      s.junta_auxiliar.toLowerCase().includes(q)
-    )
+    const matchSearch = !search.trim() || (() => {
+      const q = search.toLowerCase()
+      return (
+        s.folio_unico?.toLowerCase().includes(q) ||
+        s.nombre_solicitante.toLowerCase().includes(q) ||
+        s.curp.toLowerCase().includes(q) ||
+        s.tipo_solicitud.toLowerCase().includes(q) ||
+        s.colonia.toLowerCase().includes(q) ||
+        s.junta_auxiliar.toLowerCase().includes(q)
+      )
+    })()
+    const matchEstatus = !filtroEstatus || s.estatus_fase === filtroEstatus
+    return matchSearch && matchEstatus
   })
+
+  const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFase) => {
+    const { error } = await supabase
+      .from('solicitudes')
+      .update({ estatus_fase: nuevoEstatus })
+      .eq('id_solicitud', solicitud.id_solicitud)
+    if (!error) {
+      setSolicitudes(prev => prev.map(s =>
+        s.id_solicitud === solicitud.id_solicitud ? { ...s, estatus_fase: nuevoEstatus } : s
+      ))
+      setSelected(prev => prev && prev.id_solicitud === solicitud.id_solicitud
+        ? { ...prev, estatus_fase: nuevoEstatus }
+        : prev
+      )
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
       {selected && (
-        <SolicitudDetail solicitud={selected} onClose={() => setSelected(null)} />
+        <SolicitudDetail
+          solicitud={selected}
+          onClose={() => setSelected(null)}
+          onEstatusChange={(nuevo) => handleEstatusChange(selected, nuevo)}
+          userRole={user?.rol}
+        />
       )}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -67,6 +100,22 @@ export default function AdminDashboard() {
               placeholder="Buscar..."
               className="w-36 bg-transparent text-sm text-gray-institutional outline-none placeholder:text-gray-institutional/30 md:w-48"
             />
+          </div>
+          <div className="relative">
+            <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2">
+              <Filter className="h-4 w-4 text-gray-institutional/40" />
+              <select
+                value={filtroEstatus}
+                onChange={e => setFiltroEstatus(e.target.value)}
+                className="bg-transparent text-sm text-gray-institutional outline-none"
+              >
+                <option value="">Todos los estatus</option>
+                <option value="Planeacion - Evaluacion">Planeación - Evaluación</option>
+                {ESTATUS_OPCIONES.map(e => (
+                  <option key={e} value={e}>{e}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <button
             type="button"
@@ -99,6 +148,7 @@ export default function AdminDashboard() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtradas.map(s => {
             const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
+            const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] || ESTATUS_COLORS['Planeacion - Evaluacion']
             return (
               <button
                 key={s.id_solicitud}
@@ -119,7 +169,7 @@ export default function AdminDashboard() {
                   <span className={`rounded-lg px-2 py-0.5 text-[10px] font-medium ${
                     esPrioridad
                       ? 'bg-white/20 text-white'
-                      : 'bg-guinda/10 text-guinda'
+                      : `${estatusColor.bg} ${estatusColor.text}`
                   }`}>
                     {s.estatus_fase}
                   </span>

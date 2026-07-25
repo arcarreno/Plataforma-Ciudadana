@@ -3,7 +3,14 @@ export const MAX_SOLICITUDES_PER_MONTH = 3
 export const RANKING_PUNTOS_BASE = 5
 export const RANKING_PUNTOS_CON_EVIDENCIA = 10
 export const RANKING_PUNTOS_CARGO_PUBLICO = 15
-export const FOLIO_PREFIX = 'OP'
+export const FOLIO_PREFIX = 'ST'
+
+export const ESTATUS_OPCIONES = [
+  'Concluido favorable',
+  'Concluido no favorable',
+] as const
+
+export type EstatusFase = typeof ESTATUS_OPCIONES[number]
 
 export interface TipoObra {
   nombre: string

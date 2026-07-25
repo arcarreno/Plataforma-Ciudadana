@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileDown, FileImage } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
+import { ESTATUS_OPCIONES } from '../core/constants'
+import type { EstatusFase } from '../core/constants'
+import { esCargoPublico } from '../types/auth'
 import Card from '../shared/Card'
+import Button from '../shared/Button'
 import { cargarCapas, detectarPunto } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionPunto } from './detectar-ubicacion'
+import { generarOficioPDF } from '../lib/generarOficio'
+import { generarFichaTecnica } from '../lib/generarFicha'
 
 interface SolicitudDetailProps {
   solicitud: Solicitud
   onClose: () => void
+  onEstatusChange?: (nuevo: EstatusFase) => void
+  userRole?: string
 }
 
 const icon = L.divIcon({
@@ -43,11 +51,12 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
   return null
 }
 
-export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailProps) {
+export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, userRole }: SolicitudDetailProps) {
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
+  const [generando, setGenerando] = useState<'oficio' | 'ficha' | null>(null)
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -55,6 +64,20 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
       setDetection(detectarPunto(s.latitud, s.longitud, c))
     })
   }, [s.latitud, s.longitud])
+
+  const handleGenerarOficio = async () => {
+    setGenerando('oficio')
+    try { await generarOficioPDF(s) } catch (err) { console.error('Error al generar oficio:', err) }
+    setGenerando(null)
+  }
+
+  const handleGenerarFicha = async () => {
+    setGenerando('ficha')
+    try { await generarFichaTecnica(s) } catch (err) { console.error('Error al generar ficha:', err) }
+    setGenerando(null)
+  }
+
+  const showGenerateButtons = userRole && esCargoPublico(userRole)
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 py-6">
@@ -111,9 +134,22 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-institutional/60">Estatus</span>
-                  <span className="rounded-lg bg-guinda/10 px-2 py-0.5 text-xs font-medium text-guinda">
-                    {s.estatus_fase}
-                  </span>
+                  {onEstatusChange ? (
+                    <select
+                      value={s.estatus_fase || ''}
+                      onChange={e => onEstatusChange(e.target.value as EstatusFase)}
+                      className="rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
+                    >
+                      <option value="Planeacion - Evaluacion">Planeación - Evaluación</option>
+                      {ESTATUS_OPCIONES.map(e => (
+                        <option key={e} value={e}>{e}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="rounded-lg bg-guinda/10 px-2 py-0.5 text-xs font-medium text-guinda">
+                      {s.estatus_fase}
+                    </span>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-institutional/60">Peso ranking</span>
@@ -331,6 +367,30 @@ export default function SolicitudDetail({ solicitud, onClose }: SolicitudDetailP
             </Card>
           </div>
         </div>
+
+        {showGenerateButtons && (
+          <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4">
+            <p className="text-xs font-medium text-gray-institutional/50">Generar documentos</p>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={handleGenerarOficio}
+                disabled={generando !== null}
+                className="flex items-center gap-2"
+              >
+                <FileDown className="h-4 w-4" />
+                {generando === 'oficio' ? 'Generando...' : 'Generar oficio (PDF)'}
+              </Button>
+              <Button
+                onClick={handleGenerarFicha}
+                disabled={generando !== null}
+                className="flex items-center gap-2"
+              >
+                <FileImage className="h-4 w-4" />
+                {generando === 'ficha' ? 'Generando...' : 'Generar ficha técnica (PPTX)'}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
