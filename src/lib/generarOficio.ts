@@ -1,16 +1,19 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { Solicitud } from '../types/solicitud'
 
-// ── Page geometry (matching Generador_Oficios exactly) ──
+// ── Page geometry (Letter: 21.59 x 27.94 cm) ──
 const PTS_PER_CM = 72 / 2.54
-const PAGE_W = 21.6 * PTS_PER_CM
-const PAGE_H = 27.9 * PTS_PER_CM
+const PAGE_W = 21.59 * PTS_PER_CM
+const PAGE_H = 27.94 * PTS_PER_CM
 const LEFT = 3.0 * PTS_PER_CM
 const RIGHT = LEFT
 const CONTENT_W = PAGE_W - LEFT - RIGHT
-const TOP_P1 = 1.5 * PTS_PER_CM
-const TOP_CONT = 4.5 * PTS_PER_CM
-const BOTTOM_LIMIT = 24.70 * PTS_PER_CM
+
+// Y-coordinates in pdf-lib (y=0 at bottom of page)
+const TOP_P1 = 1.5 * PTS_PER_CM       // first page content starts at 1.5cm from top
+const TOP_CONT = 4.5 * PTS_PER_CM      // continuation pages start at 4.5cm from top
+const FOOTER_TOP_Y = PAGE_H - 22 * PTS_PER_CM       // footer div starts at 22cm from top → y≈167
+const FOOTER_TEXT_Y = PAGE_H - 24.75 * PTS_PER_CM   // footer text at 24.75cm from top → y≈89
 
 const FONT_SIZES = {
   year: 9, oficioNum: 10.5, destinatario: 10.5, cargo: 10.5,
@@ -121,8 +124,7 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
     if (letterheadImg) {
       p.drawImage(letterheadImg, { x: 0, y: 0, width: PAGE_W, height: PAGE_H })
     }
-    // Footer on every page
-    const fy = BOTTOM_LIMIT + 0.05 * PTS_PER_CM
+    // Footer text at 24.75cm from top (y=0 is bottom in pdf-lib)
     const footerX = 12.99 * PTS_PER_CM
     const footerLines = [
       'GOBIERNO DE LA CIUDAD 2024 - 2027',
@@ -130,7 +132,7 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
       'PROL. REFORMA #3308, COL. AMOR, C.P. 72140',
       'PUEBLA, PUE., MÉXICO',
     ]
-    let dy = fy + (2.75 * PTS_PER_CM)
+    let dy = FOOTER_TEXT_Y
     for (const line of footerLines) {
       p.drawText(line, { x: footerX, y: dy, size: FONT_SIZES.footer, font, color: COLOR.footerText })
       dy -= FONT_SIZES.footer * 1.5
@@ -145,7 +147,7 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
   }
 
   function ensureSpace(needPts: number) {
-    if (y - needPts < BOTTOM_LIMIT) {
+    if (y - needPts < FOOTER_TOP_Y) {
       newPage()
     }
   }
@@ -294,8 +296,8 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
     y -= h + 4 / 2.54 * PTS_PER_CM
   }
 
-  // ── CCP (ghost text at bottom of last page) ──
-  drawTextBlock(currentPage, ccpLines.join('\n'), font, FONT_SIZES.ccp, hx, BOTTOM_LIMIT + 0.5 * PTS_PER_CM, CONTENT_W, LINE_H.ccp)
+  // ── CCP at bottom of last page ──
+  drawTextBlock(currentPage, ccpLines.join('\n'), font, FONT_SIZES.ccp, hx, FOOTER_TEXT_Y + FONT_SIZES.footer * 1.5 * 4 + 10, CONTENT_W, LINE_H.ccp)
 
   // ── Return blob URL for in-browser rendering ──
   const bytes = await pdfDoc.save()

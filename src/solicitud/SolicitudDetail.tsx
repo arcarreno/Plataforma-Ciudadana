@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2 } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2, Download } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
@@ -51,13 +51,16 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
   return null
 }
 
+type DocTab = 'oficio' | 'ficha'
+
 export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, userRole }: SolicitudDetailProps) {
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
   const [generando, setGenerando] = useState(false)
-  const [docViewer, setDocViewer] = useState<{ type: 'pdf' | 'pptx'; url: string; name: string } | null>(null)
+  const [docUrls, setDocUrls] = useState<{ oficio?: string; ficha?: string } | null>(null)
+  const [activeTab, setActiveTab] = useState<DocTab>('oficio')
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -73,18 +76,19 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
         generarOficioPDF(s),
         generarFichaTecnica(s),
       ])
-      // Show PDF in iframe viewer, PPTX auto-downloads
-      setDocViewer({ type: 'pdf', url: pdfUrl, name: `oficio_${s.folio_unico}` })
-      // Auto-download PPTX
-      const a = document.createElement('a')
-      a.href = pptxUrl
-      a.download = `ficha_tecnica_${s.folio_unico}.pptx`
-      a.click()
-      URL.revokeObjectURL(pptxUrl)
+      setDocUrls({ oficio: pdfUrl, ficha: pptxUrl })
+      setActiveTab('oficio')
     } catch (err) {
       console.error('Error al generar documentos:', err)
     }
     setGenerando(false)
+  }
+
+  const handleDownload = (url: string, filename: string) => {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
   }
 
   const showGenerateButtons = userRole && esCargoPublico(userRole)
@@ -397,36 +401,93 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
         )}
       </div>
 
-      {/* Document Viewer Modal */}
-      {docViewer && (
+      {/* Document Viewer Modal — Tabbed */}
+      {docUrls && (
         <div className="fixed inset-0 z-[10000] flex flex-col bg-black/60">
+          {/* Header */}
           <div className="flex items-center justify-between bg-guinda px-4 py-3 text-white">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5" />
-              <span className="font-medium">{docViewer.name}.pdf</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <a
-                href={docViewer.url}
-                download={`${docViewer.name}.pdf`}
-                className="rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
-              >
-                Descargar PDF
-              </a>
+            <div className="flex items-center gap-4">
+              {/* Tabs */}
               <button
                 type="button"
-                onClick={() => { URL.revokeObjectURL(docViewer.url); setDocViewer(null) }}
+                onClick={() => setActiveTab('oficio')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === 'oficio' ? 'bg-white text-guinda' : 'text-white/80 hover:bg-white/10'
+                }`}
+              >
+                <FileText className="mr-1.5 inline h-4 w-4" />
+                Oficio PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('ficha')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === 'ficha' ? 'bg-white text-guinda' : 'text-white/80 hover:bg-white/10'
+                }`}
+              >
+                <FileText className="mr-1.5 inline h-4 w-4" />
+                Ficha técnica
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              {activeTab === 'oficio' && docUrls.oficio && (
+                <a
+                  href={docUrls.oficio}
+                  download={`oficio_${s.folio_unico}.pdf`}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
+                >
+                  <Download className="h-4 w-4" />
+                  Descargar PDF
+                </a>
+              )}
+              {activeTab === 'ficha' && docUrls.ficha && (
+                <button
+                  type="button"
+                  onClick={() => handleDownload(docUrls.ficha!, `ficha_tecnica_${s.folio_unico}.pptx`)}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
+                >
+                  <Download className="h-4 w-4" />
+                  Descargar PPTX
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { if (docUrls.oficio) URL.revokeObjectURL(docUrls.oficio); if (docUrls.ficha) URL.revokeObjectURL(docUrls.ficha); setDocUrls(null) }}
                 className="rounded-lg p-1.5 transition-colors hover:bg-white/20"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
           </div>
-          <iframe
-            src={docViewer.url}
-            className="flex-1 border-0"
-            title="Vista previa del oficio"
-          />
+
+          {/* Content */}
+          {activeTab === 'oficio' && docUrls.oficio && (
+            <iframe
+              src={docUrls.oficio}
+              className="flex-1 border-0"
+              title="Vista previa del oficio"
+            />
+          )}
+          {activeTab === 'ficha' && (
+            <div className="flex flex-1 items-center justify-center bg-gray-100">
+              <div className="rounded-2xl bg-white p-8 shadow-lg text-center">
+                <FileText className="mx-auto mb-4 h-12 w-12 text-guinda/40" />
+                <p className="mb-1 text-sm font-medium text-gray-institutional">Ficha técnica generada</p>
+                <p className="mb-4 text-xs text-gray-institutional/60">{s.folio_unico}</p>
+                <p className="mb-6 max-w-xs text-xs text-gray-institutional/50">
+                  La ficha técnica se generó correctamente como archivo PowerPoint. Haz clic en el botón de abajo para descargarla.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleDownload(docUrls.ficha!, `ficha_tecnica_${s.folio_unico}.pptx`)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-guinda px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-guinda/90"
+                >
+                  <Download className="h-4 w-4" />
+                  Descargar ficha técnica
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
