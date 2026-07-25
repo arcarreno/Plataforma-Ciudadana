@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileDown, FileImage } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
@@ -56,7 +56,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
-  const [generando, setGenerando] = useState<'oficio' | 'ficha' | null>(null)
+  const [generando, setGenerando] = useState(false)
+  const [docViewer, setDocViewer] = useState<{ type: 'pdf' | 'pptx'; url: string; name: string } | null>(null)
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -65,16 +66,25 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
     })
   }, [s.latitud, s.longitud])
 
-  const handleGenerarOficio = async () => {
-    setGenerando('oficio')
-    try { await generarOficioPDF(s) } catch (err) { console.error('Error al generar oficio:', err) }
-    setGenerando(null)
-  }
-
-  const handleGenerarFicha = async () => {
-    setGenerando('ficha')
-    try { await generarFichaTecnica(s) } catch (err) { console.error('Error al generar ficha:', err) }
-    setGenerando(null)
+  const handleGenerarDocumentos = async () => {
+    setGenerando(true)
+    try {
+      const [pdfUrl, pptxUrl] = await Promise.all([
+        generarOficioPDF(s),
+        generarFichaTecnica(s),
+      ])
+      // Show PDF in iframe viewer, PPTX auto-downloads
+      setDocViewer({ type: 'pdf', url: pdfUrl, name: `oficio_${s.folio_unico}` })
+      // Auto-download PPTX
+      const a = document.createElement('a')
+      a.href = pptxUrl
+      a.download = `ficha_tecnica_${s.folio_unico}.pptx`
+      a.click()
+      URL.revokeObjectURL(pptxUrl)
+    } catch (err) {
+      console.error('Error al generar documentos:', err)
+    }
+    setGenerando(false)
   }
 
   const showGenerateButtons = userRole && esCargoPublico(userRole)
@@ -371,27 +381,54 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
         {showGenerateButtons && (
           <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4">
             <p className="text-xs font-medium text-gray-institutional/50">Generar documentos</p>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={handleGenerarOficio}
-                disabled={generando !== null}
-                className="flex items-center gap-2"
-              >
-                <FileDown className="h-4 w-4" />
-                {generando === 'oficio' ? 'Generando...' : 'Generar oficio (PDF)'}
-              </Button>
-              <Button
-                onClick={handleGenerarFicha}
-                disabled={generando !== null}
-                className="flex items-center gap-2"
-              >
-                <FileImage className="h-4 w-4" />
-                {generando === 'ficha' ? 'Generando...' : 'Generar ficha técnica (PPTX)'}
-              </Button>
-            </div>
+            <Button
+              onClick={handleGenerarDocumentos}
+              disabled={generando}
+              className="flex items-center gap-2"
+            >
+              {generando ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              {generando ? 'Generando documentos...' : 'Generar oficio y ficha técnica'}
+            </Button>
           </div>
         )}
       </div>
+
+      {/* Document Viewer Modal */}
+      {docViewer && (
+        <div className="fixed inset-0 z-[10000] flex flex-col bg-black/60">
+          <div className="flex items-center justify-between bg-guinda px-4 py-3 text-white">
+            <div className="flex items-center gap-3">
+              <FileText className="h-5 w-5" />
+              <span className="font-medium">{docViewer.name}.pdf</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={docViewer.url}
+                download={`${docViewer.name}.pdf`}
+                className="rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
+              >
+                Descargar PDF
+              </a>
+              <button
+                type="button"
+                onClick={() => { URL.revokeObjectURL(docViewer.url); setDocViewer(null) }}
+                className="rounded-lg p-1.5 transition-colors hover:bg-white/20"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <iframe
+            src={docViewer.url}
+            className="flex-1 border-0"
+            title="Vista previa del oficio"
+          />
+        </div>
+      )}
     </div>
   )
 }

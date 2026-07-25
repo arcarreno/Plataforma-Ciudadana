@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { Solicitud } from '../types/solicitud'
 
+// ── Page geometry (matching Generador_Oficios exactly) ──
 const PTS_PER_CM = 72 / 2.54
 const PAGE_W = 21.6 * PTS_PER_CM
 const PAGE_H = 27.9 * PTS_PER_CM
@@ -12,8 +13,8 @@ const TOP_CONT = 4.5 * PTS_PER_CM
 const BOTTOM_LIMIT = 24.70 * PTS_PER_CM
 
 const FONT_SIZES = {
-  year: 9, oficioNum: 10.5, destinatario: 10.5, fundamento: 10.5,
-  table: 9, cuerpo: 10.5, firma: 11, ccp: 7, footer: 8.5,
+  year: 9, oficioNum: 10.5, destinatario: 10.5, cargo: 10.5,
+  fundamento: 10.5, table: 9, cuerpo: 10.5, firma: 11, ccp: 7, footer: 8.5,
 }
 
 const LINE_H = { cuerpo: 1.45, firma: 1.3, table: 1.2, ccp: 1.2 }
@@ -25,6 +26,7 @@ const COLOR = {
   gray: rgb(0.5, 0.5, 0.5),
 }
 
+// ── Helpers ──
 function formatDate(): string {
   const d = new Date()
   const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
@@ -37,9 +39,8 @@ function formatYearTag(): string {
 
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
   if (!text) return ['']
-  const paras = text.split('\n')
   const lines: string[] = []
-  for (const para of paras) {
+  for (const para of text.split('\n')) {
     const words = para.split(/\s+/)
     let cur = ''
     for (const word of words) {
@@ -58,8 +59,7 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
 
 function blockHeight(text: string, font: any, fontSize: number, maxWidth: number, lh: number): number {
   if (!text) return 0
-  const lines = wrapText(text, font, fontSize, maxWidth)
-  return lines.length * fontSize * lh
+  return wrapText(text, font, fontSize, maxWidth).length * fontSize * lh
 }
 
 function drawTextBlock(page: any, text: string, font: any, fontSize: number, x: number, y: number, maxWidth: number, lh: number): number {
@@ -95,7 +95,8 @@ const CONTACTOS = [
   { area: 'Dirección Jurídica', telefono: '222 309 4400 Ext. 5693' },
 ]
 
-export async function generarOficioPDF(solicitud: Solicitud): Promise<void> {
+// ── Main generator ──
+export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
   const pdfDoc = await PDFDocument.create()
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
@@ -107,20 +108,20 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<void> {
     letterheadImg = await pdfDoc.embedJpg(buf)
   } catch { /* continue without background */ }
 
-  const GAP = { h1: 12, table: 5.1, p: 3.7 }
-
   const colW = Array(4).fill(CONTENT_W / 4)
   const colLabels = ['OFICIO RECIBIDO', 'SOLICITUD', 'FOLIO ST', 'OFICIO DE RESPUESTA Y/O SEGUIMIENTO']
 
-  function addPageWithBg() {
+  // ── Page management ──
+  let currentPage: any = null
+  let isFirst = true
+  let y = 0
+
+  function addPage(): any {
     const p = pdfDoc.addPage([PAGE_W, PAGE_H])
     if (letterheadImg) {
       p.drawImage(letterheadImg, { x: 0, y: 0, width: PAGE_W, height: PAGE_H })
     }
-    return p
-  }
-
-  function drawFooter(p: any) {
+    // Footer on every page
     const fy = BOTTOM_LIMIT + 0.05 * PTS_PER_CM
     const footerX = 12.99 * PTS_PER_CM
     const footerLines = [
@@ -134,64 +135,65 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<void> {
       p.drawText(line, { x: footerX, y: dy, size: FONT_SIZES.footer, font, color: COLOR.footerText })
       dy -= FONT_SIZES.footer * 1.5
     }
+    return p
   }
 
-  let page = addPageWithBg()
-  drawFooter(page)
-  let isFirst = true
-  let y = PAGE_H - TOP_P1
+  function newPage() {
+    currentPage = addPage()
+    isFirst = false
+    y = PAGE_H - TOP_CONT
+  }
 
   function ensureSpace(needPts: number) {
     if (y - needPts < BOTTOM_LIMIT) {
-      page = addPageWithBg()
-      drawFooter(page)
-      isFirst = false
-      y = PAGE_H - TOP_CONT
+      newPage()
     }
   }
 
+  // ── Start first page ──
+  currentPage = addPage()
+  y = PAGE_H - TOP_P1
   const hx = LEFT
 
-  // HEADER
-  ensureSpace(FONT_SIZES.year * 1.2 + FONT_SIZES.oficioNum * 1.2 + GAP.h1)
-  page.drawText(`"${formatYearTag()}"`, { x: hx, y, size: FONT_SIZES.year, font, color: COLOR.gray })
+  // ── HEADER ──
+  const headerH = FONT_SIZES.year * 1.2 + FONT_SIZES.oficioNum * 1.2 + 12
+  ensureSpace(headerH)
+  currentPage.drawText(`"${formatYearTag()}"`, { x: hx, y, size: FONT_SIZES.year, font, color: COLOR.gray })
   y -= FONT_SIZES.year * 1.2
 
   const oficioNum = `OFICIO Núm. SEMOVINFRA-${solicitud.folio_unico}/2026`
-  page.drawText(oficioNum, { x: hx, y, size: FONT_SIZES.oficioNum, font: fontBold, color: COLOR.gray })
-  y -= FONT_SIZES.oficioNum * 1.2 + GAP.h1
+  currentPage.drawText(oficioNum, { x: hx, y, size: FONT_SIZES.oficioNum, font: fontBold, color: COLOR.gray })
+  y -= FONT_SIZES.oficioNum * 1.2 + 12
 
-  // DESTINATARIO
+  // ── DESTINATARIO ──
   const destinatario = solicitud.nombre_solicitante.toUpperCase()
   const destH = blockHeight(destinatario, font, FONT_SIZES.destinatario, CONTENT_W * 0.7, LINE_H.cuerpo)
   ensureSpace(destH)
-  drawTextBlock(page, destinatario, font, FONT_SIZES.destinatario, hx, y, CONTENT_W * 0.7, LINE_H.cuerpo)
+  drawTextBlock(currentPage, destinatario, font, FONT_SIZES.destinatario, hx, y, CONTENT_W * 0.7, LINE_H.cuerpo)
   y -= destH
 
-  // CARGO (placeholder)
+  // ── CARGO ──
   const cargo = 'CIUDADANO(A)'
-  const cargoH = blockHeight(cargo, fontBold, FONT_SIZES.destinatario, CONTENT_W * 0.7, LINE_H.cuerpo)
+  const cargoH = blockHeight(cargo, fontBold, FONT_SIZES.cargo, CONTENT_W * 0.7, LINE_H.cuerpo)
   ensureSpace(cargoH)
-  drawTextBlock(page, cargo, fontBold, FONT_SIZES.destinatario, hx, y, CONTENT_W * 0.7, LINE_H.cuerpo)
+  drawTextBlock(currentPage, cargo, fontBold, FONT_SIZES.cargo, hx, y, CONTENT_W * 0.7, LINE_H.cuerpo)
   y -= cargoH
 
-  // PRESENTE
-  ensureSpace(FONT_SIZES.destinatario * LINE_H.cuerpo)
-  page.drawText('P R E S E N T E', { x: hx, y, size: FONT_SIZES.destinatario, font: fontBold, color: COLOR.black })
+  // ── PRESENTE ──
+  ensureSpace(FONT_SIZES.destinatario * LINE_H.cuerpo + 18 / 2.54 * PTS_PER_CM)
+  currentPage.drawText('P R E S E N T E', { x: hx, y, size: FONT_SIZES.destinatario, font: fontBold, color: COLOR.black })
   y -= FONT_SIZES.destinatario * LINE_H.cuerpo + 18 / 2.54 * PTS_PER_CM
 
-  // FUNDAMENTO
+  // ── FUNDAMENTO ──
   const fundamento = `Con fundamento en lo dispuesto por los artículos 8 de la Constitución Política de los Estados Unidos Mexicanos; 3, 4, 5, 6 fracción I.2 y 12 fracción I, IV y X del Reglamento Interior de la Secretaría de Movilidad e Infraestructura del Honorable Ayuntamiento del Municipio de Puebla, por este medio respetuosamente me permito informarle que sus solicitudes han sido remitidas a las áreas correspondientes para su análisis, programación y en su caso atención de las mismas.`
   const fundH = blockHeight(fundamento, font, FONT_SIZES.fundamento, CONTENT_W, LINE_H.cuerpo)
   ensureSpace(fundH)
-  drawTextBlock(page, fundamento, font, FONT_SIZES.fundamento, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= fundH + GAP.table
+  drawTextBlock(currentPage, fundamento, font, FONT_SIZES.fundamento, hx, y, CONTENT_W, LINE_H.cuerpo)
+  y -= fundH + 5.1
 
-  // TABLE
+  // ── TABLE (1 row) ──
   const rowData = [
-    solicitud.fecha_creacion
-      ? new Date(solicitud.fecha_creacion).toLocaleDateString('es-MX')
-      : '—',
+    solicitud.fecha_creacion ? new Date(solicitud.fecha_creacion).toLocaleDateString('es-MX') : '—',
     solicitud.tipo_solicitud,
     solicitud.folio_unico || '—',
     solicitud.estatus_fase || '—',
@@ -199,7 +201,7 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<void> {
 
   const theadH = FONT_SIZES.table * LINE_H.table + 12 / 2.54 * PTS_PER_CM
   ensureSpace(theadH)
-  drawTableRow(page, fontBold, colLabels, colW, theadH, hx, y, COLOR.headerBg)
+  drawTableRow(currentPage, fontBold, colLabels, colW, theadH, hx, y, COLOR.headerBg)
   y -= theadH
 
   let rowH = FONT_SIZES.table * LINE_H.table + 8 / 2.54 * PTS_PER_CM
@@ -210,71 +212,63 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<void> {
     rowH = Math.max(rowH, h)
   }
   ensureSpace(rowH)
-  drawTableRow(page, font, rowData, colW, rowH, hx, y, null)
-  y -= rowH + GAP.table
+  drawTableRow(currentPage, font, rowData, colW, rowH, hx, y, null)
+  y -= rowH + 5.1
 
-  // COMPROMISO
+  // ── COMPROMISO ──
   const compromiso = 'Reiteramos nuestro compromiso de trabajar en beneficio de la comunidad, asegurando que los recursos sean utilizados de manera óptima para la mejora de la infraestructura urbana.'
   const compH = blockHeight(compromiso, font, FONT_SIZES.cuerpo, CONTENT_W, LINE_H.cuerpo)
   ensureSpace(compH)
-  drawTextBlock(page, compromiso, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= compH + GAP.p
+  drawTextBlock(currentPage, compromiso, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
+  y -= compH + 3.7
 
-  // CONTACTO
+  // ── CONTACTO paragraph ──
   const contacto = 'Asimismo, se informa que esta Secretaría se encuentra a su disposición para contribuir en la atención a la ciudadanía, dentro de las facultades conferidas por su reglamento. En razón de lo antes expuesto, y con el objetivo de facilitar la colaboración, se proporcionan los siguientes números de contacto de la dependencia:'
   const contactH = blockHeight(contacto, font, FONT_SIZES.cuerpo, CONTENT_W, LINE_H.cuerpo)
   ensureSpace(contactH)
-  drawTextBlock(page, contacto, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= contactH + GAP.p
+  drawTextBlock(currentPage, contacto, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
+  y -= contactH + 3.7
 
-  // CONTACTS TABLE
+  // ── CONTACTS TABLE ──
   const cpad = 4 / 2.54 * PTS_PER_CM
   const ctheadH = FONT_SIZES.table * LINE_H.table + cpad * 2
   const ctW = CONTENT_W / 2
-  let ctH = ctheadH
+
+  // Draw thead
+  ensureSpace(ctheadH)
+  currentPage.drawRectangle({ x: hx, y: y - ctheadH, width: ctW, height: ctheadH, color: COLOR.headerBg })
+  currentPage.drawRectangle({ x: hx + ctW, y: y - ctheadH, width: ctW, height: ctheadH, color: COLOR.headerBg })
+  currentPage.drawRectangle({ x: hx, y: y - ctheadH, width: ctW, height: ctheadH, borderColor: COLOR.black, borderWidth: 0.5 })
+  currentPage.drawRectangle({ x: hx + ctW, y: y - ctheadH, width: ctW, height: ctheadH, borderColor: COLOR.black, borderWidth: 0.5 })
+  currentPage.drawText('ÁREA', { x: hx + cpad, y: y - cpad - (ctheadH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2, size: FONT_SIZES.table, font: fontBold, color: COLOR.black })
+  currentPage.drawText('Número de contacto', { x: hx + ctW + cpad, y: y - cpad - (ctheadH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2, size: FONT_SIZES.table, font: fontBold, color: COLOR.black })
+  y -= ctheadH
+
+  // Draw each row with page-break support
   for (const c of CONTACTOS) {
-    const tH = Math.max(
+    const cRowH = Math.max(
       blockHeight(c.area, font, 10, ctW - cpad * 2, LINE_H.table) + cpad * 2,
       blockHeight(c.telefono, font, 10, ctW - cpad * 2, LINE_H.table) + cpad * 2,
       10 * LINE_H.table + cpad * 2
     )
-    ctH += tH
+    ensureSpace(cRowH)
+    currentPage.drawRectangle({ x: hx, y: y - cRowH, width: ctW, height: cRowH, borderColor: COLOR.black, borderWidth: 0.5 })
+    currentPage.drawRectangle({ x: hx + ctW, y: y - cRowH, width: ctW, height: cRowH, borderColor: COLOR.black, borderWidth: 0.5 })
+    const aY = y - cpad - (cRowH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2
+    drawTextBlock(currentPage, c.area, font, 10, hx + cpad, aY, ctW - cpad * 2, LINE_H.table)
+    drawTextBlock(currentPage, c.telefono, font, 10, hx + ctW + cpad, aY, ctW - cpad * 2, LINE_H.table)
+    y -= cRowH
   }
-  if (CONTACTOS.length > 0) {
-    ensureSpace(ctH)
-    page.drawRectangle({ x: hx, y: y - ctheadH, width: ctW, height: ctheadH, color: COLOR.headerBg })
-    page.drawRectangle({ x: hx + ctW, y: y - ctheadH, width: ctW, height: ctheadH, color: COLOR.headerBg })
-    page.drawRectangle({ x: hx, y: y - ctheadH, width: ctW, height: ctheadH, borderColor: COLOR.black, borderWidth: 0.5 })
-    page.drawRectangle({ x: hx + ctW, y: y - ctheadH, width: ctW, height: ctheadH, borderColor: COLOR.black, borderWidth: 0.5 })
-    page.drawText('ÁREA', { x: hx + cpad, y: y - cpad - (ctheadH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2, size: FONT_SIZES.table, font: fontBold, color: COLOR.black })
-    page.drawText('Número de contacto', { x: hx + ctW + cpad, y: y - cpad - (ctheadH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2, size: FONT_SIZES.table, font: fontBold, color: COLOR.black })
-    y -= ctheadH
+  y -= 3.7
 
-    for (const c of CONTACTOS) {
-      const cRowH = Math.max(
-        blockHeight(c.area, font, 10, ctW - cpad * 2, LINE_H.table) + cpad * 2,
-        blockHeight(c.telefono, font, 10, ctW - cpad * 2, LINE_H.table) + cpad * 2,
-        10 * LINE_H.table + cpad * 2
-      )
-      ensureSpace(cRowH)
-      page.drawRectangle({ x: hx, y: y - cRowH, width: ctW, height: cRowH, borderColor: COLOR.black, borderWidth: 0.5 })
-      page.drawRectangle({ x: hx + ctW, y: y - cRowH, width: ctW, height: cRowH, borderColor: COLOR.black, borderWidth: 0.5 })
-      const aY = y - cpad - (cRowH - cpad * 2 - FONT_SIZES.table * LINE_H.table) / 2
-      drawTextBlock(page, c.area, font, 10, hx + cpad, aY, ctW - cpad * 2, LINE_H.table)
-      drawTextBlock(page, c.telefono, font, 10, hx + ctW + cpad, aY, ctW - cpad * 2, LINE_H.table)
-      y -= cRowH
-    }
-    y -= GAP.p
-  }
-
-  // CIERRE
+  // ── CIERRE ──
   const cierre = 'Sin otro particular, agradezco su atención y reitero mi distinguida consideración.'
   const cierreH = blockHeight(cierre, font, FONT_SIZES.cuerpo, CONTENT_W, LINE_H.cuerpo)
   ensureSpace(cierreH)
-  drawTextBlock(page, cierre, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
-  y -= cierreH + GAP.p
+  drawTextBlock(currentPage, cierre, font, FONT_SIZES.cuerpo, hx, y, CONTENT_W, LINE_H.cuerpo)
+  y -= cierreH + 3.7
 
-  // FIRMA
+  // ── FIRMA ──
   const firmaX = CONTENT_W * 0.35 + LEFT
   const firmaElements = [
     { text: 'ATENTAMENTE', bold: true },
@@ -284,36 +278,27 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<void> {
     { text: 'SECRETARIA TÉCNICA DE LA SECRETARÍA DE MOVILIDAD E INFRAESTRUCTURA', bold: true },
   ]
 
+  // Calculate firma + ccp total height
   let firmaTotalH = 0
   for (const fe of firmaElements) {
-    const h = blockHeight(fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, CONTENT_W * 0.6, LINE_H.firma)
-    firmaTotalH += h + 4 / 2.54 * PTS_PER_CM
+    firmaTotalH += blockHeight(fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, CONTENT_W * 0.6, LINE_H.firma) + 4 / 2.54 * PTS_PER_CM
   }
-  ensureSpace(firmaTotalH)
+  const ccpLines = ['Archivo.', 'c.c.p. Julio César Gil Torres- Director Jurídico de la SEMOVINFRA-para su conocimiento-Presente.', 'AAMVP/jol']
+  const ccpH = blockHeight(ccpLines.join('\n'), font, FONT_SIZES.ccp, CONTENT_W, LINE_H.ccp)
+
+  ensureSpace(firmaTotalH + ccpH)
 
   for (const fe of firmaElements) {
     const h = blockHeight(fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, CONTENT_W * 0.6, LINE_H.firma)
-    drawTextBlock(page, fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, firmaX, y, CONTENT_W * 0.6, LINE_H.firma)
+    drawTextBlock(currentPage, fe.text, fe.bold ? fontBold : font, FONT_SIZES.firma, firmaX, y, CONTENT_W * 0.6, LINE_H.firma)
     y -= h + 4 / 2.54 * PTS_PER_CM
   }
 
-  // CCP (ghost text at bottom)
-  const ccpLines = [
-    'Archivo.',
-    'c.c.p. Julio César Gil Torres- Director Jurídico de la SEMOVINFRA-para su conocimiento-Presente.',
-    'AAMVP/jol',
-  ]
-  const ccpText = ccpLines.join('\n')
-  const ccpH = blockHeight(ccpText, font, FONT_SIZES.ccp, CONTENT_W, LINE_H.ccp)
-  drawTextBlock(page, ccpText, font, FONT_SIZES.ccp, hx, BOTTOM_LIMIT + 0.5 * PTS_PER_CM, CONTENT_W, LINE_H.ccp)
+  // ── CCP (ghost text at bottom of last page) ──
+  drawTextBlock(currentPage, ccpLines.join('\n'), font, FONT_SIZES.ccp, hx, BOTTOM_LIMIT + 0.5 * PTS_PER_CM, CONTENT_W, LINE_H.ccp)
 
-  // Download
+  // ── Return blob URL for in-browser rendering ──
   const bytes = await pdfDoc.save()
   const blob = new Blob([bytes], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `oficio_${solicitud.folio_unico}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+  return URL.createObjectURL(blob)
 }
