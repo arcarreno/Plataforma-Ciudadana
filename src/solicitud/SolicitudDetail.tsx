@@ -324,6 +324,18 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                       <span className="text-gray-institutional">{s.escuelas_cercanas.join(', ')}</span>
                     </div>
                   )}
+                  {s.iglesias_cercanas && s.iglesias_cercanas.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
+                      <span className="text-gray-institutional">{s.iglesias_cercanas.join(', ')}</span>
+                    </div>
+                  )}
+                  {s.transportes_cercanos && s.transportes_cercanos.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
+                      <span className="text-gray-institutional">{s.transportes_cercanos.join(', ')}</span>
+                    </div>
+                  )}
                 </div>
               </Card>
             )}
@@ -518,7 +530,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
               )
             })()}
 
-            <Card title="Información geo">
+            <Card title="Información Geográfica">
               <div className="flex flex-col gap-2 text-xs">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-3.5 w-3.5 text-guinda" />
@@ -570,24 +582,10 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                       </div>
                     )}
 
-                    {detection.escuelas_cercanas.length > 0 && (
-                      <div className="flex items-start gap-2 text-blue-600">
-                        <School className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span className="line-clamp-2">{detection.escuelas_cercanas.join(', ')}</span>
-                      </div>
-                    )}
-
                     {detection.iglesias_cercanas.length > 0 && (
                       <div className="flex items-start gap-2 text-purple-600">
                         <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         <span className="line-clamp-2">{detection.iglesias_cercanas.join(', ')}</span>
-                      </div>
-                    )}
-
-                    {detection.transportes_cercanos.length > 0 && (
-                      <div className="flex items-start gap-2 text-orange-600">
-                        <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span className="line-clamp-2">{detection.transportes_cercanos.join(', ')}</span>
                       </div>
                     )}
 
