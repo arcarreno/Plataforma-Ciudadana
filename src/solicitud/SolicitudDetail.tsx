@@ -530,19 +530,40 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
               )
             })()}
 
-            <Card title="Información Geográfica">
-              <div className="flex flex-col gap-2 text-xs">
+            <Card
+              title="Información Geográfica"
+              className={
+                s.peso_ranking === 10
+                  ? 'border border-[#41504D]/30 bg-[#41504D]'
+                  : (s.peso_ranking != null && s.peso_ranking >= 15)
+                    ? 'border border-guinda/20 bg-guinda'
+                    : ''
+              }
+            >
+              <div className={`flex flex-col gap-2 text-xs ${
+                s.peso_ranking === 10
+                  ? 'text-[#DBC6B3]'
+                  : (s.peso_ranking != null && s.peso_ranking >= 15)
+                    ? 'text-white'
+                    : ''
+              }`}>
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-3.5 w-3.5 text-guinda" />
-                  <span className="text-gray-institutional/60">
+                  <MapPin className={`h-3.5 w-3.5 ${
+                    s.peso_ranking === 10 ? 'text-[#DBC6B3]' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-white' : 'text-guinda'
+                  }`} />
+                  <span className={s.peso_ranking === 10 ? 'text-[#DBC6B3]/60' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-white/60' : 'text-gray-institutional/60'}>
                     {s.latitud.toFixed(6)}, {s.longitud.toFixed(6)}
                   </span>
                 </div>
 
                 {calleInfo?.calle && (
                   <div className="flex items-center gap-2">
-                    <Navigation className="h-3.5 w-3.5 text-guinda" />
-                    <span className="font-medium text-gray-institutional">
+                    <Navigation className={`h-3.5 w-3.5 ${
+                      s.peso_ranking === 10 ? 'text-[#DBC6B3]' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-white' : 'text-guinda'
+                    }`} />
+                    <span className={`font-medium ${
+                      s.peso_ranking === 10 ? 'text-[#DBC6B3]' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-white' : 'text-gray-institutional'
+                    }`}>
                       {calleInfo.calle}
                     </span>
                   </div>
@@ -550,47 +571,61 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
 
                 {calleInfo?.entreCalles && (
                   <div className="flex items-center gap-2 pl-5">
-                    <span className="text-gray-institutional/60">
+                    <span className={s.peso_ranking === 10 ? 'text-[#DBC6B3]/60' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-white/60' : 'text-gray-institutional/60'}>
                       {calleInfo.entreCalles}
                     </span>
                   </div>
                 )}
 
                 {!calleInfo && (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
+                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${
+                    s.peso_ranking === 10 ? 'border-[#DBC6B3]/20 border-t-[#DBC6B3]' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'border-white/20 border-t-white' : 'border-guinda/20 border-t-guinda'
+                  }`} />
                 )}
 
                 {hasTramo && (
                   <div className="flex items-center gap-2">
-                    <Ruler className="h-3.5 w-3.5 text-guinda" />
-                    <span className="text-gray-institutional/60">
+                    <Ruler className={`h-3.5 w-3.5 ${
+                      s.peso_ranking === 10 ? 'text-[#DBC6B3]' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-white' : 'text-guinda'
+                    }`} />
+                    <span className={s.peso_ranking === 10 ? 'text-[#DBC6B3]/60' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-white/60' : 'text-gray-institutional/60'}>
                       {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
                     </span>
                   </div>
                 )}
 
                 {!detection ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
+                  <div className={`h-4 w-4 animate-spin rounded-full border-2 ${
+                    s.peso_ranking === 10 ? 'border-[#DBC6B3]/20 border-t-[#DBC6B3]' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'border-white/20 border-t-white' : 'border-guinda/20 border-t-guinda'
+                  }`} />
                 ) : (
                   <>
-                    <hr className="my-1 border-gray-100" />
+                    <hr className={`my-1 ${
+                      s.peso_ranking === 10 ? 'border-[#DBC6B3]/10' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'border-white/10' : 'border-gray-100'
+                    }`} />
 
                     {detection.zona_zap && (
-                      <div className="flex items-start gap-2 text-amber-700">
+                      <div className={`flex items-start gap-2 ${
+                        s.peso_ranking === 10 ? 'text-amber-300' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-amber-200' : 'text-amber-700'
+                      }`}>
                         <MapIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         <span className="font-medium">Zona ZAP: <span className="font-normal">{detection.zona_zap}</span></span>
                       </div>
                     )}
 
                     {detection.iglesias_cercanas.length > 0 && (
-                      <div className="flex items-start gap-2 text-purple-600">
+                      <div className={`flex items-start gap-2 ${
+                        s.peso_ranking === 10 ? 'text-purple-300' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-purple-200' : 'text-purple-600'
+                      }`}>
                         <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         <span className="line-clamp-2">{detection.iglesias_cercanas.join(', ')}</span>
                       </div>
                     )}
 
                     {detection.fuera_alcance && (
-                      <p className="text-xs text-red-500">Fuera del área de cobertura</p>
+                      <p className={`text-xs ${
+                        s.peso_ranking === 10 ? 'text-red-300' : (s.peso_ranking != null && s.peso_ranking >= 15) ? 'text-red-200' : 'text-red-500'
+                      }`}>Fuera del área de cobertura</p>
                     )}
                   </>
                 )}
