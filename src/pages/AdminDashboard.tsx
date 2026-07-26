@@ -203,13 +203,13 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex justify-between">
                     <span>Junta aux.:</span>
-                    <span className={esPrioridad ? 'text-white/80' : 'text-green-700'}>{s.junta_auxiliar}</span>
+                    <span className={esMaxRanking ? 'text-[#DBC6B3]/80' : esPrioridad ? 'text-white/80' : 'text-green-700'}>{s.junta_auxiliar}</span>
                   </div>
                 </div>
 
                 {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null) && (
                   <div className={`mt-2 flex flex-wrap gap-2 text-[10px] ${
-                    esPrioridad ? 'text-white/60' : 'text-gray-institutional/50'
+                    esMaxRanking ? 'text-[#DBC6B3]/60' : esPrioridad ? 'text-white/60' : 'text-gray-institutional/50'
                   }`}>
                     {s.zona_zap != null && (
                       <span className="flex items-center gap-1">
@@ -238,7 +238,7 @@ export default function AdminDashboard() {
 
                 {s.rutas_evidencia && s.rutas_evidencia.length > 0 && (
                   <div className={`mt-3 flex items-center gap-1.5 text-xs ${
-                    esPrioridad ? 'text-white/80' : 'text-guinda'
+                    esMaxRanking ? 'text-[#DBC6B3]/80' : esPrioridad ? 'text-white/80' : 'text-guinda'
                   }`}>
                     <FileText className="h-3.5 w-3.5" />
                     <span>{s.rutas_evidencia.length} archivo(s)</span>
