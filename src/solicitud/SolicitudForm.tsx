@@ -84,6 +84,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const lottieRef = useRef<HTMLDivElement>(null)
+  const [fileErrors, setFileErrors] = useState<string[]>([])
 
   useEffect(() => {
     if (!showLottie || !lottieRef.current) return
@@ -183,12 +184,23 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         descripcion: '',
         archivos: [],
       })
+      setFileErrors([])
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    set('archivos', files)
+    const selected = Array.from(e.target.files ?? [])
+    const valid: File[] = []
+    const errors: string[] = []
+    for (const f of selected) {
+      if (f.size > 500 * 1024) {
+        errors.push(`"${f.name}" excede 500 KB`)
+      } else {
+        valid.push(f)
+      }
+    }
+    set('archivos', valid)
+    setFileErrors(errors)
   }
 
   if (resultado?.folio) {
@@ -412,7 +424,14 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
           {form.archivos.length > 0 && (
             <ul className="text-xs text-gray-institutional/60">
               {form.archivos.map((f, i) => (
-                <li key={i}>{f.name}</li>
+                <li key={i}>{f.name} <span className="text-gray-institutional/40">({(f.size / 1024).toFixed(0)} KB)</span></li>
+              ))}
+            </ul>
+          )}
+          {fileErrors.length > 0 && (
+            <ul className="text-xs text-red-500">
+              {fileErrors.map((err, i) => (
+                <li key={i}>{err}</li>
               ))}
             </ul>
           )}
