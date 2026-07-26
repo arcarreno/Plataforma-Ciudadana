@@ -148,6 +148,7 @@ export default function AdminDashboard() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtradas.map(s => {
             const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
+            const esMaxRanking = s.peso_ranking === 10
             const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] || ESTATUS_COLORS['Planeacion - Evaluacion']
             return (
               <button
@@ -155,34 +156,38 @@ export default function AdminDashboard() {
                 type="button"
                 onClick={() => setSelected(s)}
                 className={`group cursor-pointer rounded-2xl p-5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
-                  esPrioridad
-                    ? 'border border-guinda/20 bg-guinda text-white'
-                    : 'border border-gray-100 bg-white'
+                  esMaxRanking
+                    ? 'border border-[#41504D]/30 bg-[#41504D] text-[#DBC6B3]'
+                    : esPrioridad
+                      ? 'border border-guinda/20 bg-guinda text-white'
+                      : 'border border-gray-100 bg-white'
                 }`}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <p className={`font-mono text-sm font-bold tracking-wider ${
-                    esPrioridad ? 'text-white/90' : 'text-guinda'
+                    esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white/90' : 'text-guinda'
                   }`}>
                     {s.folio_unico}
                   </p>
                   <span className={`rounded-lg px-2 py-0.5 text-[10px] font-medium ${
-                    esPrioridad
-                      ? 'bg-white/20 text-white'
-                      : `${estatusColor.bg} ${estatusColor.text}`
+                    esMaxRanking
+                      ? 'bg-[#DBC6B3]/20 text-[#DBC6B3]'
+                      : esPrioridad
+                        ? 'bg-white/20 text-white'
+                        : `${estatusColor.bg} ${estatusColor.text}`
                   }`}>
                     {s.estatus_fase}
                   </span>
                 </div>
 
                 <p className={`mb-3 text-sm font-medium ${
-                  esPrioridad ? 'text-white' : 'text-gray-institutional'
+                  esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white' : 'text-gray-institutional'
                 }`}>
                   {s.nombre_solicitante}
                 </p>
 
                 <div className={`flex flex-col gap-1 text-xs ${
-                  esPrioridad ? 'text-white/70' : 'text-gray-institutional/60'
+                  esMaxRanking ? 'text-[#DBC6B3]/70' : esPrioridad ? 'text-white/70' : 'text-gray-institutional/60'
                 }`}>
                   <div className="flex justify-between">
                     <span>CURP:</span>
