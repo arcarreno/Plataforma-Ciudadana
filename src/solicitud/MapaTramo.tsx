@@ -323,7 +323,7 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                         puntos: points,
                         distancia_m: d.distancia_m,
                         ancho_calle_m: d.ancho_calle_m,
-                        zona_zap: d.zonas_zap,
+                        zona_zap: d.zonas_zap.length > 0,
                         cobertura_agua: d.cobertura_agua,
                         escuelas_cercanas: d.escuelas_cercanas,
                         iglesias_cercanas: d.iglesias_cercanas,

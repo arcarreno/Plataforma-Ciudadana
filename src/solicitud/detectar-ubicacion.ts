@@ -205,7 +205,7 @@ export function detectarTramo(
 
   if (!lineBuffer) {
     return {
-      colonias: [], juntas_auxiliares: [], zonas_zap: [],
+      colonias: [], juntas_auxiliares: [], zonas_zap: [], cobertura_agua: false,
       escuelas_cercanas: [], iglesias_cercanas: [], transportes_cercanos: [],
       distancia_m, ancho_calle_m,
       coordenadas: { lat_ini, lng_ini, lat_fin, lng_fin },
