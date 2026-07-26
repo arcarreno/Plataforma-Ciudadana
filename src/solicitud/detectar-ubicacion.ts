@@ -33,7 +33,7 @@ export interface DeteccionPunto {
 export interface DeteccionTramo {
   colonias: string[]
   juntas_auxiliares: string[]
-  zonas_zap: boolean
+  zonas_zap: string[]
   cobertura_agua: boolean
   escuelas_cercanas: string[]
   iglesias_cercanas: string[]
@@ -57,7 +57,6 @@ function detectarPIP(
     if (!f.geometry) continue
     const gt = f.geometry.type
     if (gt !== 'Polygon' && gt !== 'MultiPolygon' && gt !== 'GeometryCollection') continue
-    if (!f.geometry.coordinates) continue
     try {
       if (gt === 'GeometryCollection') {
         const gc = f.geometry as GeoJSON.GeometryCollection
@@ -69,6 +68,7 @@ function detectarPIP(
           }
         }
       } else {
+        if (!f.geometry.coordinates) continue
         if (booleanPointInPolygon(pt, f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)) {
           return getProps(f).name || ''
         }
@@ -265,7 +265,7 @@ export function detectarTramo(
   if (juntas_auxiliares_raw.length === 0) {
     juntas_auxiliares_raw.push('Zona Metropolitana')
   }
-  const zonas_zap = polygonIntersects(capas.zonasZap).length > 0
+  const zonas_zap = polygonIntersects(capas.zonasZap)
   const cobertura_agua = polygonIntersects(capas.coberturaAgua).length > 0
   const escuelas_cercanas = pointInBuffer(capas.escuelas)
   const iglesias_cercanas = pointInBuffer(capas.iglesias)

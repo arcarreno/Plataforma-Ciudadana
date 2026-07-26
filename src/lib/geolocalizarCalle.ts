@@ -23,16 +23,6 @@ const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org'
 const OVERPASS_BASE = 'https://overpass-api.de/api/interpreter'
 const UA = 'AtencionCiudadana/1.0'
 
-function normalizeStreetName(name: string): string {
-  return name
-    .replace(/^Calle\s+/i, '')
-    .replace(/^Avenida\s+/i, '')
-    .replace(/^Privada\s+/i, '')
-    .replace(/^Calzada\s+/i, '')
-    .trim()
-    .toUpperCase()
-}
-
 function stripType(name: string): string {
   return name.replace(/^(Calle|Avenida|Privada|Calzada|Boulevard)\s+/i, '').trim()
 }

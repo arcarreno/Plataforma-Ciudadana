@@ -35,14 +35,6 @@ function buildOficioHTML(solicitud: Solicitud): { page1: string; page2: string }
     ? new Date(solicitud.fecha_creacion).toLocaleDateString('es-MX')
     : '—'
 
-  const tablaRow = `
-    <tr>
-      <td>${escapeHtml(fecha)}</td>
-      <td>${escapeHtml(solicitud.tipo_solicitud)}</td>
-      <td>${escapeHtml(solicitud.folio_unico || '—')}</td>
-      <td>${escapeHtml(solicitud.estatus_fase || '—')}</td>
-    </tr>`
-
   const contactosRows = CONTACTOS.map(c => `
     <tr>
       <td>${escapeHtml(c.area)}</td>
@@ -52,7 +44,7 @@ function buildOficioHTML(solicitud: Solicitud): { page1: string; page2: string }
   const page1 = `
     <div class="oficio-header">
       <div class="header-year">${escapeHtml(formatYearTag())}</div>
-      <div class="header-oficio-num">OFICIO Núm. SEMOVINFRA-${escapeHtml(solicitud.folio_unico)}/2026</div>
+      <div class="header-oficio-num">OFICIO Núm. SEMOVINFRA-${escapeHtml(solicitud.folio_unico || '')}/2026</div>
     </div>
     <div class="oficio-body">
       <div class="destinatario-line">${escapeHtml(solicitud.nombre_solicitante.toUpperCase())}</div>

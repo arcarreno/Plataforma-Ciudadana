@@ -60,7 +60,6 @@ type DocTab = 'oficio' | 'ficha' | 'enviar'
 export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, userRole }: SolicitudDetailProps) {
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
-  const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
   const [generando, setGenerando] = useState(false)
   const [docUrls, setDocUrls] = useState<{ oficio?: string; ficha?: string } | null>(null)
@@ -79,7 +78,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
 
   useEffect(() => {
     cargarCapas().then(c => {
-      setCapas(c)
       setDetection(detectarPunto(s.latitud, s.longitud, c))
     })
     if (s.calle || s.entre_calles) {
