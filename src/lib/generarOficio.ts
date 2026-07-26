@@ -347,7 +347,7 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
   const canvases = await Promise.all(
     Array.from(wrapperEls).map(el =>
       html2canvas(el, {
-        scale: 2,
+        scale: 1,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
@@ -366,7 +366,7 @@ export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
   })
 
   canvases.forEach((canvas, i) => {
-    const imgData = canvas.toDataURL('image/png')
+    const imgData = canvas.toDataURL('image/jpeg', 0.85)
     const w = canvas.width / 2
     const h = canvas.height / 2
     if (i > 0) pdf.addPage([w, h])

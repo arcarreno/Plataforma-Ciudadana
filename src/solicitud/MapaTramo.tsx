@@ -33,6 +33,7 @@ const ZONA_ZAP_STYLE = {
 interface MapaTramoProps {
   onConfirm: (data: {
     lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
+    puntos: { lat: number; lng: number }[]
     distancia_m: number; ancho_calle_m: number
     zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
   }) => void
@@ -319,6 +320,7 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                         lng_ini: d.coordenadas.lng_ini,
                         lat_fin: d.coordenadas.lat_fin,
                         lng_fin: d.coordenadas.lng_fin,
+                        puntos: points,
                         distancia_m: d.distancia_m,
                         ancho_calle_m: d.ancho_calle_m,
                         zona_zap: d.zonas_zap,

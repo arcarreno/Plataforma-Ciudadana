@@ -16,10 +16,14 @@ export interface Solicitud {
   latitud: number
   longitud: number
 
+  calle?: string
+  entre_calles?: string
+
   tramo_lat_ini?: number
   tramo_lng_ini?: number
   tramo_lat_fin?: number
   tramo_lng_fin?: number
+  tramo_puntos?: { lat: number; lng: number }[]
 
   descripcion: string
   rutas_evidencia: string[]

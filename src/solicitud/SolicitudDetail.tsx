@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, LayersControl, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2, Download } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
@@ -12,7 +12,11 @@ import Button from '../shared/Button'
 import { cargarCapas, detectarPunto } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionPunto } from './detectar-ubicacion'
 import { generarOficioPDF } from '../lib/generarOficio'
-import { generarFichaTecnica } from '../lib/generarFicha'
+import { generarFichaPDF } from '../lib/generarFicha'
+import { geolocalizarCalle } from '../lib/geolocalizarCalle'
+import type { CalleInfo } from '../lib/geolocalizarCalle'
+import { consultarSIGED } from '../lib/consultarSIGED'
+import type { SigedEscuela } from '../lib/consultarSIGED'
 
 interface SolicitudDetailProps {
   solicitud: Solicitud
@@ -51,7 +55,7 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
   return null
 }
 
-type DocTab = 'oficio' | 'ficha'
+type DocTab = 'oficio' | 'ficha' | 'enviar'
 
 export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, userRole }: SolicitudDetailProps) {
   const s = solicitud
@@ -61,22 +65,83 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
   const [generando, setGenerando] = useState(false)
   const [docUrls, setDocUrls] = useState<{ oficio?: string; ficha?: string } | null>(null)
   const [activeTab, setActiveTab] = useState<DocTab>('oficio')
+  const [calleInfo, setCalleInfo] = useState<CalleInfo | null>(null)
+  const [tramoFullscreen, setTramoFullscreen] = useState(false)
+  const [ubicacionFullscreen, setUbicacionFullscreen] = useState(false)
+  const [calleError, setCalleError] = useState<string | null>(null)
+  const [sigedCct, setSigedCct] = useState('')
+  const [sigedData, setSigedData] = useState<SigedEscuela | null>(null)
+  const [sigedLoading, setSigedLoading] = useState(false)
+  const [sigedError, setSigedError] = useState<string | null>(null)
+  const [enviandoEmail, setEnviandoEmail] = useState(false)
+  const [emailEnviado, setEmailEnviado] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   useEffect(() => {
     cargarCapas().then(c => {
       setCapas(c)
       setDetection(detectarPunto(s.latitud, s.longitud, c))
     })
-  }, [s.latitud, s.longitud])
+    if (s.calle || s.entre_calles) {
+      setCalleInfo({ calle: s.calle || '', entreCalles: s.entre_calles || '' })
+    } else {
+      geolocalizarCalle(s.latitud, s.longitud).then(setCalleInfo)
+    }
+  }, [s.latitud, s.longitud, s.calle, s.entre_calles])
+
+  useEffect(() => {
+    if (sigedCct.length !== 10) {
+      setSigedData(null)
+      setSigedError(null)
+      return
+    }
+    let cancelled = false
+    setSigedLoading(true)
+    setSigedError(null)
+    const timer = setTimeout(async () => {
+      const { data, error } = await consultarSIGED(sigedCct)
+      if (cancelled) return
+      if (error) {
+        setSigedError(error)
+        setSigedData(null)
+      } else if (data) {
+        setSigedData(data)
+        setSigedError(null)
+      }
+      setSigedLoading(false)
+    }, 500)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [sigedCct])
 
   const handleGenerarDocumentos = async () => {
     setGenerando(true)
+    setCalleError(null)
     try {
-      const [pdfUrl, pptxUrl] = await Promise.all([
-        generarOficioPDF(s),
-        generarFichaTecnica(s),
+      // Save calle info to DB if available and not already stored
+      if (calleInfo && (calleInfo.calle || calleInfo.entreCalles) && s.id_solicitud) {
+        const { error: updateError } = await supabase
+          .from('solicitudes')
+          .update({
+            calle: calleInfo.calle,
+            entre_calles: calleInfo.entreCalles,
+          })
+          .eq('id_solicitud', s.id_solicitud)
+        if (updateError) {
+          console.error('Error guardando calle:', updateError)
+          setCalleError('No se guardó la información de calle en la base de datos')
+        }
+      }
+
+      const solicitudEnriched = {
+        ...s,
+        calle: calleInfo?.calle || s.calle || '',
+        entre_calles: calleInfo?.entreCalles || s.entre_calles || '',
+      }
+      const [oficioUrl, fichaUrl] = await Promise.all([
+        generarOficioPDF(solicitudEnriched),
+        generarFichaPDF(solicitudEnriched),
       ])
-      setDocUrls({ oficio: pdfUrl, ficha: pptxUrl })
+      setDocUrls({ oficio: oficioUrl, ficha: fichaUrl })
       setActiveTab('oficio')
     } catch (err) {
       console.error('Error al generar documentos:', err)
@@ -84,11 +149,49 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
     setGenerando(false)
   }
 
-  const handleDownload = (url: string, filename: string) => {
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
+  const blobUrlToBase64 = async (url: string): Promise<string> => {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const result = reader.result as string
+        resolve(result.split(',')[1])
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  const handleEnviarDocumentacion = async () => {
+    if (!docUrls?.oficio || !docUrls?.ficha) return
+    setEnviandoEmail(true)
+    setEmailError(null)
+    setEmailEnviado(false)
+    try {
+      const [oficioBase64, fichaBase64] = await Promise.all([
+        blobUrlToBase64(docUrls.oficio),
+        blobUrlToBase64(docUrls.ficha),
+      ])
+      const res = await fetch('/api/enviar-documentacion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          correo: s.correo,
+          folio: s.folio_unico,
+          oficioPdf: oficioBase64,
+          fichaPdf: fichaBase64,
+          oficioNombre: `Oficio_${s.folio_unico}.pdf`,
+          fichaNombre: `Ficha_${s.folio_unico}.pdf`,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al enviar')
+      setEmailEnviado(true)
+    } catch (err: any) {
+      setEmailError(err?.message || 'Error al enviar documentación')
+    }
+    setEnviandoEmail(false)
   }
 
   const showGenerateButtons = userRole && esCargoPublico(userRole)
@@ -269,7 +372,38 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
 
           <div className="flex flex-col gap-4">
             <Card title="Ubicación">
-              <div className="h-48 overflow-hidden rounded-xl">
+              {ubicacionFullscreen && (
+                <div className="fixed inset-0 z-[10001] bg-black">
+                  <div className="absolute right-4 top-4 z-[10002]">
+                    <button
+                      type="button"
+                      onClick={() => setUbicacionFullscreen(false)}
+                      className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+                    >
+                      <Minimize2 className="h-5 w-5 text-gray-700" />
+                    </button>
+                  </div>
+                  <div className="h-full w-full">
+                    <MapContainer
+                      center={[s.latitud, s.longitud]}
+                      zoom={16}
+                      className="h-full w-full"
+                      zoomControl={true}
+                    >
+                      <LayersControl position="topright">
+                        <LayersControl.BaseLayer checked name="Estándar">
+                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                        </LayersControl.BaseLayer>
+                        <LayersControl.BaseLayer name="Satélite">
+                          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
+                        </LayersControl.BaseLayer>
+                      </LayersControl>
+                      <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
+                    </MapContainer>
+                  </div>
+                </div>
+              )}
+              <div className="relative h-48 overflow-hidden rounded-xl">
                 <MapContainer
                   center={[s.latitud, s.longitud]}
                   zoom={16}
@@ -278,9 +412,16 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                   dragging={false}
                   scrollWheelZoom={false}
                 >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
                   <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
                 </MapContainer>
+                <button
+                  type="button"
+                  onClick={() => setUbicacionFullscreen(true)}
+                  className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
+                >
+                  <Maximize2 className="h-4 w-4 text-gray-700" />
+                </button>
               </div>
               <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
                 <MapPin className="h-3.5 w-3.5 text-guinda" />
@@ -288,38 +429,108 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
               </div>
             </Card>
 
-            {hasTramo && (
-              <Card title="Tramo">
-                <div className="h-48 overflow-hidden rounded-xl">
-                  <MapContainer
-                    center={[
-                      (s.tramo_lat_ini! + s.tramo_lat_fin!) / 2,
-                      (s.tramo_lng_ini! + s.tramo_lng_fin!) / 2,
-                    ] as [number, number]}
-                    zoom={17}
-                    className="h-full w-full"
-                    zoomControl={false}
-                    dragging={false}
-                    scrollWheelZoom={false}
-                  >
-                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
-                    <Polyline
-                      positions={[
-                        [s.tramo_lat_ini!, s.tramo_lng_ini!],
-                        [s.tramo_lat_fin!, s.tramo_lng_fin!],
-                      ]}
-                      pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
-                    />
-                    <DetailMarker position={[s.tramo_lat_ini!, s.tramo_lng_ini!]} icon={marker1} />
-                    <DetailMarker position={[s.tramo_lat_fin!, s.tramo_lng_fin!]} icon={marker2} />
-                  </MapContainer>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
-                  <Ruler className="h-3.5 w-3.5 text-guinda" />
-                  {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
-                </div>
-              </Card>
-            )}
+            {hasTramo && (() => {
+              const puntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
+                ? s.tramo_puntos
+                : [
+                    { lat: s.tramo_lat_ini!, lng: s.tramo_lng_ini! },
+                    { lat: s.tramo_lat_fin!, lng: s.tramo_lng_fin! },
+                  ]
+              const center: [number, number] = [
+                puntos.reduce((s, p) => s + p.lat, 0) / puntos.length,
+                puntos.reduce((s, p) => s + p.lng, 0) / puntos.length,
+              ]
+              const numMarkers = [
+                marker1,
+                marker2,
+                ...Array.from({ length: Math.max(0, puntos.length - 2) }, (_, i) =>
+                  L.divIcon({
+                    className: 'flex items-center justify-center',
+                    html: `<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${i + 3}</div>`,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10],
+                  })
+                ),
+              ]
+
+              const polyline = (
+                <Polyline
+                  positions={puntos.map(p => [p.lat, p.lng])}
+                  pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
+                />
+              )
+              const markers = puntos.map((p, i) => (
+                <DetailMarker key={i} position={[p.lat, p.lng]} icon={numMarkers[i] || numMarkers[numMarkers.length - 1]} />
+              ))
+
+              const compactMap = (
+                <MapContainer
+                  center={center}
+                  zoom={17}
+                  className="h-full w-full"
+                  zoomControl={false}
+                  dragging={false}
+                  scrollWheelZoom={false}
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                  {polyline}
+                  {markers}
+                </MapContainer>
+              )
+
+              const fullMap = (
+                <MapContainer
+                  center={center}
+                  zoom={17}
+                  className="h-full w-full"
+                  zoomControl={true}
+                >
+                  <LayersControl position="topright">
+                    <LayersControl.BaseLayer checked name="Estándar">
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                    </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer name="Satélite">
+                      <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
+                    </LayersControl.BaseLayer>
+                  </LayersControl>
+                  {polyline}
+                  {markers}
+                </MapContainer>
+              )
+
+              return (
+                <Card title="Tramo">
+                  {tramoFullscreen && (
+                    <div className="fixed inset-0 z-[10001] bg-black">
+                      <div className="absolute right-4 top-4 z-[10002]">
+                        <button
+                          type="button"
+                          onClick={() => setTramoFullscreen(false)}
+                          className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+                        >
+                          <Minimize2 className="h-5 w-5 text-gray-700" />
+                        </button>
+                      </div>
+                      <div className="h-full w-full">{fullMap}</div>
+                    </div>
+                  )}
+                  <div className="relative h-48 overflow-hidden rounded-xl">
+                    {compactMap}
+                    <button
+                      type="button"
+                      onClick={() => setTramoFullscreen(true)}
+                      className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
+                    >
+                      <Maximize2 className="h-4 w-4 text-gray-700" />
+                    </button>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
+                    <Ruler className="h-3.5 w-3.5 text-guinda" />
+                    {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
+                  </div>
+                </Card>
+              )
+            })()}
 
             <Card title="Información geo">
               <div className="flex flex-col gap-2 text-xs">
@@ -329,6 +540,28 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                     {s.latitud.toFixed(6)}, {s.longitud.toFixed(6)}
                   </span>
                 </div>
+
+                {calleInfo?.calle && (
+                  <div className="flex items-center gap-2">
+                    <Navigation className="h-3.5 w-3.5 text-guinda" />
+                    <span className="font-medium text-gray-institutional">
+                      {calleInfo.calle}
+                    </span>
+                  </div>
+                )}
+
+                {calleInfo?.entreCalles && (
+                  <div className="flex items-center gap-2 pl-5">
+                    <span className="text-gray-institutional/60">
+                      {calleInfo.entreCalles}
+                    </span>
+                  </div>
+                )}
+
+                {!calleInfo && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
+                )}
+
                 {hasTramo && (
                   <div className="flex items-center gap-2">
                     <Ruler className="h-3.5 w-3.5 text-guinda" />
@@ -379,15 +612,102 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                 )}
               </div>
             </Card>
+
+            <Card title="Datos SIGED (ficha técnica)">
+              <div className="flex flex-col gap-3 text-sm">
+                <p className="text-xs text-gray-institutional/60">
+                  CCT de la escuela — se busca automáticamente para complementar la ficha técnica.
+                </p>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={sigedCct}
+                    onChange={e => setSigedCct(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                    placeholder="21DPR0881C"
+                    maxLength={10}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-1.5 pr-8 text-xs font-mono uppercase outline-none focus:border-guinda"
+                  />
+                  {sigedLoading && (
+                    <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-guinda" />
+                  )}
+                </div>
+
+                {sigedError && (
+                  <p className="text-xs text-red-500">{sigedError}</p>
+                )}
+
+                {sigedData && (
+                  <div className="rounded-xl bg-blue-50 p-3">
+                    <div className="mb-2 flex items-center gap-2">
+                      <School className="h-4 w-4 text-blue-600" />
+                      <span className="text-xs font-bold text-blue-800">{sigedData.nombre}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">CCT</span>
+                        <span className="font-mono font-medium text-gray-institutional">{sigedData.cct}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Nivel</span>
+                        <span className="font-medium text-guinda">{sigedData.nivel}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Subnivel</span>
+                        <span className="text-gray-institutional">{sigedData.subnivel}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Turno</span>
+                        <span className="text-gray-institutional">{sigedData.turno}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Sostenimiento</span>
+                        <span className="text-gray-institutional">{sigedData.sostenimiento}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Total alumnos</span>
+                        <span className="font-bold text-guinda">{sigedData.totalAlumnos}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Alumnos (H/M)</span>
+                        <span className="text-gray-institutional">{sigedData.alumnosHombres}/{sigedData.alumnosMujeres}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Docentes</span>
+                        <span className="text-gray-institutional">{sigedData.docentes}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Grupos</span>
+                        <span className="text-gray-institutional">{sigedData.grupos}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Municipio</span>
+                        <span className="text-gray-institutional">{sigedData.municipio}</span>
+                      </div>
+                      <div className="col-span-2 flex justify-between">
+                        <span className="text-gray-500">Domicilio</span>
+                        <span className="max-w-[200px] text-right text-gray-institutional">{sigedData.domicilio}</span>
+                      </div>
+                      <div className="col-span-2 flex justify-between">
+                        <span className="text-gray-500">Fuente</span>
+                        <span className="text-xs text-gray-400">{sigedData.fuente}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
         </div>
 
         {showGenerateButtons && (
           <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4">
             <p className="text-xs font-medium text-gray-institutional/50">Generar documentos</p>
+            {calleError && (
+              <p className="text-xs text-amber-600">{calleError}</p>
+            )}
             <Button
               onClick={handleGenerarDocumentos}
-              disabled={generando}
+              disabled={generando || calleInfo === null}
               className="flex items-center gap-2"
             >
               {generando ? (
@@ -395,7 +715,11 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
               ) : (
                 <FileText className="h-4 w-4" />
               )}
-              {generando ? 'Generando documentos...' : 'Generar oficio y ficha técnica'}
+              {calleInfo === null
+                ? 'Obteniendo ubicación...'
+                : generando
+                  ? 'Generando documentos...'
+                  : 'Generar oficio y ficha técnica'}
             </Button>
           </div>
         )}
@@ -428,6 +752,16 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                 <FileText className="mr-1.5 inline h-4 w-4" />
                 Ficha técnica
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('enviar')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === 'enviar' ? 'bg-white text-guinda' : 'text-white/80 hover:bg-white/10'
+                }`}
+              >
+                <Send className="mr-1.5 inline h-4 w-4" />
+                Enviar documentación
+              </button>
             </div>
             <div className="flex items-center gap-2">
               {activeTab === 'oficio' && docUrls.oficio && (
@@ -437,18 +771,18 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                   className="flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
                 >
                   <Download className="h-4 w-4" />
-                  Descargar PDF
+                  Descargar
                 </a>
               )}
               {activeTab === 'ficha' && docUrls.ficha && (
-                <button
-                  type="button"
-                  onClick={() => handleDownload(docUrls.ficha!, `ficha_tecnica_${s.folio_unico}.pptx`)}
+                <a
+                  href={docUrls.ficha}
+                  download={`ficha_tecnica_${s.folio_unico}.pdf`}
                   className="flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
                 >
                   <Download className="h-4 w-4" />
-                  Descargar PPTX
-                </button>
+                  Descargar
+                </a>
               )}
               <button
                 type="button"
@@ -468,23 +802,82 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
               title="Vista previa del oficio"
             />
           )}
-          {activeTab === 'ficha' && (
-            <div className="flex flex-1 items-center justify-center bg-gray-100">
-              <div className="rounded-2xl bg-white p-8 shadow-lg text-center">
-                <FileText className="mx-auto mb-4 h-12 w-12 text-guinda/40" />
-                <p className="mb-1 text-sm font-medium text-gray-institutional">Ficha técnica generada</p>
-                <p className="mb-4 text-xs text-gray-institutional/60">{s.folio_unico}</p>
-                <p className="mb-6 max-w-xs text-xs text-gray-institutional/50">
-                  La ficha técnica se generó correctamente como archivo PowerPoint. Haz clic en el botón de abajo para descargarla.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleDownload(docUrls.ficha!, `ficha_tecnica_${s.folio_unico}.pptx`)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-guinda px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-guinda/90"
-                >
-                  <Download className="h-4 w-4" />
-                  Descargar ficha técnica
-                </button>
+          {activeTab === 'ficha' && docUrls.ficha && (
+            <iframe
+              src={docUrls.ficha}
+              className="flex-1 border-0"
+              title="Vista previa de la ficha técnica"
+            />
+          )}
+          {activeTab === 'enviar' && (
+            <div className="flex flex-1 flex-col items-center justify-center bg-gray-50 p-8">
+              <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-100">
+                <div className="mb-6 text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-guinda/10">
+                    <Send className="h-6 w-6 text-guinda" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Enviar documentación</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Se enviarán ambos documentos por correo electrónico al solicitante.
+                  </p>
+                </div>
+
+                <div className="space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Folio</span>
+                    <span className="font-mono font-medium text-gray-900">{s.folio_unico}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Solicitante</span>
+                    <span className="font-medium text-gray-900">{s.nombre_solicitante}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Correo</span>
+                    <span className="flex items-center gap-1.5 font-medium text-gray-900">
+                      <Mail className="h-3.5 w-3.5 text-gray-400" />
+                      {s.correo || 'Sin correo'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Documentos</span>
+                    <span className="text-gray-900">Oficio + Ficha técnica (PDF)</span>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  {emailEnviado ? (
+                    <div className="flex items-center justify-center gap-2 rounded-xl bg-green-50 p-4 text-sm text-green-700">
+                      <CheckCircle className="h-5 w-5" />
+                      Documentación enviada correctamente
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleEnviarDocumentacion}
+                      disabled={enviandoEmail || !s.correo}
+                      className="flex w-full items-center justify-center gap-2"
+                    >
+                      {enviandoEmail ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4" />
+                          Enviar documentación
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {emailError && (
+                    <p className="mt-2 text-center text-sm text-red-500">{emailError}</p>
+                  )}
+                  {!s.correo && (
+                    <p className="mt-2 text-center text-sm text-amber-600">
+                      No hay correo registrado para este solicitante
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}

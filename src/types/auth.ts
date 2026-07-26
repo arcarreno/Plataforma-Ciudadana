@@ -11,5 +11,5 @@ export function nombreCompleto(u: Usuario): string {
 }
 
 export function esCargoPublico(rol: string): boolean {
-  return rol === 'diputado' || rol === 'senador'
+  return rol === 'admin' || rol === 'revisor' || rol === 'diputado' || rol === 'senador'
 }

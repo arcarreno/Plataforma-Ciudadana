@@ -4,6 +4,7 @@ import {
   RANKING_PUNTOS_BASE,
   RANKING_PUNTOS_CON_EVIDENCIA,
 } from '../core/constants'
+import { geolocalizarCalle } from './geolocalizarCalle'
 
 function uuidV4(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -48,20 +49,29 @@ export async function crearSolicitud(
   tramoData?: {
     distancia_m: number; ancho_calle_m: number
     zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+    puntos: { lat: number; lng: number }[]
   }
 ): Promise<{ data?: Solicitud; error?: string; advertencia?: string }> {
   const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, ...rest } = data
+
+  // Geocode street info in parallel
+  const lat = parseFloat(latitud)
+  const lng = parseFloat(longitud)
+  const calleInfo = await geolocalizarCalle(lat, lng).catch(() => ({ calle: '', entreCalles: '' }))
 
   const { data: solicitud, error: insertError } = await supabase
     .from('solicitudes')
     .insert({
       ...rest,
-      latitud: parseFloat(latitud),
-      longitud: parseFloat(longitud),
+      latitud: lat,
+      longitud: lng,
       tramo_lat_ini: tramo_lat_ini ? parseFloat(tramo_lat_ini) : null,
       tramo_lng_ini: tramo_lng_ini ? parseFloat(tramo_lng_ini) : null,
       tramo_lat_fin: tramo_lat_fin ? parseFloat(tramo_lat_fin) : null,
       tramo_lng_fin: tramo_lng_fin ? parseFloat(tramo_lng_fin) : null,
+      tramo_puntos: tramoData?.puntos ?? [],
+      calle: calleInfo.calle,
+      entre_calles: calleInfo.entreCalles,
       peso_ranking:
         pesoRankingOverride ??
         (archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE),
@@ -77,6 +87,7 @@ export async function crearSolicitud(
     .single()
 
   if (insertError) {
+    console.error('Error al insertar solicitud:', insertError)
     if (insertError.message.includes('Limite de 3 solicitudes')) {
       return {
         error:

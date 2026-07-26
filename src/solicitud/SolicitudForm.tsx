@@ -80,6 +80,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const [tramoData, setTramoData] = useState<{
     distancia_m: number; ancho_calle_m: number
     zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+    puntos: { lat: number; lng: number }[]
   } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const lottieRef = useRef<HTMLDivElement>(null)
@@ -97,6 +98,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
 
   const handleMapTramoConfirm = (data: {
     lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
+    puntos: { lat: number; lng: number }[]
     distancia_m: number; ancho_calle_m: number
     zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
   }) => {
@@ -112,6 +114,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
       escuelas_cercanas: data.escuelas_cercanas,
       iglesias_cercanas: data.iglesias_cercanas,
       transportes_cercanos: data.transportes_cercanos,
+      puntos: data.puntos,
     })
     setShowMapaTramo(false)
   }
