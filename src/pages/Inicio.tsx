@@ -5,6 +5,7 @@ import Card from '../shared/Card'
 import { useAuth } from '../contexts/AuthContext'
 import { nombreCompleto, esCargoPublico } from '../types/auth'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
+import mosaico from '../assets/elemento-Mosaico.svg'
 
 const features = [
   {
@@ -91,7 +92,18 @@ export default function Inicio() {
         </div>
       </section>
 
-      <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <section className="relative -mx-4 py-8 md:-mx-8">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage: `url(${mosaico})`,
+            backgroundRepeat: 'repeat',
+            backgroundPosition: 'center',
+            WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
+            maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
+          }}
+        />
+        <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {features.map((f) => (
           <Card key={f.title} hover>
             <div className="flex flex-col items-center text-center">
@@ -105,6 +117,7 @@ export default function Inicio() {
             </div>
           </Card>
         ))}
+        </div>
       </section>
 
       <section>
