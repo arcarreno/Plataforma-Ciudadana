@@ -21,7 +21,7 @@ export default function NuevaSolicitud() {
 
   return (
     <div className="py-4">
-      <h1 className="mb-6 text-2xl font-bold tracking-tight text-guinda">
+      <h1 className="mb-6 text-center text-2xl font-bold tracking-tight text-guinda">
         Nueva Solicitud de Obra
       </h1>
 

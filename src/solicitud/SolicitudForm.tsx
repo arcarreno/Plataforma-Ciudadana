@@ -300,7 +300,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
           </Card>
         </div>
 
-        <div className="md:flex md:gap-6">
+        <div className={`md:flex ${inlineMap ? 'md:gap-6' : ''}`}>
           <div className={`transition-all duration-500 ease-in-out min-w-0 ${inlineMap ? 'md:w-[55%]' : 'mx-auto w-full max-w-2xl'}`}>
             <Card title="Datos de la obra">
               <div className="flex flex-col gap-4">
@@ -407,8 +407,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             </Card>
           </div>
 
-          <div className={`hidden md:block transition-all duration-500 ease-in-out relative z-20 ${inlineMap ? 'md:max-w-[45%] md:opacity-100' : 'md:max-w-0 md:opacity-0 md:overflow-hidden'}`}>
-            <div className="min-w-[500px] h-full" style={{ isolation: 'isolate' }}>
+          <div className={`hidden md:block transition-all duration-500 ease-in-out relative z-20 min-w-0 ${inlineMap ? 'md:max-w-[45%] md:opacity-100' : 'md:max-w-0 md:opacity-0 md:overflow-hidden'}`}>
+            <div className="h-full w-[500px] md:w-full" style={{ isolation: 'isolate' }}>
               <MapaCombinado
                 inline
                 onConfirm={handleMapCombinadoConfirm}
