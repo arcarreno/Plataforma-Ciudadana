@@ -205,15 +205,21 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
             ? 'bg-[#41504D]'
             : esPrioridad
               ? 'bg-guinda'
-              : 'bg-white'
+              : 'bg-white border border-gray-100'
         }`}>
-          <div>
-            <p className={`text-xs ${
-              esMaxRanking ? 'text-[#DBC6B3]/60' : esPrioridad ? 'text-white/60' : 'text-gray-institutional/50'
-            }`}>Folio</p>
+          <div className="flex items-baseline gap-3">
             <p className={`text-xl font-bold tracking-wider ${
               esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white' : 'text-guinda'
             }`}>{s.folio_unico}</p>
+            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+              esPrioridad
+                ? 'bg-white/20 text-white'
+                : esMaxRanking
+                  ? 'bg-[#DBC6B3]/20 text-[#DBC6B3]'
+                  : 'bg-guinda/10 text-guinda'
+            }`}>
+              {esPrioridad ? 'Prioridad alta' : esMaxRanking ? 'Prioridad media' : 'Prioridad baja'}
+            </span>
           </div>
           <button
             type="button"
