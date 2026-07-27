@@ -214,7 +214,7 @@ export default function MapasEstadisticas() {
             {puntos.length} punto(s) mapeado(s) de {solicitudes.length} solicitud(es) total
           </p>
           <div className="flex items-center gap-1.5 text-[10px] text-gray-institutional/40">
-            <div className="h-2.5 w-2.5 rounded-full bg-guinda" />
+            <MapPin className="h-3.5 w-3.5 text-guinda" />
             Punto de solicitud
           </div>
         </div>

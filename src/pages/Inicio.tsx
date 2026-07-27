@@ -116,7 +116,7 @@ export default function Inicio() {
           style={{
             backgroundImage: `url(${mosaico})`,
             backgroundRepeat: 'repeat',
-            backgroundPosition: 'center',
+            backgroundPosition: 'calc(50% - 0.6mm) center',
             WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
             maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
           }}

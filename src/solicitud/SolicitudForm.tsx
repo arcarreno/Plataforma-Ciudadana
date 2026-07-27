@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, MapPin, Check } from 'lucide-react'
+import { Upload, MapPin, Check, Navigation } from 'lucide-react'
 import lottie from 'lottie-web'
 import loadingAnimation from '../assets/lottie/landing-construccion.json'
 import Button from '../shared/Button'
@@ -59,6 +59,10 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     tipo_solicitud: '',
     colonia: '',
     junta_auxiliar: '',
+    calle: '',
+    entre_calles: '',
+    zona_zap: false,
+    cobertura_agua: false,
     latitud: '',
     longitud: '',
     tramo_lat_ini: '',
@@ -79,7 +83,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const [showAviso, setShowAviso] = useState(false)
   const [tramoData, setTramoData] = useState<{
     distancia_m: number; ancho_calle_m: number
-    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+    escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
     puntos: { lat: number; lng: number }[]
   } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -101,7 +105,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
     puntos: { lat: number; lng: number }[]
     distancia_m: number; ancho_calle_m: number
-    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+    escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
   }) => {
     set('tramo_lat_ini', String(data.lat_ini))
     set('tramo_lng_ini', String(data.lng_ini))
@@ -110,8 +114,6 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setTramoData({
       distancia_m: data.distancia_m,
       ancho_calle_m: data.ancho_calle_m,
-      zona_zap: data.zona_zap,
-      cobertura_agua: data.cobertura_agua,
       escuelas_cercanas: data.escuelas_cercanas,
       iglesias_cercanas: data.iglesias_cercanas,
       transportes_cercanos: data.transportes_cercanos,
@@ -120,13 +122,15 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setShowMapaTramo(false)
   }
 
-  const handleMapConfirm = (data: { lat: number; lng: number; colonia: string; junta_auxiliar: string }) => {
+  const handleMapConfirm = (data: { lat: number; lng: number; colonia: string; junta_auxiliar: string; calle: string; entre_calles: string; zona_zap: boolean; cobertura_agua: boolean }) => {
     set('latitud', String(data.lat))
     set('longitud', String(data.lng))
-    if (data.colonia) {
-      set('colonia', data.colonia)
-    }
+    if (data.colonia) set('colonia', data.colonia)
     if (data.junta_auxiliar) set('junta_auxiliar', data.junta_auxiliar)
+    if (data.calle) set('calle', data.calle)
+    if (data.entre_calles) set('entre_calles', data.entre_calles)
+    set('zona_zap', data.zona_zap)
+    set('cobertura_agua', data.cobertura_agua)
     setShowMapaPin(false)
   }
 
@@ -175,6 +179,10 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         tipo_solicitud: '',
         colonia: '',
         junta_auxiliar: '',
+        calle: '',
+        entre_calles: '',
+        zona_zap: false,
+        cobertura_agua: false,
         latitud: '',
         longitud: '',
         tramo_lat_ini: '',
@@ -385,6 +393,22 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
               {errors.junta_auxiliar && <p className="text-xs text-red-500">{errors.junta_auxiliar}</p>}
             </div>
           </div>
+
+          {(form.calle || form.entre_calles) && (
+            <div className="rounded-xl border border-alabaster-dark/30 bg-alabaster/30 p-3">
+              {form.calle && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Navigation className="h-4 w-4 shrink-0 text-guinda" />
+                  <span className="font-medium text-gray-institutional">{form.calle}</span>
+                </div>
+              )}
+              {form.entre_calles && (
+                <div className="flex items-center gap-2 pl-6 text-xs text-gray-institutional/60">
+                  {form.entre_calles}
+                </div>
+              )}
+            </div>
+          )}
 
           <Textarea
             label="Descripción del problema"

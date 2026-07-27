@@ -48,16 +48,25 @@ export async function crearSolicitud(
   pesoRankingOverride?: number,
   tramoData?: {
     distancia_m: number; ancho_calle_m: number
-    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+    escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
     puntos: { lat: number; lng: number }[]
   }
 ): Promise<{ data?: Solicitud; error?: string; advertencia?: string }> {
-  const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, ...rest } = data
+  const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, calle, entre_calles, zona_zap, cobertura_agua, ...rest } = data
 
-  // Geocode street info in parallel
   const lat = parseFloat(latitud)
   const lng = parseFloat(longitud)
-  const calleInfo = await geolocalizarCalle(lat, lng).catch(() => ({ calle: '', entreCalles: '' }))
+
+  // Use calle from form if available, otherwise geocode as fallback
+  const calleFinal = calle || ''
+  const entreCallesFinal = entre_calles || ''
+  let calleToSave = calleFinal
+  let entreCallesToSave = entreCallesFinal
+  if (!calleFinal && !entreCallesFinal) {
+    const calleInfo = await geolocalizarCalle(lat, lng).catch(() => ({ calle: '', entreCalles: '' }))
+    calleToSave = calleInfo.calle
+    entreCallesToSave = calleInfo.entreCalles
+  }
 
   const { data: solicitud, error: insertError } = await supabase
     .from('solicitudes')
@@ -70,13 +79,13 @@ export async function crearSolicitud(
       tramo_lat_fin: tramo_lat_fin ? parseFloat(tramo_lat_fin) : null,
       tramo_lng_fin: tramo_lng_fin ? parseFloat(tramo_lng_fin) : null,
       tramo_puntos: tramoData?.puntos ?? [],
-      calle: calleInfo.calle,
-      entre_calles: calleInfo.entreCalles,
+      calle: calleToSave,
+      entre_calles: entreCallesToSave,
       peso_ranking:
         pesoRankingOverride ??
         (archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE),
-      zona_zap: tramoData?.zona_zap ?? false,
-      cobertura_agua: tramoData?.cobertura_agua ?? false,
+      zona_zap: zona_zap ?? false,
+      cobertura_agua: cobertura_agua ?? false,
       escuelas_cercanas: tramoData?.escuelas_cercanas ?? [],
       iglesias_cercanas: tramoData?.iglesias_cercanas ?? [],
       transportes_cercanos: tramoData?.transportes_cercanos ?? [],

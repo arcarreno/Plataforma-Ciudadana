@@ -35,7 +35,7 @@ interface MapaTramoProps {
     lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
     puntos: { lat: number; lng: number }[]
     distancia_m: number; ancho_calle_m: number
-    zona_zap: boolean; cobertura_agua: boolean; escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+    escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
   }) => void
   onClose: () => void
 }
@@ -269,24 +269,6 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                   </div>
                 </div>
 
-                {d.colonias.length > 0 && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-medium text-gray-institutional">Colonias:</span>
-                    <span className="line-clamp-1 text-guinda">{d.colonias.join(', ')}</span>
-                  </div>
-                )}
-                {d.juntas_auxiliares.length > 0 && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-medium text-gray-institutional">Juntas:</span>
-                    <span className="line-clamp-1 text-green-700">{d.juntas_auxiliares.join(', ')}</span>
-                  </div>
-                )}
-                {d.zonas_zap.length > 0 && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-medium text-gray-institutional">Zonas ZAP:</span>
-                    <span className="line-clamp-1 text-amber-700">{d.zonas_zap.join(', ')}</span>
-                  </div>
-                )}
                 {d.escuelas_cercanas.length > 0 && (
                   <div className="flex items-start gap-2 text-xs text-gray-institutional">
                     <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
@@ -323,8 +305,6 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
                         puntos: points,
                         distancia_m: d.distancia_m,
                         ancho_calle_m: d.ancho_calle_m,
-                        zona_zap: d.zonas_zap.length > 0,
-                        cobertura_agua: d.cobertura_agua,
                         escuelas_cercanas: d.escuelas_cercanas,
                         iglesias_cercanas: d.iglesias_cercanas,
                         transportes_cercanos: d.transportes_cercanos,

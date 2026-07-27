@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 
-import { X, Crosshair, MapPin, School, Church, Bus, Info, Layers, Eye, EyeOff, Globe, Map } from 'lucide-react'
+import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation } from 'lucide-react'
 import Button from '../shared/Button'
 import { cargarCapas, detectarPunto } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionPunto } from './detectar-ubicacion'
+import { geolocalizarCalle } from '../lib/geolocalizarCalle'
+import type { CalleInfo } from '../lib/geolocalizarCalle'
 
 const DEFAULT_CENTER: [number, number] = [19.0414, -98.2063]
 const DEFAULT_ZOOM = 13
@@ -44,7 +46,7 @@ const icon = L.divIcon({
 })
 
 interface MapaPinProps {
-  onConfirm: (data: { lat: number; lng: number; colonia: string; junta_auxiliar: string }) => void
+  onConfirm: (data: { lat: number; lng: number; colonia: string; junta_auxiliar: string; calle: string; entre_calles: string; zona_zap: boolean; cobertura_agua: boolean }) => void
   onClose: () => void
   initialLat?: string
   initialLng?: string
@@ -71,6 +73,8 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
   const [hasPicado, setHasPicado] = useState(false)
   const [manualColonia, setManualColonia] = useState('')
   const [manualJunta, setManualJunta] = useState('')
+  const [calleInfo, setCalleInfo] = useState<CalleInfo | null>(null)
+  const [buscandoCalle, setBuscandoCalle] = useState(false)
   const lastClick = useRef<{ lat: number; lng: number } | null>(null)
 
   useEffect(() => {
@@ -96,6 +100,11 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
     const d = detectarPunto(lat, lng, capas)
     setDetection(d)
     setHasPicado(true)
+    setBuscandoCalle(true)
+    geolocalizarCalle(lat, lng).then(info => {
+      setCalleInfo(info)
+      setBuscandoCalle(false)
+    })
   }
 
   const d = detection
@@ -259,24 +268,28 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
                         <span className="text-blue-600">Si</span>
                       </div>
                     )}
-                    {d.escuelas_cercanas.length > 0 && (
-                      <div className="flex items-start gap-2 text-xs text-gray-institutional">
-                        <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
-                        <span className="line-clamp-1">{d.escuelas_cercanas.slice(0, 3).join(', ')}{d.escuelas_cercanas.length > 3 ? ` (+${d.escuelas_cercanas.length - 3})` : ''}</span>
+
+                    <hr className="border-gray-100" />
+                    {buscandoCalle ? (
+                      <div className="flex items-center gap-2 text-xs text-gray-institutional/60">
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
+                        Buscando dirección...
                       </div>
-                    )}
-                    {d.iglesias_cercanas.length > 0 && (
-                      <div className="flex items-start gap-2 text-xs text-gray-institutional">
-                        <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
-                        <span className="line-clamp-1">{d.iglesias_cercanas.slice(0, 3).join(', ')}{d.iglesias_cercanas.length > 3 ? ` (+${d.iglesias_cercanas.length - 3})` : ''}</span>
-                      </div>
-                    )}
-                    {d.transportes_cercanos.length > 0 && (
-                      <div className="flex items-start gap-2 text-xs text-gray-institutional">
-                        <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
-                        <span className="line-clamp-1">{d.transportes_cercanos.slice(0, 3).join(', ')}{d.transportes_cercanos.length > 3 ? ` (+${d.transportes_cercanos.length - 3})` : ''}</span>
-                      </div>
-                    )}
+                    ) : calleInfo ? (
+                      <>
+                        {calleInfo.calle && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <Navigation className="h-3.5 w-3.5 shrink-0 text-guinda" />
+                            <span className="font-medium text-gray-institutional">{calleInfo.calle}</span>
+                          </div>
+                        )}
+                        {calleInfo.entreCalles && (
+                          <div className="flex items-center gap-2 pl-5 text-xs text-gray-institutional/60">
+                            {calleInfo.entreCalles}
+                          </div>
+                        )}
+                      </>
+                    ) : null}
                   </>
                 )}
 
@@ -292,6 +305,10 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
                         lng: d.coordenadas.lng,
                         colonia: isOutside ? manualColonia.trim() : d.colonia,
                         junta_auxiliar: isOutside ? manualJunta.trim() : d.junta_auxiliar,
+                        calle: calleInfo?.calle || '',
+                        entre_calles: calleInfo?.entreCalles || '',
+                        zona_zap: d.zona_zap,
+                        cobertura_agua: d.cobertura_agua,
                       })
                     }
                   }}

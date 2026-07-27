@@ -51,6 +51,10 @@ export interface SolicitudFormData {
   tipo_solicitud: string
   colonia: string
   junta_auxiliar: string
+  calle: string
+  entre_calles: string
+  zona_zap: boolean
+  cobertura_agua: boolean
   latitud: string
   longitud: string
 

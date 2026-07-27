@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle, Globe, Map } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle, Globe, Map } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
@@ -13,8 +13,6 @@ import { cargarCapas, detectarPunto } from './detectar-ubicacion'
 import type { DeteccionPunto, CapasGeoJSON } from './detectar-ubicacion'
 import { generarOficioPDF } from '../lib/generarOficio'
 import { generarFichaPDF } from '../lib/generarFicha'
-import { geolocalizarCalle } from '../lib/geolocalizarCalle'
-import type { CalleInfo } from '../lib/geolocalizarCalle'
 import { consultarSIGED } from '../lib/consultarSIGED'
 import type { SigedEscuela } from '../lib/consultarSIGED'
 
@@ -85,7 +83,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
   const [generando, setGenerando] = useState(false)
   const [docUrls, setDocUrls] = useState<{ oficio?: string; ficha?: string } | null>(null)
   const [activeTab, setActiveTab] = useState<DocTab>('oficio')
-  const [calleInfo, setCalleInfo] = useState<CalleInfo | null>(null)
   const [tramoFullscreen, setTramoFullscreen] = useState(false)
   const [ubicacionFullscreen, setUbicacionFullscreen] = useState(false)
   const [satelliteUbicacion, setSatelliteUbicacion] = useState(false)
@@ -93,7 +90,10 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [showLayersUbicacion, setShowLayersUbicacion] = useState(false)
   const [showLayersTramo, setShowLayersTramo] = useState(false)
-  const [calleError, setCalleError] = useState<string | null>(null)
+
+  const calleInfo = s.calle || s.entre_calles
+    ? { calle: s.calle || '', entreCalles: s.entre_calles || '' }
+    : null
   const [sigedCct, setSigedCct] = useState('')
   const [sigedData, setSigedData] = useState<SigedEscuela | null>(null)
   const [sigedLoading, setSigedLoading] = useState(false)
@@ -107,12 +107,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
       setCapas(c)
       setDetection(detectarPunto(s.latitud, s.longitud, c))
     })
-    if (s.calle || s.entre_calles) {
-      setCalleInfo({ calle: s.calle || '', entreCalles: s.entre_calles || '' })
-    } else {
-      geolocalizarCalle(s.latitud, s.longitud).then(setCalleInfo)
-    }
-  }, [s.latitud, s.longitud, s.calle, s.entre_calles])
+  }, [s.latitud, s.longitud])
 
   useEffect(() => {
     if (sigedCct.length !== 10) {
@@ -140,27 +135,11 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
 
   const handleGenerarDocumentos = async () => {
     setGenerando(true)
-    setCalleError(null)
     try {
-      // Save calle info to DB if available and not already stored
-      if (calleInfo && (calleInfo.calle || calleInfo.entreCalles) && s.id_solicitud) {
-        const { error: updateError } = await supabase
-          .from('solicitudes')
-          .update({
-            calle: calleInfo.calle,
-            entre_calles: calleInfo.entreCalles,
-          })
-          .eq('id_solicitud', s.id_solicitud)
-        if (updateError) {
-          console.error('Error guardando calle:', updateError)
-          setCalleError('No se guardó la información de calle en la base de datos')
-        }
-      }
-
       const solicitudEnriched = {
         ...s,
-        calle: calleInfo?.calle || s.calle || '',
-        entre_calles: calleInfo?.entreCalles || s.entre_calles || '',
+        calle: calleInfo?.calle || '',
+        entre_calles: calleInfo?.entreCalles || '',
       }
       const [oficioUrl, fichaUrl] = await Promise.all([
         generarOficioPDF(solicitudEnriched),
@@ -341,7 +320,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
               </div>
             </Card>
 
-            {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.escuelas_cercanas && s.escuelas_cercanas.length > 0) || (s.iglesias_cercanas && s.iglesias_cercanas.length > 0) || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
+            {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
               <Card title="Información del tramo">
                 <div className="flex flex-col gap-2 text-sm">
                   {s.distancia_tramo_m != null && (
@@ -372,18 +351,18 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                       </span>
                     </div>
                   )}
-                  {s.escuelas_cercanas && s.escuelas_cercanas.length > 0 && (
-                    <div className="flex items-start gap-2 text-xs">
-                      <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
-                      <span className="text-gray-institutional">{s.escuelas_cercanas.join(', ')}</span>
-                    </div>
-                  )}
-                  {s.iglesias_cercanas && s.iglesias_cercanas.length > 0 && (
-                    <div className="flex items-start gap-2 text-xs">
-                      <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
-                      <span className="text-gray-institutional">{s.iglesias_cercanas.join(', ')}</span>
-                    </div>
-                  )}
+                  <div className="flex items-start gap-2 text-xs">
+                    <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
+                    <span className="text-gray-institutional">
+                      {s.escuelas_cercanas?.length ? s.escuelas_cercanas.join(', ') : 'Ninguna encontrada'}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 text-xs">
+                    <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
+                    <span className="text-gray-institutional">
+                      {s.iglesias_cercanas?.length ? s.iglesias_cercanas.join(', ') : 'Ninguna encontrada'}
+                    </span>
+                  </div>
                   {s.transportes_cercanos && s.transportes_cercanos.length > 0 && (
                     <div className="flex items-start gap-2 text-xs">
                       <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
@@ -660,10 +639,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                   </div>
                 )}
 
-                {!calleInfo && (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
-                )}
-
                 {hasTramo && (
                   <div className="flex items-center gap-2">
                     <Ruler className="h-3.5 w-3.5 text-guinda" />
@@ -673,30 +648,15 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                   </div>
                 )}
 
-                {!detection ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
-                ) : (
-                  <>
-                    <hr className="my-1 border-gray-100" />
+                {s.iglesias_cercanas && s.iglesias_cercanas.length > 0 && (
+                  <div className="flex items-start gap-2 text-purple-600">
+                    <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span className="line-clamp-2">{s.iglesias_cercanas.join(', ')}</span>
+                  </div>
+                )}
 
-                    {detection.zona_zap && (
-                      <div className="flex items-start gap-2 text-amber-700">
-                        <MapIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span className="font-medium">Zona ZAP: <span className="font-normal">{detection.zona_zap}</span></span>
-                      </div>
-                    )}
-
-                    {detection.iglesias_cercanas.length > 0 && (
-                      <div className="flex items-start gap-2 text-purple-600">
-                        <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span className="line-clamp-2">{detection.iglesias_cercanas.join(', ')}</span>
-                      </div>
-                    )}
-
-                    {detection.fuera_alcance && (
-                      <p className="text-xs text-red-500">Fuera del área de cobertura</p>
-                    )}
-                  </>
+                {detection?.fuera_alcance && (
+                  <p className="text-xs text-red-500">Fuera del área de cobertura</p>
                 )}
               </div>
             </Card>
@@ -787,15 +747,12 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
           </div>
         </div>
 
-        {showGenerateButtons && (
+          {showGenerateButtons && (
           <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4">
             <p className="text-xs font-medium text-gray-institutional/50">Generar documentos</p>
-            {calleError && (
-              <p className="text-xs text-amber-600">{calleError}</p>
-            )}
             <Button
               onClick={handleGenerarDocumentos}
-              disabled={generando || calleInfo === null}
+              disabled={generando}
               className="flex items-center gap-2"
             >
               {generando ? (
@@ -803,11 +760,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
               ) : (
                 <FileText className="h-4 w-4" />
               )}
-              {calleInfo === null
-                ? 'Obteniendo ubicación...'
-                : generando
-                  ? 'Generando documentos...'
-                  : 'Generar oficio y ficha técnica'}
+              {generando ? 'Generando documentos...' : 'Generar oficio y ficha técnica'}
             </Button>
           </div>
         )}

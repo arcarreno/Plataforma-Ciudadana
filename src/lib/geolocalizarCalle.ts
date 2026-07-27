@@ -27,64 +27,76 @@ function stripType(name: string): string {
   return name.replace(/^(Calle|Avenida|Privada|Calzada|Boulevard)\s+/i, '').trim()
 }
 
-export async function geolocalizarCalle(lat: number, lon: number): Promise<CalleInfo> {
+function cacheKey(lat: number, lon: number): string {
+  return `geocalle:${lat.toFixed(3)},${lon.toFixed(3)}`
+}
+
+function writeCache(lat: number, lon: number, info: CalleInfo): void {
   try {
-    // 1) Reverse geocode → street name
-    const nomUrl = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&zoom=18`
-    const nomResp = await fetch(nomUrl, { headers: { 'User-Agent': UA } })
-    const nomData: NominatimResponse = await nomResp.json()
-    const mainStreet = nomData.address?.road || ''
+    localStorage.setItem(cacheKey(lat, lon), JSON.stringify(info))
+  } catch {}
+}
 
-    if (!mainStreet) {
-      return { calle: '', entreCalles: '' }
+function readCache(lat: number, lon: number): CalleInfo | null {
+  try {
+    const raw = localStorage.getItem(cacheKey(lat, lon))
+    return raw ? (JSON.parse(raw) as CalleInfo) : null
+  } catch {
+    return null
+  }
+}
+
+async function fetchNominatim(lat: number, lon: number): Promise<string> {
+  const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&zoom=18`
+  const resp = await fetch(url, { headers: { 'User-Agent': UA } })
+  const data: NominatimResponse = await resp.json()
+  return data.address?.road?.toUpperCase() || ''
+}
+
+async function fetchOverpass(lat: number, lon: number): Promise<string[]> {
+  const query = `[out:json][timeout:5];way["highway"](around:150,${lat},${lon});out tags;`
+  const body = 'data=' + encodeURIComponent(query)
+  const resp = await fetch(OVERPASS_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+    body,
+  })
+  const data: { elements: OverpassElement[] } = await resp.json()
+  const seen = new Set<string>()
+  return data.elements
+    .map(el => el.tags?.name?.toUpperCase().trim())
+    .filter((n): n is string => !!n && !seen.has(n) && !!seen.add(n))
+}
+
+function buildEntreCalles(calle: string, nearby: string[]): string {
+  const mainBase = stripType(calle)
+  const streets = nearby.filter(n => stripType(n) !== mainBase)
+  if (streets.length === 0) return ''
+  const entre1 = streets[0]
+  const entre2 = streets[1]
+  if (entre1 && entre2) return `ENTRE ${entre1} Y ${entre2}`
+  return `ENTRE ${entre1}`
+}
+
+export async function geolocalizarCalle(lat: number, lon: number): Promise<CalleInfo> {
+  const cached = readCache(lat, lon)
+  if (cached) return cached
+
+  try {
+    const [calle, nearby] = await Promise.all([
+      fetchNominatim(lat, lon),
+      fetchOverpass(lat, lon),
+    ])
+
+    if (!calle) return { calle: '', entreCalles: '' }
+
+    const result: CalleInfo = {
+      calle,
+      entreCalles: buildEntreCalles(calle, nearby),
     }
 
-    const calleName = mainStreet.toUpperCase()
-
-    // 2) Overpass → nearby streets within 150m
-    const overpassQuery = `
-      [out:json][timeout:10];
-      way["highway"](around:150,${lat},${lon});
-      out tags;
-    `
-    const overpassBody = 'data=' + encodeURIComponent(overpassQuery)
-    const ovResp = await fetch(OVERPASS_BASE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
-      body: overpassBody,
-    })
-    const ovData: { elements: OverpassElement[] } = await ovResp.json()
-
-    // 3) Extract unique street names, exclude main street
-    const mainBase = stripType(mainStreet)
-    const seen = new Set<string>()
-    const nearby: string[] = []
-
-    for (const el of ovData.elements) {
-      const name = el.tags?.name
-      if (!name) continue
-      const base = stripType(name)
-      if (base === mainBase) continue
-      if (seen.has(base)) continue
-      seen.add(base)
-      nearby.push(name.toUpperCase())
-    }
-
-    // 4) Pick first 2 cross streets
-    const entre1 = nearby[0] || ''
-    const entre2 = nearby[1] || ''
-
-    let entreCalles = ''
-    if (entre1 && entre2) {
-      entreCalles = `ENTRE ${entre1} Y ${entre2}`
-    } else if (entre1) {
-      entreCalles = `ENTRE ${entre1}`
-    }
-
-    return {
-      calle: calleName,
-      entreCalles,
-    }
+    writeCache(lat, lon, result)
+    return result
   } catch (err) {
     console.warn('Error en geolocalización:', err)
     return { calle: '', entreCalles: '' }

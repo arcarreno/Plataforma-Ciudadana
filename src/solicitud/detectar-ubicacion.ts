@@ -2,8 +2,6 @@ import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import booleanIntersects from '@turf/boolean-intersects'
 import lineIntersect from '@turf/line-intersect'
 import { point, lineString } from '@turf/helpers'
-import distance from '@turf/distance'
-import nearestPointOnLine from '@turf/nearest-point-on-line'
 import buffer from '@turf/buffer'
 import { matchJunta, cleanColoniaName } from '../core/geo'
 import { estimarAnchoCalle, haversineDistancia } from './calle'
@@ -23,18 +21,11 @@ export interface DeteccionPunto {
   junta_auxiliar: string
   zona_zap: boolean
   cobertura_agua: boolean
-  escuelas_cercanas: string[]
-  iglesias_cercanas: string[]
-  transportes_cercanos: string[]
   fuera_alcance: boolean
   coordenadas: { lat: number; lng: number }
 }
 
 export interface DeteccionTramo {
-  colonias: string[]
-  juntas_auxiliares: string[]
-  zonas_zap: string[]
-  cobertura_agua: boolean
   escuelas_cercanas: string[]
   iglesias_cercanas: string[]
   transportes_cercanos: string[]
@@ -43,7 +34,7 @@ export interface DeteccionTramo {
   coordenadas: { lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number }
 }
 
-const RADIO_CERCANIA_KM = 0.1
+const RADIO_TRAMO_KM = 0.003
 
 function getProps(f: GeoJSON.Feature): { name: string } {
   return f.properties as { name: string } || { name: '' }
@@ -76,35 +67,6 @@ function detectarPIP(
     } catch (_e) { /* skip */ }
   }
   return ''
-}
-
-function detectarCercanos(
-  pt: GeoJSON.Feature<GeoJSON.Point>,
-  capa: GeoJSON.FeatureCollection
-): string[] {
-  const results: string[] = []
-  for (const f of capa.features) {
-    if (!f.geometry) continue
-    const gt = f.geometry.type
-    if (gt !== 'Point' && gt !== 'LineString' && gt !== 'MultiLineString') continue
-    if (!f.geometry.coordinates) continue
-    try {
-      let d: number | null = null
-      if (gt === 'Point') {
-        d = distance(pt, f as GeoJSON.Feature<GeoJSON.Point>, { units: 'kilometers' })
-      } else {
-        const nearest = nearestPointOnLine(
-          f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>,
-          pt
-        )
-        d = nearest.properties.dist != null ? nearest.properties.dist : null
-      }
-      if (d !== null && d <= RADIO_CERCANIA_KM) {
-        results.push(getProps(f).name || '(sin nombre)')
-      }
-    } catch (_e) { /* skip */ }
-  }
-  return results
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
@@ -154,18 +116,11 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
     colonia = 'Desconocida'
   }
 
-  const escuelas_cercanas = detectarCercanos(pt, capas.escuelas)
-  const iglesias_cercanas = detectarCercanos(pt, capas.iglesias)
-  const transportes_cercanos = detectarCercanos(pt, capas.stv)
-
   return {
     colonia,
     junta_auxiliar,
     zona_zap: tieneZonaZap,
     cobertura_agua: tieneCoberturaAgua,
-    escuelas_cercanas,
-    iglesias_cercanas,
-    transportes_cercanos,
     fuera_alcance,
     coordenadas: { lat, lng },
   }
@@ -183,7 +138,7 @@ export function detectarTramo(
   const coords = puntos.map(p => [p.lng, p.lat] as [number, number])
   const line = lineString(coords)
 
-  const lineBuffer = buffer(line, RADIO_CERCANIA_KM, { units: 'kilometers' })
+  const lineBuffer = buffer(line, RADIO_TRAMO_KM, { units: 'kilometers' })
 
   let distancia_m = 0
   for (let i = 1; i < puntos.length; i++) {
@@ -205,7 +160,6 @@ export function detectarTramo(
 
   if (!lineBuffer) {
     return {
-      colonias: [], juntas_auxiliares: [], zonas_zap: [], cobertura_agua: false,
       escuelas_cercanas: [], iglesias_cercanas: [], transportes_cercanos: [],
       distancia_m, ancho_calle_m,
       coordenadas: { lat_ini, lng_ini, lat_fin, lng_fin },
@@ -213,21 +167,6 @@ export function detectarTramo(
   }
 
   const buf = lineBuffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>
-
-  function polygonIntersects(fc: GeoJSON.FeatureCollection): string[] {
-    const names: string[] = []
-    for (const f of fc.features) {
-      if (!f.geometry) continue
-      if (f.geometry.type !== 'Polygon' && f.geometry.type !== 'MultiPolygon') continue
-      if (!f.geometry.coordinates) continue
-      try {
-        if (booleanIntersects(f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>, buf)) {
-          names.push(getProps(f).name || '')
-        }
-      } catch (_e) { /* skip invalid geometry */ }
-    }
-    return names
-  }
 
   function pointInBuffer(fc: GeoJSON.FeatureCollection): string[] {
     const names: string[] = []
@@ -260,22 +199,11 @@ export function detectarTramo(
     return names
   }
 
-  const colonias = polygonIntersects(capas.colonias).map(cleanColoniaName)
-  const juntas_auxiliares_raw = polygonIntersects(capas.juntas)
-  if (juntas_auxiliares_raw.length === 0) {
-    juntas_auxiliares_raw.push('Zona Metropolitana')
-  }
-  const zonas_zap = polygonIntersects(capas.zonasZap)
-  const cobertura_agua = polygonIntersects(capas.coberturaAgua).length > 0
   const escuelas_cercanas = pointInBuffer(capas.escuelas)
   const iglesias_cercanas = pointInBuffer(capas.iglesias)
   const transportes_cercanos = lineIntersects(capas.stv)
 
   return {
-    colonias,
-    juntas_auxiliares: juntas_auxiliares_raw.map(matchJunta),
-    zonas_zap,
-    cobertura_agua,
     escuelas_cercanas,
     iglesias_cercanas,
     transportes_cercanos,
