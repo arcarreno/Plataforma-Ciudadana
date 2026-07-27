@@ -152,7 +152,7 @@ export default function MapasEstadisticas() {
 
       {/* Mapa */}
       <Card title="Mapa de solicitudes">
-        <div className="relative h-[520px] w-full rounded-xl border border-gray-100">
+        <div className="relative h-[520px] w-full overflow-hidden rounded-xl border border-gray-100">
           <div className="absolute right-3 top-3 z-[1000]">
             <button
               type="button"
