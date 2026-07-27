@@ -73,7 +73,41 @@ function TramoMarker({ position, label }: { position: L.LatLngExpression; label:
 function LocateOnMount() {
   const map = useMap()
   useEffect(() => {
-    map.locate({ setView: true, maxZoom: 16 })
+    const marker = L.circleMarker([0, 0], {
+      radius: 8,
+      fillColor: '#3b82f6',
+      color: '#fff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.8,
+    })
+    const circle = L.circle([0, 0], {
+      radius: 100,
+      color: '#3b82f6',
+      fillColor: '#3b82f6',
+      fillOpacity: 0.08,
+      weight: 1,
+    })
+
+    const onFound = (e: L.LocationEvent) => {
+      marker.setLatLng(e.latlng).addTo(map)
+      circle.setLatLng(e.latlng).setRadius(e.accuracy ?? 100).addTo(map)
+    }
+    const onError = () => {
+      marker.remove()
+      circle.remove()
+    }
+
+    map.on('locationfound', onFound)
+    map.on('locationerror', onError)
+    map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true })
+
+    return () => {
+      map.off('locationfound', onFound)
+      map.off('locationerror', onError)
+      marker.remove()
+      circle.remove()
+    }
   }, [map])
   return null
 }
