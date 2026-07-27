@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, Accessibility, LogOut } from 'lucide-react'
-import type { FontSize, Contrast } from '../core/theme'
+import type { FontSize, Contrast, VoiceType } from '../core/theme'
 import logoPuebla from '../assets/Puebla.png'
 import mosaico from '../assets/mosaico.svg'
 import AccessibilityPanel from './AccessibilityPanel'
@@ -14,6 +14,8 @@ interface HeaderProps {
   onFontSizeChange: (size: FontSize) => void
   contrast: Contrast
   onContrastChange: (c: Contrast) => void
+  voiceType: VoiceType
+  onVoiceTypeChange: (v: VoiceType) => void
   talkBackEnabled: boolean
   onTalkBackToggle: () => void
   navOpen: boolean
@@ -31,6 +33,8 @@ export default function Header({
   onFontSizeChange,
   contrast,
   onContrastChange,
+  voiceType,
+  onVoiceTypeChange,
   talkBackEnabled,
   onTalkBackToggle,
   navOpen,
@@ -165,6 +169,8 @@ export default function Header({
         onFontSizeChange={onFontSizeChange}
         contrast={contrast}
         onContrastChange={onContrastChange}
+        voiceType={voiceType}
+        onVoiceTypeChange={onVoiceTypeChange}
         talkBackEnabled={talkBackEnabled}
         onTalkBackToggle={onTalkBackToggle}
       />

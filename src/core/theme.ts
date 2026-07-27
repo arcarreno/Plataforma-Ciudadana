@@ -24,3 +24,6 @@ export const fontLabels: Record<FontSize, string> = {
 
 export const contrastOptions = ['light', 'dark'] as const
 export type Contrast = (typeof contrastOptions)[number]
+
+export const voiceOptions = ['default', 'female', 'male'] as const
+export type VoiceType = (typeof voiceOptions)[number]

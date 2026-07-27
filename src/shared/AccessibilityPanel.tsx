@@ -1,6 +1,6 @@
 import { Volume2, VolumeX, Type, Sun, Moon, Accessibility } from 'lucide-react'
-import { fontSizeOptions, fontLabels } from '../core/theme'
-import type { FontSize, Contrast } from '../core/theme'
+import { fontSizeOptions, fontLabels, voiceOptions } from '../core/theme'
+import type { FontSize, Contrast, VoiceType } from '../core/theme'
 import ContrastToggle from './ContrastToggle'
 
 interface AccessibilityPanelProps {
@@ -10,6 +10,8 @@ interface AccessibilityPanelProps {
   onFontSizeChange: (size: FontSize) => void
   contrast: Contrast
   onContrastChange: (c: Contrast) => void
+  voiceType: VoiceType
+  onVoiceTypeChange: (v: VoiceType) => void
   talkBackEnabled: boolean
   onTalkBackToggle: () => void
 }
@@ -21,6 +23,8 @@ export default function AccessibilityPanel({
   onFontSizeChange,
   contrast,
   onContrastChange,
+  voiceType,
+  onVoiceTypeChange,
   talkBackEnabled,
   onTalkBackToggle,
 }: AccessibilityPanelProps) {
@@ -134,6 +138,28 @@ export default function AccessibilityPanel({
                 </>
               )}
             </button>
+
+            {talkBackEnabled && (
+              <div className="mt-3">
+                <p className="mb-2 text-xs text-gray-institutional/70">Voz</p>
+                <div className="flex gap-2">
+                  {voiceOptions.map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => onVoiceTypeChange(v)}
+                      className={`flex flex-1 items-center justify-center rounded-xl px-3 py-2 text-xs font-medium transition-all duration-200 ${
+                        voiceType === v
+                          ? 'bg-guinda text-white shadow-button'
+                          : 'border-2 border-alabaster-dark text-gray-institutional hover:border-guinda/30 hover:text-guinda'
+                      }`}
+                      aria-pressed={voiceType === v}
+                    >
+                      {v === 'female' ? 'Femenina' : v === 'male' ? 'Masculina' : 'Default'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </aside>

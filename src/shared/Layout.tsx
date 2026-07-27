@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import type { FontSize, Contrast } from '../core/theme'
+import type { FontSize, Contrast, VoiceType } from '../core/theme'
 import { useTalkBack } from '../hooks/useTalkBack'
 import Header from './Header'
 import Footer from './Footer'
@@ -19,9 +19,10 @@ export default function Layout() {
   })
 
   const [talkBackEnabled, setTalkBackEnabled] = useState(false)
+  const [voiceType, setVoiceType] = useState<VoiceType>('female')
   const [navOpen, setNavOpen] = useState(false)
 
-  useTalkBack(talkBackEnabled)
+  useTalkBack(talkBackEnabled, voiceType)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-font-size', fontSize)
@@ -40,6 +41,8 @@ export default function Layout() {
         onContrastChange={setContrast}
         talkBackEnabled={talkBackEnabled}
         onTalkBackToggle={() => setTalkBackEnabled((p) => !p)}
+        voiceType={voiceType}
+        onVoiceTypeChange={setVoiceType}
         navOpen={navOpen}
         onNavToggle={() => setNavOpen((p) => !p)}
       />

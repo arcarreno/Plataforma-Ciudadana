@@ -1,6 +1,36 @@
 import { useEffect, useRef, useCallback } from 'react'
+import type { VoiceType } from '../core/theme'
 
-export function useTalkBack(enabled: boolean) {
+const femaleNames = ['maria', 'sofia', 'paulina', 'helena', 'lucia', 'valentina', 'camila', 'isabella', 'gabriela', 'alejandra', 'fernanda', 'ximena', 'renata', 'victoria', 'diana', 'julia', 'monica', 'ana', 'carmen', 'rosa', 'laura', 'martha', 'silvia', 'patricia', 'claudia', 'veronica', 'beatriz', 'elena', 'adriana', 'teresa']
+const maleNames = ['miguel', 'jorge', 'raul', 'pablo', 'carlos', 'juan', 'david', 'jose', 'antonio', 'luis', 'javier', 'alejandro', 'manuel', 'fernando', 'pedro', 'diego', 'ricardo', 'daniel', 'rodrigo', 'andres']
+
+function findVoice(type: VoiceType): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis?.getVoices() ?? []
+  const spanish = voices.filter((v) => v.lang.startsWith('es'))
+  if (!spanish.length) return null
+
+  const isFemale = (name: string) => femaleNames.some((fn) => name.includes(fn))
+  const isMale = (name: string) => maleNames.some((mn) => name.includes(mn))
+  const lower = (s: string) => s.toLowerCase()
+
+  if (type === 'female') {
+    for (const v of spanish) {
+      if (isFemale(lower(v.name))) return v
+    }
+    const ms = spanish.find((v) => lower(v.name).includes('microsoft') && !isMale(lower(v.name)))
+    if (ms) return ms
+  } else if (type === 'male') {
+    for (const v of spanish) {
+      if (isMale(lower(v.name))) return v
+    }
+    const ms = spanish.find((v) => lower(v.name).includes('microsoft') && !isFemale(lower(v.name)))
+    if (ms) return ms
+  }
+
+  return spanish[0] ?? null
+}
+
+export function useTalkBack(enabled: boolean, voiceType: VoiceType) {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
 
   const speak = useCallback(
@@ -11,10 +41,12 @@ export function useTalkBack(enabled: boolean) {
       utterance.lang = 'es-MX'
       utterance.rate = 0.9
       utterance.pitch = 1
+      const voice = findVoice(voiceType)
+      if (voice) utterance.voice = voice
       utteranceRef.current = utterance
       window.speechSynthesis.speak(utterance)
     },
-    [enabled]
+    [enabled, voiceType]
   )
 
   const speakElement = useCallback(
