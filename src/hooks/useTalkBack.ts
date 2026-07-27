@@ -19,7 +19,7 @@ function findVoice(type: VoiceType): SpeechSynthesisVoice | null {
     }
     const ms = spanish.find((v) => lower(v.name).includes('microsoft') && !isMale(lower(v.name)))
     if (ms) return ms
-  } else if (type === 'male') {
+  } else {
     for (const v of spanish) {
       if (isMale(lower(v.name))) return v
     }

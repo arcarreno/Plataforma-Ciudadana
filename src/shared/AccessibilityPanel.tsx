@@ -154,7 +154,7 @@ export default function AccessibilityPanel({
                       }`}
                       aria-pressed={voiceType === v}
                     >
-                      {v === 'female' ? 'Femenina' : v === 'male' ? 'Masculina' : 'Default'}
+                      {v === 'female' ? 'Femenina' : 'Masculina'}
                     </button>
                   ))}
                 </div>
