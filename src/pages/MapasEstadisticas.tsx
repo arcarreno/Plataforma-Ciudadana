@@ -292,15 +292,6 @@ export default function MapasEstadisticas() {
       {/* Mapa fullscreen */}
       {mapFullscreen && (
         <div className="fixed inset-0 z-[10001] bg-black">
-          <div className="absolute right-4 top-4 z-[10002]">
-            <button
-              type="button"
-              onClick={() => setMapFullscreen(false)}
-              className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
-            >
-              <Minimize2 className="h-5 w-5 text-gray-700" />
-            </button>
-          </div>
           <div className="h-full w-full">
             <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
               <LayersControl position="topright">
@@ -327,6 +318,13 @@ export default function MapasEstadisticas() {
                 </Marker>
               ))}
             </MapContainer>
+            <button
+              type="button"
+              onClick={() => setMapFullscreen(false)}
+              className="absolute bottom-4 right-4 z-[10002] rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+            >
+              <Minimize2 className="h-5 w-5 text-gray-700" />
+            </button>
           </div>
         </div>
       )}
