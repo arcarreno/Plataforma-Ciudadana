@@ -107,95 +107,174 @@ export default function MapasEstadisticas() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8 lg:px-12">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-guinda">Mapas y Estadísticas</h1>
-        <p className="mt-1 text-sm text-gray-institutional/50">Panel visual de todas las solicitudes registradas</p>
+    <div className="relative min-h-screen">
+      {/* Mapa como fondo */}
+      <div className="fixed inset-0 z-0">
+        <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl={false} dragging={false} scrollWheelZoom={false} attributionControl={false}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {puntos.map(s => (
+            <Marker
+              key={s.id_solicitud}
+              position={[s.latitud, s.longitud]}
+              icon={markerIcon}
+            />
+          ))}
+        </MapContainer>
+        <div className="absolute inset-0 bg-alabaster/70 backdrop-blur-[2px]" />
       </div>
 
-      {/* KPIs */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <div className="overflow-hidden rounded-2xl border border-guinda/10 bg-gradient-to-br from-guinda to-guinda-dark p-5 shadow-card">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
-              <MapPin className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-white">{solicitudes.length}</p>
-              <p className="text-xs font-medium text-white/60">Total solicitudes</p>
-            </div>
-          </div>
+      {/* Contenido encima del mapa */}
+      <div className="relative z-10 mx-auto max-w-[1400px] px-4 py-6 md:px-8 lg:px-12">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-guinda">Mapas y Estadísticas</h1>
+          <p className="mt-1 text-sm text-gray-institutional/50">Panel visual de todas las solicitudes registradas</p>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-[#41504D]/10 bg-gradient-to-br from-[#41504D] to-[#2d3835] p-5 shadow-card">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
-              <Building2 className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-white">{porColonia.length}</p>
-              <p className="text-xs font-medium text-white/60">Colonias distintas</p>
-            </div>
-          </div>
-        </div>
-        <div className="overflow-hidden rounded-2xl border border-[#DBC6B3]/20 bg-gradient-to-br from-[#DBC6B3] to-[#c4a999] p-5 shadow-card">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <Layers className="h-6 w-6 text-guinda-dark" />
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-guinda-dark">{porJunta.length}</p>
-              <p className="text-xs font-medium text-guinda-dark/60">Juntas auxiliares</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Mapa */}
-      <Card title="Mapa de solicitudes">
-        <div className="relative h-[520px] w-full overflow-hidden rounded-xl">
-          <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
-            <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="Estándar">
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
-              </LayersControl.BaseLayer>
-              <LayersControl.BaseLayer name="Satélite">
-                <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="&copy; Esri" />
-              </LayersControl.BaseLayer>
-            </LayersControl>
-            {puntos.map(s => (
-              <Marker
-                key={s.id_solicitud}
-                position={[s.latitud, s.longitud]}
-                icon={markerIcon}
-              >
-                <Popup maxWidth={240} className="custom-popup">
-                  <div className="py-1">
-                    <p className="font-bold text-guinda" style={{ fontSize: '13px' }}>{s.folio_unico}</p>
-                    <p className="mt-0.5 text-xs text-gray-700">{s.nombre_solicitante}</p>
-                    <p className="text-[11px] text-gray-400">{s.colonia} &mdash; {s.tipo_solicitud}</p>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
+        {/* KPIs */}
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <div className="overflow-hidden rounded-2xl border border-guinda/10 bg-gradient-to-br from-guinda to-guinda-dark p-5 shadow-card">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+                <MapPin className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-white">{solicitudes.length}</p>
+                <p className="text-xs font-medium text-white/60">Total solicitudes</p>
+              </div>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-[#41504D]/10 bg-gradient-to-br from-[#41504D] to-[#2d3835] p-5 shadow-card">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+                <Building2 className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-white">{porColonia.length}</p>
+                <p className="text-xs font-medium text-white/60">Colonias distintas</p>
+              </div>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-[#DBC6B3]/20 bg-gradient-to-br from-[#DBC6B3] to-[#c4a999] p-5 shadow-card">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
+                <Layers className="h-6 w-6 text-guinda-dark" />
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-guinda-dark">{porJunta.length}</p>
+                <p className="text-xs font-medium text-guinda-dark/60">Juntas auxiliares</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Botón mapa completo */}
+        <div className="mb-4 flex justify-end">
           <button
             type="button"
             onClick={() => setMapFullscreen(true)}
-            className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
+            className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-institutional shadow-card transition-colors hover:bg-gray-50 hover:text-guinda"
           >
-            <Maximize2 className="h-4 w-4 text-gray-700" />
+            <Maximize2 className="h-4 w-4" />
+            Ver mapa completo
           </button>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <p className="text-xs text-gray-institutional/40">
-            {puntos.length} punto(s) mapeado(s) de {solicitudes.length} solicitud(es) total
-          </p>
-          <div className="flex items-center gap-1.5 text-[10px] text-gray-institutional/40">
-            <div className="h-2.5 w-2.5 rounded-full bg-guinda" />
-            Punto de solicitud
-          </div>
+
+        {/* Charts */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card title="Obras por colonia">
+            <p className="mb-3 text-xs text-gray-institutional/40">Top 10 colonias con más solicitudes</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={porColonia} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#636569' }} angle={-40} textAnchor="end" interval={0} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
+                  {porColonia.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card title="Obras por junta auxiliar">
+            <p className="mb-3 text-xs text-gray-institutional/40">Distribución por junta auxiliar</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={porJunta} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#636569' }} angle={-40} textAnchor="end" interval={0} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
+                  {porJunta.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card title="Obras por tipo">
+            <p className="mb-3 text-xs text-gray-institutional/40">Tipos de obra más solicitados</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={porTipo} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#636569' }} angle={-40} textAnchor="end" interval={0} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
+                  {porTipo.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card title="Solicitudes por día de la semana">
+            <p className="mb-3 text-xs text-gray-institutional/40">Volumen de peticiones por día</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={porDiaSemana} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#636569' }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={36}>
+                  {porDiaSemana.map((entry) => (
+                    <Cell
+                      key={entry.name}
+                      fill={
+                        entry.name === diaMax?.name
+                          ? '#7d2447'
+                          : entry.name === diaMin?.name
+                            ? '#d5d2c8'
+                            : 'rgba(125,36,71,0.35)'
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            {diaMax && diaMin && (
+              <div className="mt-3 flex flex-wrap gap-4 border-t border-gray-100 pt-3">
+                <span className="flex items-center gap-1.5 rounded-lg bg-guinda/5 px-3 py-1.5 text-xs font-medium text-guinda">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  Más peticiones: {diaMax.name} ({diaMax.value})
+                </span>
+                <span className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-institutional/60">
+                  <TrendingDown className="h-3.5 w-3.5" />
+                  Menos peticiones: {diaMin.name} ({diaMin.value})
+                </span>
+              </div>
+            )}
+          </Card>
         </div>
-      </Card>
+
+        <div className="mt-4 pb-6 text-center text-xs text-gray-institutional/30">
+          {puntos.length} punto(s) mapeado(s) de {solicitudes.length} solicitud(es) total
+        </div>
+      </div>
 
       {/* Mapa fullscreen */}
       {mapFullscreen && (
@@ -238,147 +317,6 @@ export default function MapasEstadisticas() {
           </div>
         </div>
       )}
-
-      {/* Charts */}
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <Card title="Obras por colonia">
-          <p className="mb-3 text-xs text-gray-institutional/40">Top 10 colonias con más solicitudes</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porColonia} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 10, fill: '#636569' }}
-                angle={-40}
-                textAnchor="end"
-                interval={0}
-                axisLine={{ stroke: '#e5e7eb' }}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 11, fill: '#636569' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
-                {porColonia.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="Obras por junta auxiliar">
-          <p className="mb-3 text-xs text-gray-institutional/40">Distribución por junta auxiliar</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porJunta} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 10, fill: '#636569' }}
-                angle={-40}
-                textAnchor="end"
-                interval={0}
-                axisLine={{ stroke: '#e5e7eb' }}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 11, fill: '#636569' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
-                {porJunta.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="Obras por tipo">
-          <p className="mb-3 text-xs text-gray-institutional/40">Tipos de obra más solicitados</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porTipo} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 10, fill: '#636569' }}
-                angle={-40}
-                textAnchor="end"
-                interval={0}
-                axisLine={{ stroke: '#e5e7eb' }}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 11, fill: '#636569' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
-                {porTipo.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="Solicitudes por día de la semana">
-          <p className="mb-3 text-xs text-gray-institutional/40">Volumen de peticiones por día</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porDiaSemana} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 11, fill: '#636569' }}
-                axisLine={{ stroke: '#e5e7eb' }}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 11, fill: '#636569' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={36}>
-                {porDiaSemana.map((entry) => (
-                  <Cell
-                    key={entry.name}
-                    fill={
-                      entry.name === diaMax?.name
-                        ? '#7d2447'
-                        : entry.name === diaMin?.name
-                          ? '#d5d2c8'
-                          : 'rgba(125,36,71,0.35)'
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          {diaMax && diaMin && (
-            <div className="mt-3 flex flex-wrap gap-4 border-t border-gray-100 pt-3">
-              <span className="flex items-center gap-1.5 rounded-lg bg-guinda/5 px-3 py-1.5 text-xs font-medium text-guinda">
-                <TrendingUp className="h-3.5 w-3.5" />
-                Más peticiones: {diaMax.name} ({diaMax.value})
-              </span>
-              <span className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-institutional/60">
-                <TrendingDown className="h-3.5 w-3.5" />
-                Menos peticiones: {diaMin.name} ({diaMin.value})
-              </span>
-            </div>
-          )}
-        </Card>
-      </div>
     </div>
   )
 }
