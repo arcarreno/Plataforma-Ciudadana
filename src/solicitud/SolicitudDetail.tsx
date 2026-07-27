@@ -211,7 +211,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
             <p className={`text-xl font-bold tracking-wider ${
               esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white' : 'text-guinda'
             }`}>{s.folio_unico}</p>
-            <span className={`text-[10px] font-semibold ${
+            <span className={`text-[20px] font-semibold ${
               esPrioridad
                 ? 'text-white/70'
                 : esMaxRanking
