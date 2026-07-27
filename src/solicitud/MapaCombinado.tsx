@@ -51,6 +51,7 @@ interface MapaCombinadoProps {
   onClose: () => void
   initialLat?: string
   initialLng?: string
+  inline?: boolean
 }
 
 function TramoMarker({ position, label }: { position: L.LatLngExpression; label: number }) {
@@ -98,7 +99,7 @@ function ClickHandler({
   return null
 }
 
-export default function MapaCombinado({ onConfirm, onClose, initialLat, initialLng }: MapaCombinadoProps) {
+export default function MapaCombinado({ onConfirm, onClose, initialLat, initialLng, inline }: MapaCombinadoProps) {
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState<Step>(initialLat && initialLng ? 'tramo' : 'punto')
@@ -228,7 +229,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const td = tramoDetection
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/60">
+    <div className={inline ? 'flex h-full w-full flex-col bg-white' : 'fixed inset-0 z-50 flex flex-col bg-black/60'}>
       <div className="flex items-center justify-between bg-white px-4 py-3 shadow-md">
         <button
           type="button"
@@ -237,7 +238,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           aria-label="Cerrar mapa"
         >
           <X className="h-4 w-4" />
-          Cancelar
+          {inline ? 'Cerrar' : 'Cancelar'}
         </button>
         <h2 className="text-sm font-semibold text-guinda">
           {step === 'punto' ? 'Seleccionar ubicación' : 'Dibujar tramo'}
