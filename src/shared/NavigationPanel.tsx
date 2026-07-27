@@ -53,12 +53,25 @@ export default function NavigationPanel({ open, onClose }: NavigationPanelProps)
               to="/admin"
               onClick={onClose}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-                location.pathname.startsWith('/admin')
+                location.pathname.startsWith('/admin') && location.pathname !== '/admin/mapas'
                   ? 'bg-guinda text-white shadow-button'
                   : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
               }`}
             >
               Admin
+            </Link>
+          )}
+          {user && (
+            <Link
+              to="/admin/mapas"
+              onClick={onClose}
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                location.pathname === '/admin/mapas'
+                  ? 'bg-guinda text-white shadow-button'
+                  : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
+              }`}
+            >
+              Mapas y Estadísticas
             </Link>
           )}
           {navLinks.map((link) => {

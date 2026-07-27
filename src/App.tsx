@@ -6,6 +6,7 @@ import NuevaSolicitud from './pages/NuevaSolicitud'
 import ConsultarFolio from './pages/ConsultarFolio'
 import AdminDashboard from './pages/AdminDashboard'
 import GestionUsuarios from './pages/GestionUsuarios'
+import MapasEstadisticas from './pages/MapasEstadisticas'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/consultar-folio" element={<ConsultarFolio />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/usuarios" element={<GestionUsuarios />} />
+            <Route path="/admin/mapas" element={<MapasEstadisticas />} />
           </Route>
         </Routes>
       </AuthProvider>
