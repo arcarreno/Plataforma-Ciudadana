@@ -70,6 +70,17 @@ function TramoMarker({ position, label }: { position: L.LatLngExpression; label:
   return null
 }
 
+function ResizeHandler() {
+  const map = useMap()
+  useEffect(() => {
+    const el = map.getContainer()
+    const ro = new ResizeObserver(() => map.invalidateSize())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [map])
+  return null
+}
+
 function LocateOnMount() {
   const map = useMap()
   useEffect(() => {
@@ -315,6 +326,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           )}
 
           <LocateOnMount />
+          <ResizeHandler />
 
           <ClickHandler
             stepRef={stepRef}

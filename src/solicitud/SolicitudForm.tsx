@@ -418,7 +418,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
           </div>
 
           <div className={`hidden md:block transition-all duration-500 ease-in-out relative z-20 min-w-0 ${inlineMap ? 'md:max-w-full md:flex-1 md:opacity-100' : 'md:max-w-0 md:opacity-0 md:overflow-hidden'}`}>
-            <div className="h-full w-[500px] md:w-full overflow-hidden rounded-xl">
+            <div className="h-full w-full overflow-hidden rounded-xl">
               {showMapaCombinado && (
                 <MapaCombinado
                   inline
