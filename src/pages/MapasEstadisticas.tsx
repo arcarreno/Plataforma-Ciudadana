@@ -369,7 +369,8 @@ export default function MapasEstadisticas() {
               ) : (
                 <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="&copy; Esri" />
               )}
-              {puntos.map(s => (
+              {showHeatmap && <HeatmapLayer puntos={puntos} />}
+              {!showHeatmap && puntos.map(s => (
                 <Marker
                   key={s.id_solicitud}
                   position={[s.latitud, s.longitud]}
@@ -412,6 +413,14 @@ export default function MapasEstadisticas() {
                   {showLayers ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   <Layers className="h-3.5 w-3.5" />
                   Capas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowHeatmap(prev => !prev)}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs shadow-card transition-colors ${showHeatmap ? 'bg-guinda text-white' : 'bg-white text-guinda hover:bg-guinda hover:text-white'}`}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  {showHeatmap ? 'Calor' : 'Puntos'}
                 </button>
                 <button
                   type="button"
