@@ -2,9 +2,23 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import nodemailer from 'nodemailer'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const LOGO_PUEBLA = fs.readFileSync(path.join(__dirname, 'Puebla.png'))
-const LOGO_SEMOVINFRA = fs.readFileSync(path.join(__dirname, 'Logo_Semovinfra.jpg'))
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+function loadImage(filename: string): Buffer | null {
+  try {
+    return fs.readFileSync(path.join(__dirname, filename))
+  } catch {
+    try {
+      return fs.readFileSync(path.join(process.cwd(), 'api', filename))
+    } catch {
+      console.warn('[EMAIL] No se pudo cargar imagen:', filename)
+      return null
+    }
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -48,6 +62,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     auth: { user: smtpUser, pass: smtpPass },
   })
 
+  const logoPuebla = loadImage('Puebla.png')
+  const logoSemovinfra = loadImage('Logo_Semovinfra.jpg')
+
+  const attachments: any[] = [
+    { filename: oficioNombre || `Oficio_${folio}.pdf`, content: Buffer.from(oficioPdf, 'base64'), contentType: 'application/pdf' },
+    { filename: fichaNombre || `Ficha_${folio}.pdf`, content: Buffer.from(fichaPdf, 'base64'), contentType: 'application/pdf' },
+  ]
+
+  if (logoPuebla) {
+    attachments.push({ filename: 'puebla.png', content: logoPuebla, contentType: 'image/png', cid: 'puebla-logo' })
+  }
+  if (logoSemovinfra) {
+    attachments.push({ filename: 'semovinfra.jpg', content: logoSemovinfra, contentType: 'image/jpeg', cid: 'semov-logo' })
+  }
+
   try {
     const info = await transporter.sendMail({
       from: `"Atención Ciudadana Puebla" <${smtpFrom}>`,
@@ -55,12 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       subject: `Documentación solicitud ${folio} — Atención Ciudadana Puebla`,
       html: buildEmailHtml(folio),
       text: buildEmailText(folio),
-      attachments: [
-        { filename: 'puebla.png', content: LOGO_PUEBLA, contentType: 'image/png', cid: 'puebla-logo' },
-        { filename: 'semovinfra.jpg', content: LOGO_SEMOVINFRA, contentType: 'image/jpeg', cid: 'semov-logo' },
-        { filename: oficioNombre || `Oficio_${folio}.pdf`, content: Buffer.from(oficioPdf, 'base64'), contentType: 'application/pdf' },
-        { filename: fichaNombre || `Ficha_${folio}.pdf`, content: Buffer.from(fichaPdf, 'base64'), contentType: 'application/pdf' },
-      ],
+      attachments,
     })
 
     console.log('[EMAIL] Enviado:', info.messageId, '→', correo)
