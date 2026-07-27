@@ -211,12 +211,12 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
             <p className={`text-xl font-bold tracking-wider ${
               esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white' : 'text-guinda'
             }`}>{s.folio_unico}</p>
-            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+            <span className={`text-[10px] font-semibold ${
               esPrioridad
-                ? 'bg-white/20 text-white'
+                ? 'text-white/70'
                 : esMaxRanking
-                  ? 'bg-[#DBC6B3]/20 text-[#DBC6B3]'
-                  : 'bg-guinda/10 text-guinda'
+                  ? 'text-[#DBC6B3]/70'
+                  : 'text-guinda/60'
             }`}>
               {esPrioridad ? 'Prioridad alta' : esMaxRanking ? 'Prioridad media' : 'Prioridad baja'}
             </span>
