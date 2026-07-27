@@ -152,7 +152,7 @@ export default function MapasEstadisticas() {
 
       {/* Mapa */}
       <Card title="Mapa de solicitudes">
-        <div className="relative h-[520px] w-full overflow-hidden rounded-xl">
+        <div className="relative h-[520px] w-full overflow-hidden rounded-xl" style={{ isolation: 'isolate' }}>
           <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="Estándar">
