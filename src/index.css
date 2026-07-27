@@ -45,32 +45,60 @@ html[data-font-size="xlarge"] {
 }
 
 html[data-contrast="dark"] {
+  /* Surface hierarchy — near-black base, elevated surfaces lighter */
   --color-alabaster: #121212;
-  --color-guinda: #bb5588;
-  --color-guinda-light: #d47aa3;
-  --color-guinda-dark: #9a3f66;
-  --color-gray-institutional: #e0e0e0;
-  --color-alabaster-dark: #2a2a2a;
-  --color-surface: #1e1e1e;
-  --color-surface-hover: #252525;
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.3);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
-  --shadow-button: 0 2px 8px rgba(187, 85, 136, 0.3);
-  --shadow-button-hover: 0 4px 14px rgba(187, 85, 136, 0.4);
-  --shadow-header: 0 1px 8px rgba(0,0,0,0.3);
+  --color-alabaster-dark: #2a2a2e;
+  --color-surface: #1a1a1e;
+  --color-surface-hover: #222226;
+
+  /* Guinda → softer warm rose for dark mode (desaturated ~20%, lightened) */
+  --color-guinda: #c46a8d;
+  --color-guinda-light: #d485a3;
+  --color-guinda-dark: #aa5577;
+
+  /* Text — off-white to reduce halation vs pure white on black */
+  --color-gray-institutional: #e2e2e6;
+
+  /* Shadows — deeper, with guinda accent tinted slightly warmer */
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.6), 0 8px 24px rgba(0,0,0,0.4);
+  --shadow-button: 0 2px 8px rgba(196,106,141,0.25);
+  --shadow-button-hover: 0 4px 14px rgba(196,106,141,0.35);
+  --shadow-header: 0 1px 8px rgba(0,0,0,0.4);
+
+  /* Map the default white token to dark surface so bg-white adapts */
+  --color-white: #1a1a1e;
 }
 html[data-contrast="dark"] body {
   background-color: var(--color-alabaster);
   color: var(--color-gray-institutional);
 }
-html[data-contrast="dark"] .leaflet-control-zoom { background: #2a2a2a !important; border-color: #444 !important; }
-html[data-contrast="dark"] .leaflet-control-zoom a { color: #e0e0e0 !important; }
-html[data-contrast="dark"] .leaflet-control-zoom a.leaflet-control-zoom-in { border-bottom-color: #444 !important; }
+
+/* Restore white text on guinda buttons / surfaces (also covers hover:bg-guinda etc.) */
+html[data-contrast="dark"] [class*="bg-guinda"] {
+  --color-white: #fff;
+}
+
+/* Border grays → dark borders */
+html[data-contrast="dark"] .border-gray-100 { border-color: #2a2a2e !important; }
+html[data-contrast="dark"] .border-gray-200 { border-color: #333338 !important; }
+
+/* Hover grays → dark hover surfaces */
+html[data-contrast="dark"] .hover\:bg-gray-50:hover { background-color: #2a2a2e !important; }
+
+/* Alabaster translucent backgrounds in dark mode */
+html[data-contrast="dark"] .bg-alabaster\/30 { background-color: rgba(18,18,18,0.5) !important; }
+html[data-contrast="dark"] .bg-alabaster\/50 { background-color: rgba(18,18,18,0.6) !important; }
+
+/* Leaflet map dark mode — softer invert for less eye strain */
+html[data-contrast="dark"] .leaflet-control-zoom { background: #2a2a2e !important; border-color: #3a3a3e !important; }
+html[data-contrast="dark"] .leaflet-control-zoom a { color: #e2e2e6 !important; }
+html[data-contrast="dark"] .leaflet-control-zoom a.leaflet-control-zoom-in { border-bottom-color: #3a3a3e !important; }
 html[data-contrast="dark"] .leaflet-control-layers,
-html[data-contrast="dark"] .leaflet-control-layers-expanded { background: #2a2a2a !important; border-color: #444 !important; }
-html[data-contrast="dark"] .leaflet-layer { filter: invert(0.85) hue-rotate(180deg); }
-html[data-contrast="dark"] .leaflet-popup-content-wrapper { background: #2a2a2a !important; color: #e0e0e0 !important; }
-html[data-contrast="dark"] .leaflet-popup-tip { background: #2a2a2a !important; }
+html[data-contrast="dark"] .leaflet-control-layers-expanded { background: #2a2a2e !important; border-color: #3a3a3e !important; }
+html[data-contrast="dark"] .leaflet-layer { filter: invert(0.75) hue-rotate(180deg) saturate(0.7); }
+html[data-contrast="dark"] .leaflet-popup-content-wrapper { background: #2a2a2e !important; color: #e2e2e6 !important; }
+html[data-contrast="dark"] .leaflet-popup-tip { background: #2a2a2e !important; }
 
 ::selection {
   background-color: var(--color-guinda);
