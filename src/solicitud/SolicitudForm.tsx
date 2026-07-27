@@ -253,239 +253,160 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         </div>
       )}
 
-      <div className={`transition-all duration-500 ease-in-out ${inlineMap ? 'md:max-w-none' : 'md:max-w-2xl md:mx-auto'}`}>
+      <form onSubmit={handleSubmit} className="mx-auto flex max-w-2xl flex-col gap-6">
+        <Card title="Datos del solicitante">
+          <div className="flex flex-col gap-4">
+            <Input
+              label="Nombre completo"
+              value={form.nombre_solicitante}
+              onChange={(e) => set('nombre_solicitante', e.target.value)}
+              error={errors.nombre_solicitante}
+              placeholder="Juan Pérez García"
+              readOnly={!!nombrePrefilled}
+              tabIndex={nombrePrefilled ? -1 : undefined}
+              className={nombrePrefilled ? 'cursor-default opacity-80' : undefined}
+            />
+            <div className="grid gap-4 md:grid-cols-2">
+              {!omitirCurp && (
+                <Input
+                  label="CURP"
+                  value={form.curp}
+                  onChange={(e) => set('curp', e.target.value.toUpperCase())}
+                  error={errors.curp}
+                  placeholder="PEGJ900101HDFRRN01"
+                  maxLength={18}
+                />
+              )}
+              <Input
+                label="Teléfono"
+                type="tel"
+                value={form.telefono}
+                onChange={(e) => set('telefono', e.target.value.replace(/\D/g, ''))}
+                error={errors.telefono}
+                placeholder="2221234567"
+                maxLength={10}
+              />
+            </div>
+            <Input
+              label="Correo electrónico"
+              type="email"
+              value={form.correo}
+              onChange={(e) => set('correo', e.target.value)}
+              error={errors.correo}
+              placeholder="correo@ejemplo.com"
+            />
+          </div>
+        </Card>
+
         <div className="md:flex md:gap-6">
           <div className={`transition-all duration-500 ease-in-out min-w-0 ${inlineMap ? 'md:w-[55%]' : 'md:w-full'}`}>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-              <Card title="Datos del solicitante">
-                <div className="flex flex-col gap-4">
-                  <Input
-                    label="Nombre completo"
-                    value={form.nombre_solicitante}
-                    onChange={(e) => set('nombre_solicitante', e.target.value)}
-                    error={errors.nombre_solicitante}
-                    placeholder="Juan Pérez García"
-                    readOnly={!!nombrePrefilled}
-                    tabIndex={nombrePrefilled ? -1 : undefined}
-                    className={nombrePrefilled ? 'cursor-default opacity-80' : undefined}
-                  />
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {!omitirCurp && (
-                      <Input
-                        label="CURP"
-                        value={form.curp}
-                        onChange={(e) => set('curp', e.target.value.toUpperCase())}
-                        error={errors.curp}
-                        placeholder="PEGJ900101HDFRRN01"
-                        maxLength={18}
-                      />
+            <Card title="Datos de la obra">
+              <div className="flex flex-col gap-4">
+                <Select
+                  label="Tipo de obra"
+                  options={TIPOS_OBRA_NOMBRES}
+                  value={form.tipo_solicitud}
+                  onChange={(e) => set('tipo_solicitud', e.target.value)}
+                  error={errors.tipo_solicitud}
+                />
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-institutional">
+                    Ubicación
+                  </label>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 p-4">
+                      <MapPin className="h-5 w-5 shrink-0 text-guinda" />
+                      <span className="text-sm text-gray-institutional/70">
+                        {form.latitud && form.longitud
+                          ? `${form.latitud}, ${form.longitud}`
+                          : 'Presiona para marcar un punto en el mapa'}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="ml-auto shrink-0"
+                        aria-label="Abrir mapa"
+                        onClick={() => setShowMapaCombinado(true)}
+                      >
+                        <MapPin className="mr-1 h-4 w-4" />
+                        {form.tramo_lat_ini ? 'Editar' : 'Mapa'}
+                      </Button>
+                    </div>
+                    {errors.latitud && (
+                      <p className="mt-1 text-xs text-red-500">{errors.latitud}</p>
                     )}
-                    <Input
-                      label="Teléfono"
-                      type="tel"
-                      value={form.telefono}
-                      onChange={(e) => set('telefono', e.target.value.replace(/\D/g, ''))}
-                      error={errors.telefono}
-                      placeholder="2221234567"
-                      maxLength={10}
-                    />
+                    {form.tramo_lat_ini && (
+                      <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                        Tramo: {form.tramo_lat_ini}, {form.tramo_lng_ini} → {form.tramo_lat_fin}, {form.tramo_lng_fin}
+                      </div>
+                    )}
                   </div>
-                  <Input
-                    label="Correo electrónico"
-                    type="email"
-                    value={form.correo}
-                    onChange={(e) => set('correo', e.target.value)}
-                    error={errors.correo}
-                    placeholder="correo@ejemplo.com"
-                  />
                 </div>
-              </Card>
 
-              <Card title="Datos de la obra">
-                <div className="flex flex-col gap-4">
-                  <Select
-                    label="Tipo de obra"
-                    options={TIPOS_OBRA_NOMBRES}
-                    value={form.tipo_solicitud}
-                    onChange={(e) => set('tipo_solicitud', e.target.value)}
-                    error={errors.tipo_solicitud}
-                  />
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-institutional">
-                      Ubicación
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-institutional">
+                      Colonia
                     </label>
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-3 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 p-4">
-                        <MapPin className="h-5 w-5 shrink-0 text-guinda" />
-                        <span className="text-sm text-gray-institutional/70">
-                          {form.latitud && form.longitud
-                            ? `${form.latitud}, ${form.longitud}`
-                            : 'Presiona para marcar un punto en el mapa'}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="ml-auto shrink-0"
-                          aria-label="Abrir mapa"
-                          onClick={() => setShowMapaCombinado(true)}
-                        >
-                          <MapPin className="mr-1 h-4 w-4" />
-                          {form.tramo_lat_ini ? 'Editar' : 'Mapa'}
-                        </Button>
-                      </div>
-                      {errors.latitud && (
-                        <p className="mt-1 text-xs text-red-500">{errors.latitud}</p>
-                      )}
-                      {form.tramo_lat_ini && (
-                        <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
-                          Tramo: {form.tramo_lat_ini}, {form.tramo_lng_ini} → {form.tramo_lat_fin}, {form.tramo_lng_fin}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-gray-institutional">
-                        Colonia
-                      </label>
-                      <div
-                        className="w-full cursor-pointer rounded-xl border-2 border-alabaster-dark bg-alabaster/50 px-4 py-3 text-sm text-gray-institutional/70 transition-all duration-200 hover:border-guinda/30"
-                        onClick={() => setShowInfoModal(true)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowInfoModal(true) }}
-                      >
-                        {form.colonia || 'Esperando datos'}
-                      </div>
-                      {errors.colonia && <p className="text-xs text-red-500">{errors.colonia}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-gray-institutional">
-                        Junta auxiliar
-                      </label>
-                      <div
-                        className="w-full cursor-pointer rounded-xl border-2 border-alabaster-dark bg-alabaster/50 px-4 py-3 text-sm text-gray-institutional/70 transition-all duration-200 hover:border-guinda/30"
-                        onClick={() => setShowInfoModal(true)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowInfoModal(true) }}
-                      >
-                        {form.junta_auxiliar || 'Esperando datos'}
-                      </div>
-                      {errors.junta_auxiliar && <p className="text-xs text-red-500">{errors.junta_auxiliar}</p>}
-                    </div>
-                  </div>
-
-                  {(form.calle || form.entre_calles) && (
-                    <div className="rounded-xl border border-alabaster-dark/30 bg-alabaster/30 p-3">
-                      {form.calle && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Navigation className="h-4 w-4 shrink-0 text-guinda" />
-                          <span className="font-medium text-gray-institutional">{form.calle}</span>
-                        </div>
-                      )}
-                      {form.entre_calles && (
-                        <div className="flex items-center gap-2 pl-6 text-xs text-gray-institutional/60">
-                          {form.entre_calles}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <Textarea
-                    label="Descripción del problema"
-                    value={form.descripcion}
-                    onChange={(e) => set('descripcion', e.target.value)}
-                    placeholder="Describe el problema o la necesidad de la obra..."
-                    rows={3}
-                  />
-                </div>
-              </Card>
-
-              <Card title="Evidencia (opcional)">
-                <div className="flex flex-col gap-3">
-                  <p className="text-xs text-gray-institutional/60">
-                    Sube fotos o un PDF como evidencia. Máximo 500 KB por archivo. Las
-                    solicitudes con evidencia reciben mayor prioridad.
-                  </p>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    multiple
-                    onChange={handleFileChange}
-                    className="hidden"
-                    aria-label="Seleccionar archivos de evidencia"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    {form.archivos.length > 0
-                      ? `${form.archivos.length} archivo(s) seleccionado(s)`
-                      : 'Seleccionar archivos'}
-                  </Button>
-                  {form.archivos.length > 0 && (
-                    <ul className="text-xs text-gray-institutional/60">
-                      {form.archivos.map((f, i) => (
-                        <li key={i}>{f.name} <span className="text-gray-institutional/40">({(f.size / 1024).toFixed(0)} KB)</span></li>
-                      ))}
-                    </ul>
-                  )}
-                  {fileErrors.length > 0 && (
-                    <ul className="text-xs text-red-500">
-                      {fileErrors.map((err, i) => (
-                        <li key={i}>{err}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </Card>
-
-              <Card>
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={form.aviso_privacidad_aceptado}
-                    onChange={(e) => set('aviso_privacidad_aceptado', e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-guinda focus:ring-guinda"
-                    aria-label="Acepto el aviso de privacidad"
-                  />
-                  <span className="text-sm text-gray-institutional">
-                    He leído y acepto el{' '}
-                    <button
-                      type="button"
-                      className="cursor-pointer text-guinda underline hover:no-underline"
-                      onClick={() => setShowAviso(true)}
+                    <div
+                      className="w-full cursor-pointer rounded-xl border-2 border-alabaster-dark bg-alabaster/50 px-4 py-3 text-sm text-gray-institutional/70 transition-all duration-200 hover:border-guinda/30"
+                      onClick={() => setShowInfoModal(true)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowInfoModal(true) }}
                     >
-                      Aviso de Privacidad
-                    </button>{' '}
-                    y el tratamiento de mis datos personales para la gestión de la
-                    solicitud.
-                  </span>
-                </label>
-                {errors.aviso_privacidad_aceptado && (
-                  <p className="mt-1 text-xs text-red-500">
-                    {errors.aviso_privacidad_aceptado}
-                  </p>
-                )}
-              </Card>
+                      {form.colonia || 'Esperando datos'}
+                    </div>
+                    {errors.colonia && <p className="text-xs text-red-500">{errors.colonia}</p>}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-institutional">
+                      Junta auxiliar
+                    </label>
+                    <div
+                      className="w-full cursor-pointer rounded-xl border-2 border-alabaster-dark bg-alabaster/50 px-4 py-3 text-sm text-gray-institutional/70 transition-all duration-200 hover:border-guinda/30"
+                      onClick={() => setShowInfoModal(true)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowInfoModal(true) }}
+                    >
+                      {form.junta_auxiliar || 'Esperando datos'}
+                    </div>
+                    {errors.junta_auxiliar && <p className="text-xs text-red-500">{errors.junta_auxiliar}</p>}
+                  </div>
+                </div>
 
-              <div className="flex justify-end">
-                <Button type="submit" size="lg" disabled={submittedOnce}>
-                  {submittedOnce ? 'Enviando' : 'Enviar solicitud'}
-                </Button>
+                {(form.calle || form.entre_calles) && (
+                  <div className="rounded-xl border border-alabaster-dark/30 bg-alabaster/30 p-3">
+                    {form.calle && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Navigation className="h-4 w-4 shrink-0 text-guinda" />
+                        <span className="font-medium text-gray-institutional">{form.calle}</span>
+                      </div>
+                    )}
+                    {form.entre_calles && (
+                      <div className="flex items-center gap-2 pl-6 text-xs text-gray-institutional/60">
+                        {form.entre_calles}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Textarea
+                  label="Descripción del problema"
+                  value={form.descripcion}
+                  onChange={(e) => set('descripcion', e.target.value)}
+                  placeholder="Describe el problema o la necesidad de la obra..."
+                  rows={3}
+                />
               </div>
-            </form>
+            </Card>
           </div>
 
-          <div className={`hidden md:block transition-all duration-500 ease-in-out overflow-hidden ${inlineMap ? 'md:w-[45%] md:opacity-100' : 'md:w-0 md:opacity-0'}`}>
-            <div className="min-w-[480px] h-full">
+          <div className={`hidden md:block transition-all duration-500 ease-in-out ${inlineMap ? 'md:max-w-[45%] md:opacity-100' : 'md:max-w-0 md:opacity-0 md:overflow-hidden'}`}>
+            <div className="min-w-[500px] h-full">
               <MapaCombinado
                 inline
                 onConfirm={handleMapCombinadoConfirm}
@@ -496,7 +417,84 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             </div>
           </div>
         </div>
-      </div>
+
+        <Card title="Evidencia (opcional)">
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-gray-institutional/60">
+              Sube fotos o un PDF como evidencia. Máximo 500 KB por archivo. Las
+              solicitudes con evidencia reciben mayor prioridad.
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              multiple
+              onChange={handleFileChange}
+              className="hidden"
+              aria-label="Seleccionar archivos de evidencia"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {form.archivos.length > 0
+                ? `${form.archivos.length} archivo(s) seleccionado(s)`
+                : 'Seleccionar archivos'}
+            </Button>
+            {form.archivos.length > 0 && (
+              <ul className="text-xs text-gray-institutional/60">
+                {form.archivos.map((f, i) => (
+                  <li key={i}>{f.name} <span className="text-gray-institutional/40">({(f.size / 1024).toFixed(0)} KB)</span></li>
+                ))}
+              </ul>
+            )}
+            {fileErrors.length > 0 && (
+              <ul className="text-xs text-red-500">
+                {fileErrors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={form.aviso_privacidad_aceptado}
+              onChange={(e) => set('aviso_privacidad_aceptado', e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-guinda focus:ring-guinda"
+              aria-label="Acepto el aviso de privacidad"
+            />
+            <span className="text-sm text-gray-institutional">
+              He leído y acepto el{' '}
+              <button
+                type="button"
+                className="cursor-pointer text-guinda underline hover:no-underline"
+                onClick={() => setShowAviso(true)}
+              >
+                Aviso de Privacidad
+              </button>{' '}
+              y el tratamiento de mis datos personales para la gestión de la
+              solicitud.
+            </span>
+          </label>
+          {errors.aviso_privacidad_aceptado && (
+            <p className="mt-1 text-xs text-red-500">
+              {errors.aviso_privacidad_aceptado}
+            </p>
+          )}
+        </Card>
+
+        <div className="flex justify-end">
+          <Button type="submit" size="lg" disabled={submittedOnce}>
+            {submittedOnce ? 'Enviando' : 'Enviar solicitud'}
+          </Button>
+        </div>
+      </form>
 
       {showMapaCombinado && (
         <div className="md:hidden">
