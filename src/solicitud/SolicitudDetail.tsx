@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Polyline, LayersControl, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, Map as MapIcon, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle, Globe, Map } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
@@ -10,7 +10,7 @@ import { esCargoPublico } from '../types/auth'
 import Card from '../shared/Card'
 import Button from '../shared/Button'
 import { cargarCapas, detectarPunto } from './detectar-ubicacion'
-import type { DeteccionPunto } from './detectar-ubicacion'
+import type { DeteccionPunto, CapasGeoJSON } from './detectar-ubicacion'
 import { generarOficioPDF } from '../lib/generarOficio'
 import { generarFichaPDF } from '../lib/generarFicha'
 import { geolocalizarCalle } from '../lib/geolocalizarCalle'
@@ -46,6 +46,27 @@ const marker2 = L.divIcon({
   iconAnchor: [10, 10],
 })
 
+const COLONIA_STYLE = {
+  color: '#7d2447',
+  weight: 2,
+  fillColor: '#7d2447',
+  fillOpacity: 0.08,
+}
+
+const JUNTA_STYLE = {
+  color: '#2c6b2f',
+  weight: 3,
+  fillColor: '#2c6b2f',
+  fillOpacity: 0.05,
+}
+
+const ZONA_ZAP_STYLE = {
+  color: '#b8860b',
+  weight: 2,
+  fillColor: '#b8860b',
+  fillOpacity: 0.06,
+}
+
 function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: L.DivIcon }) {
   const map = useMap()
   useEffect(() => {
@@ -67,6 +88,11 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
   const [calleInfo, setCalleInfo] = useState<CalleInfo | null>(null)
   const [tramoFullscreen, setTramoFullscreen] = useState(false)
   const [ubicacionFullscreen, setUbicacionFullscreen] = useState(false)
+  const [satelliteUbicacion, setSatelliteUbicacion] = useState(false)
+  const [satelliteTramo, setSatelliteTramo] = useState(false)
+  const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
+  const [showLayersUbicacion, setShowLayersUbicacion] = useState(false)
+  const [showLayersTramo, setShowLayersTramo] = useState(false)
   const [calleError, setCalleError] = useState<string | null>(null)
   const [sigedCct, setSigedCct] = useState('')
   const [sigedData, setSigedData] = useState<SigedEscuela | null>(null)
@@ -78,6 +104,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
 
   useEffect(() => {
     cargarCapas().then(c => {
+      setCapas(c)
       setDetection(detectarPunto(s.latitud, s.longitud, c))
     })
     if (s.calle || s.entre_calles) {
@@ -399,15 +426,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
             <Card title="Ubicación">
               {ubicacionFullscreen && (
                 <div className="fixed inset-0 z-[10001] bg-black">
-                  <div className="absolute right-4 top-4 z-[10002]">
-                    <button
-                      type="button"
-                      onClick={() => setUbicacionFullscreen(false)}
-                      className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
-                    >
-                      <Minimize2 className="h-5 w-5 text-gray-700" />
-                    </button>
-                  </div>
                   <div className="h-full w-full">
                     <MapContainer
                       center={[s.latitud, s.longitud]}
@@ -415,15 +433,49 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                       className="h-full w-full"
                       zoomControl={true}
                     >
-                      <LayersControl position="topright">
-                        <LayersControl.BaseLayer checked name="Estándar">
-                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-                        </LayersControl.BaseLayer>
-                        <LayersControl.BaseLayer name="Satélite">
-                          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
-                        </LayersControl.BaseLayer>
-                      </LayersControl>
+                      {!satelliteUbicacion ? (
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                      ) : (
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
+                      )}
                       <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
+                      {showLayersUbicacion && capas?.colonias && (
+                        <GeoJSON key="colonias" data={capas.colonias} style={COLONIA_STYLE} interactive={false} />
+                      )}
+                      {showLayersUbicacion && capas?.juntas && (
+                        <GeoJSON key="juntas" data={capas.juntas} style={JUNTA_STYLE} interactive={false} />
+                      )}
+                      {showLayersUbicacion && capas?.zonasZap && (
+                        <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
+                      )}
+                      <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSatelliteUbicacion(prev => !prev)}
+                          className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                          aria-label={satelliteUbicacion ? 'Vista calle' : 'Vista satélite'}
+                        >
+                          {satelliteUbicacion ? <Map className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+                          {satelliteUbicacion ? 'Calle' : 'Satélite'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowLayersUbicacion(prev => !prev)}
+                          className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                          aria-label={showLayersUbicacion ? 'Ocultar capas' : 'Mostrar capas'}
+                        >
+                          {showLayersUbicacion ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          <Layers className="h-3.5 w-3.5" />
+                          Capas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setUbicacionFullscreen(false)}
+                          className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+                        >
+                          <Minimize2 className="h-5 w-5 text-gray-700" />
+                        </button>
+                      </div>
                     </MapContainer>
                   </div>
                 </div>
@@ -510,16 +562,50 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                   className="h-full w-full"
                   zoomControl={true}
                 >
-                  <LayersControl position="topright">
-                    <LayersControl.BaseLayer checked name="Estándar">
-                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-                    </LayersControl.BaseLayer>
-                    <LayersControl.BaseLayer name="Satélite">
-                      <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
-                    </LayersControl.BaseLayer>
-                  </LayersControl>
+                  {!satelliteTramo ? (
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                  ) : (
+                    <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
+                  )}
                   {polyline}
                   {markers}
+                  {showLayersTramo && capas?.colonias && (
+                    <GeoJSON key="colonias" data={capas.colonias} style={COLONIA_STYLE} interactive={false} />
+                  )}
+                  {showLayersTramo && capas?.juntas && (
+                    <GeoJSON key="juntas" data={capas.juntas} style={JUNTA_STYLE} interactive={false} />
+                  )}
+                  {showLayersTramo && capas?.zonasZap && (
+                    <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
+                  )}
+                  <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSatelliteTramo(prev => !prev)}
+                      className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                      aria-label={satelliteTramo ? 'Vista calle' : 'Vista satélite'}
+                    >
+                      {satelliteTramo ? <Map className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+                      {satelliteTramo ? 'Calle' : 'Satélite'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowLayersTramo(prev => !prev)}
+                      className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                      aria-label={showLayersTramo ? 'Ocultar capas' : 'Mostrar capas'}
+                    >
+                      {showLayersTramo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      <Layers className="h-3.5 w-3.5" />
+                      Capas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTramoFullscreen(false)}
+                      className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+                    >
+                      <Minimize2 className="h-5 w-5 text-gray-700" />
+                    </button>
+                  </div>
                 </MapContainer>
               )
 
@@ -527,15 +613,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                 <Card title="Tramo">
                   {tramoFullscreen && (
                     <div className="fixed inset-0 z-[10001] bg-black">
-                      <div className="absolute right-4 top-4 z-[10002]">
-                        <button
-                          type="button"
-                          onClick={() => setTramoFullscreen(false)}
-                          className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
-                        >
-                          <Minimize2 className="h-5 w-5 text-gray-700" />
-                        </button>
-                      </div>
                       <div className="h-full w-full">{fullMap}</div>
                     </div>
                   )}
