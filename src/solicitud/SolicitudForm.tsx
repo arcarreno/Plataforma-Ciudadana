@@ -77,6 +77,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const [showLottie, setShowLottie] = useState(false)
   const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
   const [showMapaCombinado, setShowMapaCombinado] = useState(false)
+  const [mapClosing, setMapClosing] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [showAviso, setShowAviso] = useState(false)
   const [tramoData, setTramoData] = useState<{
@@ -124,7 +125,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         puntos: tramo.puntos,
       })
     }
-    setShowMapaCombinado(false)
+    closeMap()
   }
 
   const set = (field: keyof SolicitudFormData, value: unknown) => {
@@ -236,7 +237,16 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     )
   }
 
-  const inlineMap = showMapaCombinado
+  const inlineMap = showMapaCombinado || mapClosing
+
+  const closeMap = () => {
+    if (mapClosing) return
+    setMapClosing(true)
+    setTimeout(() => {
+      setShowMapaCombinado(false)
+      setMapClosing(false)
+    }, 500)
+  }
 
   return (
     <>
@@ -407,15 +417,17 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             </Card>
           </div>
 
-          <div className={`hidden md:block transition-all duration-500 ease-in-out relative z-20 min-w-0 overflow-hidden ${inlineMap ? 'md:max-w-full md:flex-1 md:opacity-100' : 'md:max-w-0 md:opacity-0'}`}>
-            <div className="h-full w-[500px] md:w-full overflow-hidden rounded-xl" style={{ isolation: 'isolate' }}>
-              <MapaCombinado
-                inline
-                onConfirm={handleMapCombinadoConfirm}
-                onClose={() => setShowMapaCombinado(false)}
-                initialLat={form.latitud}
-                initialLng={form.longitud}
-              />
+          <div className={`hidden md:block transition-all duration-500 ease-in-out relative z-20 min-w-0 ${inlineMap ? 'md:max-w-full md:flex-1 md:opacity-100' : 'md:max-w-0 md:opacity-0 md:overflow-hidden'}`}>
+            <div className="h-full w-[500px] md:w-full overflow-hidden rounded-xl">
+              {showMapaCombinado && (
+                <MapaCombinado
+                  inline
+                  onConfirm={handleMapCombinadoConfirm}
+                  onClose={closeMap}
+                  initialLat={form.latitud}
+                  initialLng={form.longitud}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -504,7 +516,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         <div className="md:hidden">
           <MapaCombinado
             onConfirm={handleMapCombinadoConfirm}
-            onClose={() => setShowMapaCombinado(false)}
+            onClose={closeMap}
             initialLat={form.latitud}
             initialLng={form.longitud}
           />
