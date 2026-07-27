@@ -7,13 +7,13 @@ import { useAuth } from '../contexts/AuthContext'
 import type { Solicitud } from '../types/solicitud'
 import Card from '../shared/Card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts'
-import { MapPin, BarChart3, TrendingUp, TrendingDown, Layers, Building2 } from 'lucide-react'
+import { MapPin, BarChart3, TrendingUp, TrendingDown, Layers, Building2, Maximize2, Minimize2 } from 'lucide-react'
 
 const markerIcon = new L.DivIcon({
-  html: `<div style="width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#7d2447,#a3325f);border:3px solid white;box-shadow:0 2px 8px rgba(125,36,71,0.4);cursor:pointer"></div>`,
+  html: '<svg viewBox="0 0 32 48" width="24" height="36" xmlns="http://www.w3.org/2000/svg"><path d="M16 0C7.16 0 0 7.16 0 16c0 10.6 12.8 26.6 14.6 28.8.6.8 1.8.8 2.4 0C18.8 42.6 32 26.6 32 16 32 7.16 24.84 0 16 0z" fill="#7D2447"/><circle cx="16" cy="16" r="10" fill="white" opacity="0.9"/><circle cx="16" cy="16" r="8" fill="#7D2447"/></svg>',
   className: '',
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
+  iconSize: [24, 36],
+  iconAnchor: [12, 36],
 })
 
 const CHART_COLORS = ['#7d2447', '#a3325f', '#c44d78', '#41504D', '#DBC6B3', '#636569', '#5c1a34', '#2d8f6f', '#e07b39', '#3b82f6']
@@ -44,6 +44,7 @@ export default function MapasEstadisticas() {
   const navigate = useNavigate()
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [loading, setLoading] = useState(true)
+  const [mapFullscreen, setMapFullscreen] = useState(false)
 
   useEffect(() => {
     if (!user) { navigate('/'); return }
@@ -151,7 +152,17 @@ export default function MapasEstadisticas() {
 
       {/* Mapa */}
       <Card title="Mapa de solicitudes">
-        <div className="h-[520px] w-full overflow-hidden rounded-xl border border-gray-100">
+        <div className="relative h-[520px] w-full overflow-hidden rounded-xl border border-gray-100">
+          <div className="absolute right-3 top-3 z-[1000]">
+            <button
+              type="button"
+              onClick={() => setMapFullscreen(true)}
+              className="rounded-lg bg-white/90 p-2 shadow-lg transition-colors hover:bg-white"
+              title="Pantalla completa"
+            >
+              <Maximize2 className="h-4 w-4 text-gray-700" />
+            </button>
+          </div>
           <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="Estándar">
@@ -188,6 +199,48 @@ export default function MapasEstadisticas() {
           </div>
         </div>
       </Card>
+
+      {/* Mapa fullscreen */}
+      {mapFullscreen && (
+        <div className="fixed inset-0 z-[10001] bg-black">
+          <div className="absolute right-4 top-4 z-[10002]">
+            <button
+              type="button"
+              onClick={() => setMapFullscreen(false)}
+              className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+            >
+              <Minimize2 className="h-5 w-5 text-gray-700" />
+            </button>
+          </div>
+          <div className="h-full w-full">
+            <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
+              <LayersControl position="topright">
+                <LayersControl.BaseLayer checked name="Estándar">
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
+                </LayersControl.BaseLayer>
+                <LayersControl.BaseLayer name="Satélite">
+                  <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="&copy; Esri" />
+                </LayersControl.BaseLayer>
+              </LayersControl>
+              {puntos.map(s => (
+                <Marker
+                  key={s.id_solicitud}
+                  position={[s.latitud, s.longitud]}
+                  icon={markerIcon}
+                >
+                  <Popup maxWidth={240} className="custom-popup">
+                    <div className="py-1">
+                      <p className="font-bold text-guinda" style={{ fontSize: '13px' }}>{s.folio_unico}</p>
+                      <p className="mt-0.5 text-xs text-gray-700">{s.nombre_solicitante}</p>
+                      <p className="text-[11px] text-gray-400">{s.colonia} &mdash; {s.tipo_solicitud}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          </div>
+        </div>
+      )}
 
       {/* Charts */}
       <div className="mt-6 grid gap-6 md:grid-cols-2">
