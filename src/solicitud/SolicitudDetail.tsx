@@ -194,24 +194,45 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
 
   const showGenerateButtons = userRole && esCargoPublico(userRole)
 
+  const esMaxRanking = s.peso_ranking === 10
+  const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 py-6">
-      <div className="relative mx-auto w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-xl p-1.5 text-gray-institutional transition-colors hover:bg-gray-100 hover:text-guinda"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        <div className="mb-6">
-          <p className="text-xs text-gray-institutional/50">Folio</p>
-          <p className="text-xl font-bold tracking-wider text-guinda">{s.folio_unico}</p>
+      <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-2xl shadow-xl">
+        <div className={`flex items-center justify-between px-6 py-4 ${
+          esMaxRanking
+            ? 'bg-[#41504D]'
+            : esPrioridad
+              ? 'bg-guinda'
+              : 'bg-white'
+        }`}>
+          <div>
+            <p className={`text-xs ${
+              esMaxRanking ? 'text-[#DBC6B3]/60' : esPrioridad ? 'text-white/60' : 'text-gray-institutional/50'
+            }`}>Folio</p>
+            <p className={`text-xl font-bold tracking-wider ${
+              esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white' : 'text-guinda'
+            }`}>{s.folio_unico}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`rounded-xl p-1.5 transition-colors ${
+              esMaxRanking
+                ? 'text-[#DBC6B3]/60 hover:bg-[#DBC6B3]/10 hover:text-[#DBC6B3]'
+                : esPrioridad
+                  ? 'text-white/60 hover:bg-white/10 hover:text-white'
+                  : 'text-gray-institutional hover:bg-gray-100 hover:text-guinda'
+            }`}
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="flex flex-col gap-4">
+        <div className="bg-white p-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="flex flex-col gap-4">
             <Card title="Datos del solicitante">
               <div className="flex flex-col gap-2 text-sm">
                 <div className="flex items-center gap-2">
@@ -707,6 +728,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
             </Button>
           </div>
         )}
+        </div>
       </div>
 
       {/* Document Viewer Modal — Tabbed */}
