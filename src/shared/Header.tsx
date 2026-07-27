@@ -37,6 +37,7 @@ export default function Header({
   const [loginOpen, setLoginOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  const compactNav = fontSize === 'xlarge'
 
   return (
     <>
@@ -57,7 +58,7 @@ export default function Header({
           </button>
 
           <div className="flex items-center gap-2">
-            <nav className="hidden items-center gap-1 md:flex">
+            <nav className={`${compactNav ? 'hidden' : 'hidden md:flex'} items-center gap-1`}>
               {user && (
                 <Link
                   to="/admin"
@@ -122,7 +123,7 @@ export default function Header({
             <button
               type="button"
               onClick={onNavToggle}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 md:hidden ${
+              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 ${compactNav ? '' : 'md:hidden'} ${
                 navOpen
                   ? 'bg-guinda text-white shadow-button'
                   : 'text-guinda hover:bg-guinda/10'
