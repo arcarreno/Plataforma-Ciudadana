@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import 'leaflet.heat'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Solicitud } from '../types/solicitud'
@@ -41,6 +42,35 @@ const ZONA_ZAP_STYLE = {
 
 const CHART_COLORS = ['#7d2447', '#a3325f', '#c44d78', '#41504D', '#DBC6B3', '#636569', '#5c1a34', '#2d8f6f', '#e07b39', '#3b82f6']
 
+function HeatmapLayer({ puntos }: { puntos: { latitud: number; longitud: number }[] }) {
+  const map = useMap()
+  const layerRef = useRef<L.HeatLayer | null>(null)
+
+  useEffect(() => {
+    if (!puntos.length) return
+    const data: L.HeatLatLngTuple[] = puntos.map(p => [p.latitud, p.longitud, 1])
+    if (layerRef.current) {
+      layerRef.current.setLatLngs(data)
+    } else {
+      layerRef.current = L.heatLayer(data, {
+        radius: 25,
+        blur: 18,
+        maxZoom: 16,
+        max: 1,
+        gradient: { 0.2: '#636569', 0.4: '#7d2447', 0.6: '#a3325f', 0.8: '#c44d78', 1.0: '#e07b39' },
+      }).addTo(map)
+    }
+    return () => {
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current)
+        layerRef.current = null
+      }
+    }
+  }, [map, puntos])
+
+  return null
+}
+
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 function agruparPor(arr: string[]): { name: string; value: number }[] {
@@ -71,6 +101,7 @@ export default function MapasEstadisticas() {
   const [satellite, setSatellite] = useState(false)
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [showLayers, setShowLayers] = useState(false)
+  const [showHeatmap, setShowHeatmap] = useState(false)
 
   useEffect(() => {
     if (!user) { navigate('/'); return }
@@ -85,7 +116,7 @@ export default function MapasEstadisticas() {
     setLoading(true)
     const { data, error } = await supabase
       .from('solicitudes')
-      .select('latitud, longitud, colonia, junta_auxiliar, tipo_solicitud, fecha_creacion')
+      .select('id_solicitud, folio_unico, nombre_solicitante, latitud, longitud, colonia, junta_auxiliar, tipo_solicitud, fecha_creacion')
       .limit(500)
     if (!error && data) setSolicitudes(data as Solicitud[])
     setLoading(false)
@@ -186,7 +217,8 @@ export default function MapasEstadisticas() {
         <div className="relative h-[520px] w-full overflow-hidden rounded-xl" style={{ isolation: 'isolate' }}>
           <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
-            {puntos.map(s => (
+            {showHeatmap && <HeatmapLayer puntos={puntos} />}
+            {!showHeatmap && puntos.map(s => (
               <Marker
                 key={s.id_solicitud}
                 position={[s.latitud, s.longitud]}
@@ -202,21 +234,35 @@ export default function MapasEstadisticas() {
               </Marker>
             ))}
           </MapContainer>
-          <button
-            type="button"
-            onClick={() => setMapFullscreen(true)}
-            className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
-          >
-            <Maximize2 className="h-4 w-4 text-gray-700" />
-          </button>
+          <div className="absolute right-2 top-2 z-[2000] flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowHeatmap(prev => !prev)}
+              className={`rounded-lg p-1.5 shadow-lg transition-colors hover:bg-gray-50 ${showHeatmap ? 'bg-guinda text-white' : 'bg-white text-gray-700'}`}
+              title={showHeatmap ? 'Ver puntos individuales' : 'Ver mapa de calor'}
+            >
+              <MapPin className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapFullscreen(true)}
+              className="rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
+            >
+              <Maximize2 className="h-4 w-4 text-gray-700" />
+            </button>
+          </div>
         </div>
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-gray-institutional/40">
             {puntos.length} punto(s) mapeado(s) de {solicitudes.length} solicitud(es) total
           </p>
           <div className="flex items-center gap-1.5 text-[10px] text-gray-institutional/40">
-            <MapPin className="h-3.5 w-3.5 text-guinda" />
-            Punto de solicitud
+            {showHeatmap ? (
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: 'linear-gradient(135deg, #636569, #7d2447, #e07b39)' }} />
+            ) : (
+              <MapPin className="h-3.5 w-3.5 text-guinda" />
+            )}
+            {showHeatmap ? 'Mapa de calor' : 'Punto de solicitud'}
           </div>
         </div>
       </Card>
