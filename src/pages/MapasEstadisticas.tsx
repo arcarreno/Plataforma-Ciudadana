@@ -151,18 +151,8 @@ export default function MapasEstadisticas() {
       </div>
 
       {/* Mapa */}
-      <Card title="Mapa de solicitudes" className="overflow-hidden">
-        <div className="relative h-[520px] w-full overflow-hidden rounded-xl border border-gray-100">
-          <div className="absolute right-3 top-3 z-[1000]">
-            <button
-              type="button"
-              onClick={() => setMapFullscreen(true)}
-              className="rounded-lg bg-white/90 p-2 shadow-lg transition-colors hover:bg-white"
-              title="Pantalla completa"
-            >
-              <Maximize2 className="h-4 w-4 text-gray-700" />
-            </button>
-          </div>
+      <Card title="Mapa de solicitudes">
+        <div className="relative h-[520px] w-full overflow-hidden rounded-xl">
           <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="Estándar">
@@ -188,6 +178,13 @@ export default function MapasEstadisticas() {
               </Marker>
             ))}
           </MapContainer>
+          <button
+            type="button"
+            onClick={() => setMapFullscreen(true)}
+            className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
+          >
+            <Maximize2 className="h-4 w-4 text-gray-700" />
+          </button>
         </div>
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-gray-institutional/40">
