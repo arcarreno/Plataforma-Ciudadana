@@ -9,8 +9,7 @@ import Select from '../shared/Select'
 import { TIPOS_OBRA_NOMBRES, RANKING_PUNTOS_CARGO_PUBLICO } from '../core/constants'
 import { crearSolicitud } from '../lib/solicitud'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
-import MapaPin from './MapaPin'
-import MapaTramo from './MapaTramo'
+import MapaCombinado from './MapaCombinado'
 import AvisoPrivacidad from '../shared/AvisoPrivacidad'
 
 function validarCURP(curp: string): boolean {
@@ -77,8 +76,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const [submittedOnce, setSubmittedOnce] = useState(false)
   const [showLottie, setShowLottie] = useState(false)
   const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
-  const [showMapaPin, setShowMapaPin] = useState(false)
-  const [showMapaTramo, setShowMapaTramo] = useState(false)
+  const [showMapaCombinado, setShowMapaCombinado] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [showAviso, setShowAviso] = useState(false)
   const [tramoData, setTramoData] = useState<{
@@ -101,37 +99,32 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     return () => anim.destroy()
   }, [showLottie])
 
-  const handleMapTramoConfirm = (data: {
-    lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
-    puntos: { lat: number; lng: number }[]
-    distancia_m: number; ancho_calle_m: number
-    escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
-  }) => {
-    set('tramo_lat_ini', String(data.lat_ini))
-    set('tramo_lng_ini', String(data.lng_ini))
-    set('tramo_lat_fin', String(data.lat_fin))
-    set('tramo_lng_fin', String(data.lng_fin))
-    setTramoData({
-      distancia_m: data.distancia_m,
-      ancho_calle_m: data.ancho_calle_m,
-      escuelas_cercanas: data.escuelas_cercanas,
-      iglesias_cercanas: data.iglesias_cercanas,
-      transportes_cercanos: data.transportes_cercanos,
-      puntos: data.puntos,
-    })
-    setShowMapaTramo(false)
-  }
+  const handleMapCombinadoConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
+    const { pin, tramo } = data
+    set('latitud', String(pin.lat))
+    set('longitud', String(pin.lng))
+    if (pin.colonia) set('colonia', pin.colonia)
+    if (pin.junta_auxiliar) set('junta_auxiliar', pin.junta_auxiliar)
+    if (pin.calle) set('calle', pin.calle)
+    if (pin.entre_calles) set('entre_calles', pin.entre_calles)
+    set('zona_zap', pin.zona_zap)
+    set('cobertura_agua', pin.cobertura_agua)
 
-  const handleMapConfirm = (data: { lat: number; lng: number; colonia: string; junta_auxiliar: string; calle: string; entre_calles: string; zona_zap: boolean; cobertura_agua: boolean }) => {
-    set('latitud', String(data.lat))
-    set('longitud', String(data.lng))
-    if (data.colonia) set('colonia', data.colonia)
-    if (data.junta_auxiliar) set('junta_auxiliar', data.junta_auxiliar)
-    if (data.calle) set('calle', data.calle)
-    if (data.entre_calles) set('entre_calles', data.entre_calles)
-    set('zona_zap', data.zona_zap)
-    set('cobertura_agua', data.cobertura_agua)
-    setShowMapaPin(false)
+    if (tramo) {
+      set('tramo_lat_ini', String(tramo.lat_ini))
+      set('tramo_lng_ini', String(tramo.lng_ini))
+      set('tramo_lat_fin', String(tramo.lat_fin))
+      set('tramo_lng_fin', String(tramo.lng_fin))
+      setTramoData({
+        distancia_m: tramo.distancia_m,
+        ancho_calle_m: tramo.ancho_calle_m,
+        escuelas_cercanas: tramo.escuelas_cercanas,
+        iglesias_cercanas: tramo.iglesias_cercanas,
+        transportes_cercanos: tramo.transportes_cercanos,
+        puntos: tramo.puntos,
+      })
+    }
+    setShowMapaCombinado(false)
   }
 
   const set = (field: keyof SolicitudFormData, value: unknown) => {
@@ -329,35 +322,21 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
                   variant="secondary"
                   size="sm"
                   className="ml-auto shrink-0"
-                  aria-label="Abrir mapa para colocar marcador"
-                  onClick={() => setShowMapaPin(true)}
+                  aria-label="Abrir mapa"
+                  onClick={() => setShowMapaCombinado(true)}
                 >
                   <MapPin className="mr-1 h-4 w-4" />
-                  Punto
+                  {form.tramo_lat_ini ? 'Editar' : 'Mapa'}
                 </Button>
               </div>
               {errors.latitud && (
                 <p className="mt-1 text-xs text-red-500">{errors.latitud}</p>
               )}
-              <div className="flex items-center gap-3 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 p-4">
-                <MapPin className="h-5 w-5 shrink-0 text-guinda" />
-                <span className="text-sm text-gray-institutional/70">
-                  {form.tramo_lat_ini
-                    ? `${form.tramo_lat_ini}, ${form.tramo_lng_ini} → ${form.tramo_lat_fin}, ${form.tramo_lng_fin}`
-                    : 'Presiona para dibujar un tramo en la calle'}
-                </span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="ml-auto shrink-0"
-                  aria-label="Abrir mapa para dibujar tramo"
-                  onClick={() => setShowMapaTramo(true)}
-                >
-                  <MapPin className="mr-1 h-4 w-4" />
-                  Tramo
-                </Button>
-              </div>
+              {form.tramo_lat_ini && (
+                <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                  Tramo: {form.tramo_lat_ini}, {form.tramo_lng_ini} → {form.tramo_lat_fin}, {form.tramo_lng_fin}
+                </div>
+              )}
             </div>
           </div>
 
@@ -493,13 +472,13 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
 
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={submittedOnce}>
-          {submittedOnce ? 'Enviando...' : 'Enviar solicitud'}
+          {submittedOnce ? 'Enviando' : 'Enviar solicitud'}
         </Button>
       </div>
-      {showMapaPin && (
-        <MapaPin
-          onConfirm={handleMapConfirm}
-          onClose={() => setShowMapaPin(false)}
+      {showMapaCombinado && (
+        <MapaCombinado
+          onConfirm={handleMapCombinadoConfirm}
+          onClose={() => setShowMapaCombinado(false)}
           initialLat={form.latitud}
           initialLng={form.longitud}
         />
@@ -524,13 +503,6 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             </button>
           </div>
         </div>
-      )}
-
-      {showMapaTramo && (
-        <MapaTramo
-          onConfirm={handleMapTramoConfirm}
-          onClose={() => setShowMapaTramo(false)}
-        />
       )}
 
       {showAviso && <AvisoPrivacidad onClose={() => setShowAviso(false)} />}

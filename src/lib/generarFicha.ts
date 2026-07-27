@@ -431,10 +431,11 @@ function getFichaCSS(): string {
 }
 
 export async function generarFichaPDF(solicitud: Solicitud): Promise<string> {
-  const [mapDataUrl, calleInfo] = await Promise.all([
-    captureMap(),
-    geolocalizarCalle(solicitud.latitud, solicitud.longitud),
-  ])
+  const calleInfo = solicitud.calle
+    ? { calle: solicitud.calle, entreCalles: solicitud.entre_calles || '' }
+    : await geolocalizarCalle(solicitud.latitud, solicitud.longitud)
+        .catch(() => ({ calle: '', entreCalles: '' }))
+  const [mapDataUrl] = await Promise.all([captureMap()])
   const html = buildFichaHTML(solicitud, mapDataUrl, calleInfo.calle, calleInfo.entreCalles)
 
   const container = document.createElement('div')

@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
-import { FileText, ArrowUpDown, Search, Ruler, Filter } from 'lucide-react'
+import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
 import Button from '../shared/Button'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
 
@@ -15,46 +15,79 @@ const ESTATUS_COLORS: Record<string, { bg: string; text: string }> = {
   'Concluido no favorable': { bg: 'bg-red-100', text: 'text-red-700' },
 }
 
+const PAGE_SIZE = 50
+
 export default function AdminDashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Solicitud | null>(null)
-  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [sortAsc, setSortAsc] = useState(false)
   const [filtroEstatus, setFiltroEstatus] = useState<string>('')
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const debounceRef = useRef<number | undefined>(undefined)
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+
+  const cargarSolicitudes = useCallback(async () => {
+    setLoading(true)
+    let query = supabase
+      .from('solicitudes')
+      .select('*', { count: 'exact' })
+
+    const q = searchQuery.trim()
+    if (q) {
+      query = query.or(
+        `folio_unico.ilike.%${q}%,` +
+        `nombre_solicitante.ilike.%${q}%,` +
+        `curp.ilike.%${q}%,` +
+        `tipo_solicitud.ilike.%${q}%,` +
+        `colonia.ilike.%${q}%,` +
+        `junta_auxiliar.ilike.%${q}%`
+      )
+    }
+    if (filtroEstatus) {
+      query = query.eq('estatus_fase', filtroEstatus)
+    }
+
+    const from = (page - 1) * PAGE_SIZE
+    const { data, count, error } = await query
+      .order('fecha_creacion', { ascending: sortAsc })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (!error && data) {
+      setSolicitudes(data as Solicitud[])
+      setTotalCount(count ?? 0)
+    }
+    setLoading(false)
+  }, [searchQuery, filtroEstatus, page, sortAsc])
 
   useEffect(() => {
     if (!user) { navigate('/'); return }
     cargarSolicitudes()
-  }, [user])
+  }, [user, cargarSolicitudes])
 
-  async function cargarSolicitudes() {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('solicitudes')
-      .select('*')
-      .order('fecha_creacion', { ascending: sortAsc })
-    if (!error && data) setSolicitudes(data as Solicitud[])
-    setLoading(false)
+  const handleSearch = (val: string) => {
+    setSearchInput(val)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setSearchQuery(val)
+      setPage(1)
+    }, 300)
   }
 
-  const filtradas = solicitudes.filter(s => {
-    const matchSearch = !search.trim() || (() => {
-      const q = search.toLowerCase()
-      return (
-        s.folio_unico?.toLowerCase().includes(q) ||
-        s.nombre_solicitante.toLowerCase().includes(q) ||
-        s.curp.toLowerCase().includes(q) ||
-        s.tipo_solicitud.toLowerCase().includes(q) ||
-        s.colonia.toLowerCase().includes(q) ||
-        s.junta_auxiliar.toLowerCase().includes(q)
-      )
-    })()
-    const matchEstatus = !filtroEstatus || s.estatus_fase === filtroEstatus
-    return matchSearch && matchEstatus
-  })
+  const handleEstatusFilter = (val: string) => {
+    setFiltroEstatus(val)
+    setPage(1)
+  }
+
+  const toggleSort = () => {
+    setSortAsc(p => !p)
+  }
 
   const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFase) => {
     const { error } = await supabase
@@ -87,7 +120,7 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-xl font-bold text-guinda">Panel de administración</h1>
           <p className="text-sm text-gray-institutional/60">
-            {filtradas.length} de {solicitudes.length} solicitud(es)
+            Página {page} de {totalPages} ({totalCount} solicitudes)
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -95,8 +128,8 @@ export default function AdminDashboard() {
             <Search className="h-4 w-4 text-gray-institutional/40" />
             <input
               type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={e => handleSearch(e.target.value)}
               placeholder="Buscar..."
               className="w-36 bg-transparent text-sm text-gray-institutional outline-none placeholder:text-gray-institutional/30 md:w-48"
             />
@@ -106,7 +139,7 @@ export default function AdminDashboard() {
               <Filter className="h-4 w-4 text-gray-institutional/40" />
               <select
                 value={filtroEstatus}
-                onChange={e => setFiltroEstatus(e.target.value)}
+                onChange={e => handleEstatusFilter(e.target.value)}
                 className="bg-transparent text-sm text-gray-institutional outline-none"
               >
                 <option value="">Todos los estatus</option>
@@ -119,7 +152,7 @@ export default function AdminDashboard() {
           </div>
           <button
             type="button"
-            onClick={() => setSortAsc(p => !p)}
+            onClick={toggleSort}
             className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-institutional/50 transition-colors hover:bg-gray-100 hover:text-guinda"
             title={sortAsc ? 'Más recientes primero' : 'Más antiguas primero'}
           >
@@ -138,15 +171,13 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-center py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-guinda/20 border-t-guinda" />
         </div>
-      ) : filtradas.length === 0 ? (
+      ) : solicitudes.length === 0 ? (
         <p className="py-16 text-center text-sm text-gray-institutional/50">
-          {solicitudes.length === 0
-            ? 'No hay solicitudes registradas.'
-            : 'Ninguna solicitud coincide con la búsqueda.'}
+          Ninguna solicitud coincide con la búsqueda.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtradas.map(s => {
+          {solicitudes.map(s => {
             const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
             const esMaxRanking = s.peso_ranking === 10
             const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] || ESTATUS_COLORS['Planeacion - Evaluacion']
@@ -247,6 +278,32 @@ export default function AdminDashboard() {
               </button>
             )
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-institutional/50 transition-colors hover:bg-gray-100 hover:text-guinda disabled:opacity-30 disabled:hover:bg-transparent"
+            aria-label="Página anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="text-xs text-gray-institutional/60">
+            {page} / {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-institutional/50 transition-colors hover:bg-gray-100 hover:text-guinda disabled:opacity-30 disabled:hover:bg-transparent"
+            aria-label="Página siguiente"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       )}
     </div>

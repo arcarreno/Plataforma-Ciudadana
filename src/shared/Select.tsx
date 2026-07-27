@@ -10,7 +10,7 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 export default function Select({
   label,
   options,
-  placeholder = 'Seleccionar...',
+  placeholder = 'Seleccionar',
   error,
   id,
   ...props

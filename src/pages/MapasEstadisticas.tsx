@@ -85,7 +85,8 @@ export default function MapasEstadisticas() {
     setLoading(true)
     const { data, error } = await supabase
       .from('solicitudes')
-      .select('*')
+      .select('latitud, longitud, colonia, junta_auxiliar, tipo_solicitud, fecha_creacion')
+      .limit(500)
     if (!error && data) setSolicitudes(data as Solicitud[])
     setLoading(false)
   }
