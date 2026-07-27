@@ -181,7 +181,7 @@ export default function MapasEstadisticas() {
           <button
             type="button"
             onClick={() => setMapFullscreen(true)}
-            className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
+            className="absolute bottom-2 right-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
           >
             <Maximize2 className="h-4 w-4 text-gray-700" />
           </button>
