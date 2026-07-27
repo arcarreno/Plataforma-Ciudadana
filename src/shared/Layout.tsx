@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import type { FontSize } from '../core/theme'
+import type { FontSize, Contrast } from '../core/theme'
 import { useTalkBack } from '../hooks/useTalkBack'
 import Header from './Header'
 import Footer from './Footer'
@@ -12,6 +12,12 @@ export default function Layout() {
       : null) ?? 'normal'
   })
 
+  const [contrast, setContrast] = useState<Contrast>(() => {
+    return (typeof document !== 'undefined'
+      ? (document.documentElement.getAttribute('data-contrast') as Contrast)
+      : null) ?? 'light'
+  })
+
   const [talkBackEnabled, setTalkBackEnabled] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
 
@@ -21,11 +27,17 @@ export default function Layout() {
     document.documentElement.setAttribute('data-font-size', fontSize)
   }, [fontSize])
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-contrast', contrast)
+  }, [contrast])
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
+        contrast={contrast}
+        onContrastChange={setContrast}
         talkBackEnabled={talkBackEnabled}
         onTalkBackToggle={() => setTalkBackEnabled((p) => !p)}
         navOpen={navOpen}

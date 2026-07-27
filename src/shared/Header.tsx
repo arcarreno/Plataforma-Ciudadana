@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, Accessibility, LogOut } from 'lucide-react'
-import type { FontSize } from '../core/theme'
+import type { FontSize, Contrast } from '../core/theme'
 import logoPuebla from '../assets/Puebla.png'
 import mosaico from '../assets/mosaico.svg'
 import AccessibilityPanel from './AccessibilityPanel'
@@ -12,6 +12,8 @@ import { useAuth } from '../contexts/AuthContext'
 interface HeaderProps {
   fontSize: FontSize
   onFontSizeChange: (size: FontSize) => void
+  contrast: Contrast
+  onContrastChange: (c: Contrast) => void
   talkBackEnabled: boolean
   onTalkBackToggle: () => void
   navOpen: boolean
@@ -27,6 +29,8 @@ const navLinks = [
 export default function Header({
   fontSize,
   onFontSizeChange,
+  contrast,
+  onContrastChange,
   talkBackEnabled,
   onTalkBackToggle,
   navOpen,
@@ -159,6 +163,8 @@ export default function Header({
         onClose={() => setPanelOpen(false)}
         fontSize={fontSize}
         onFontSizeChange={onFontSizeChange}
+        contrast={contrast}
+        onContrastChange={onContrastChange}
         talkBackEnabled={talkBackEnabled}
         onTalkBackToggle={onTalkBackToggle}
       />

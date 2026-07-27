@@ -1,12 +1,15 @@
-import { Volume2, VolumeX, Type, Accessibility } from 'lucide-react'
+import { Volume2, VolumeX, Type, Sun, Moon, Accessibility } from 'lucide-react'
 import { fontSizeOptions, fontLabels } from '../core/theme'
-import type { FontSize } from '../core/theme'
+import type { FontSize, Contrast } from '../core/theme'
+import ContrastToggle from './ContrastToggle'
 
 interface AccessibilityPanelProps {
   open: boolean
   onClose: () => void
   fontSize: FontSize
   onFontSizeChange: (size: FontSize) => void
+  contrast: Contrast
+  onContrastChange: (c: Contrast) => void
   talkBackEnabled: boolean
   onTalkBackToggle: () => void
 }
@@ -16,6 +19,8 @@ export default function AccessibilityPanel({
   onClose,
   fontSize,
   onFontSizeChange,
+  contrast,
+  onContrastChange,
   talkBackEnabled,
   onTalkBackToggle,
 }: AccessibilityPanelProps) {
@@ -75,6 +80,25 @@ export default function AccessibilityPanel({
                   {fontLabels[size]}
                 </button>
               ))}
+            </div>
+          </section>
+
+          <div className="h-px bg-alabaster-dark/50" />
+
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              {contrast === 'dark' ? (
+                <Moon size={18} className="text-guinda" />
+              ) : (
+                <Sun size={18} className="text-guinda" />
+              )}
+              <h3 className="text-sm font-medium text-guinda">Contraste</h3>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-institutional">
+                {contrast === 'dark' ? 'Oscuro' : 'Claro'}
+              </span>
+              <ContrastToggle contrast={contrast} onChange={onContrastChange} />
             </div>
           </section>
 

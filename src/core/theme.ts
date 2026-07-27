@@ -21,3 +21,6 @@ export const fontLabels: Record<FontSize, string> = {
   large: 'A+',
   xlarge: 'A++',
 }
+
+export const contrastOptions = ['light', 'dark'] as const
+export type Contrast = (typeof contrastOptions)[number]
