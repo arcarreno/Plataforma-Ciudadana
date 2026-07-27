@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ClipboardList, MapPin, FileText, Shield } from 'lucide-react'
 import Button from '../shared/Button'
@@ -51,6 +52,23 @@ const steps = [
 export default function Inicio() {
   const { user } = useAuth()
   const esCargo = user && esCargoPublico(user.rol)
+
+  const [activePos, setActivePos] = useState(-1)
+
+  useEffect(() => {
+    let pos = 0
+    let timer: number
+
+    const tick = () => {
+      setActivePos(pos)
+      pos++
+      if (pos > 10) pos = 0
+    timer = window.setTimeout(tick, 300)
+    }
+
+    timer = window.setTimeout(tick, 800)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
     <div className="flex flex-col gap-12 py-4 md:py-8">
@@ -120,19 +138,59 @@ export default function Inicio() {
         </div>
       </section>
 
-      <section>
+      <section className="overflow-hidden py-4">
         <h2 className="text-center text-2xl font-bold tracking-tight text-guinda">
           ¿Cómo funciona?
         </h2>
         <p className="mx-auto mt-2 max-w-lg text-center text-gray-institutional/70">
           Tres pasos simples para realizar tu solicitud
         </p>
-        <div className="mt-8 grid gap-8 md:grid-cols-3">
-          {steps.map((step, i) => (
-            <div key={step.number} className="relative text-center">
-              {i < steps.length - 1 && (
-                <div className="absolute right-0 top-8 hidden h-px w-[calc(50%-2rem)] bg-gradient-to-r from-guinda/20 to-guinda/40 md:block" />
-              )}
+
+        {/* Desktop — animated */}
+        <div className="mt-10 hidden items-start justify-center md:flex">
+          <div className="flex flex-col items-center">
+            <span className={`step-num ${activePos === 0 ? 'step-bounce bg-guinda text-white shadow-[0_0_30px_12px_rgba(125,36,71,0.3)]' : 'bg-guinda/5 text-guinda'}`}>
+              {steps[0].number}
+            </span>
+            <h3 className="mt-4 font-semibold text-guinda">{steps[0].title}</h3>
+            <p className="mt-1.5 max-w-48 text-center text-sm leading-relaxed text-gray-institutional/70">{steps[0].desc}</p>
+          </div>
+          <div className="connector relative mx-2 mt-8 flex w-32 items-center xl:mx-4 xl:w-44">
+            <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-guinda/20" />
+            <div className="relative flex w-full justify-evenly">
+              {[1,2,3,4].map((d) => (
+                <div key={d} className={activePos === d ? 'dot-active' : 'dot-base'} />
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className={`step-num ${activePos === 5 ? 'step-bounce bg-guinda text-white shadow-[0_0_30px_12px_rgba(125,36,71,0.3)]' : 'bg-guinda/5 text-guinda'}`}>
+              {steps[1].number}
+            </span>
+            <h3 className="mt-4 font-semibold text-guinda">{steps[1].title}</h3>
+            <p className="mt-1.5 max-w-48 text-center text-sm leading-relaxed text-gray-institutional/70">{steps[1].desc}</p>
+          </div>
+          <div className="connector relative mx-2 mt-8 flex w-32 items-center xl:mx-4 xl:w-44">
+            <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-guinda/20" />
+            <div className="relative flex w-full justify-evenly">
+              {[6,7,8,9].map((d) => (
+                <div key={d} className={activePos === d ? 'dot-active' : 'dot-base'} />
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className={`step-num ${activePos === 10 ? 'step-bounce bg-guinda text-white shadow-[0_0_30px_12px_rgba(125,36,71,0.3)]' : 'bg-guinda/5 text-guinda'}`}>
+              {steps[2].number}
+            </span>
+            <h3 className="mt-4 font-semibold text-guinda">{steps[2].title}</h3>
+            <p className="mt-1.5 max-w-48 text-center text-sm leading-relaxed text-gray-institutional/70">{steps[2].desc}</p>
+          </div>
+        </div>
+
+        {/* Mobile — static grid */}
+        <div className="mt-8 grid gap-8 md:hidden">
+          {steps.map((step) => (
+            <div key={step.number} className="flex flex-col items-center text-center">
               <span className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-guinda/5 text-xl font-bold text-guinda">
                 {step.number}
               </span>
