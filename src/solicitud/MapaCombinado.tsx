@@ -192,10 +192,10 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     const markerLL = L.latLng(marker.lat, marker.lng)
     const clickLL = L.latLng(latlng.lat, latlng.lng)
     const distM = markerLL.distanceTo(clickLL)
-    const limit = tramoPoints.length === 0 ? 500 : 10000
+    const limit = tramoPoints.length === 0 ? 500 : 5000
 
     if (distM > limit) {
-      const label = limit === 500 ? '500 m' : '10 km'
+      const label = limit === 500 ? '500 m' : '5 km'
       setTramoError(`El punto está a ${Math.round(distM)} m del marcador (máximo ${label})`)
       return
     }
@@ -365,7 +365,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
             <Circle center={[marker.lat, marker.lng]} radius={500} pathOptions={{ color: '#7d2447', weight: 1.5, fillOpacity: 0.04, dashArray: '5,5' }} />
           )}
           {step === 'tramo' && marker && tramoPoints.length >= 1 && (
-            <Circle center={[marker.lat, marker.lng]} radius={10000} pathOptions={{ color: '#7d2447', weight: 1, fillOpacity: 0.03, dashArray: '5,5' }} />
+            <Circle center={[marker.lat, marker.lng]} radius={5000} pathOptions={{ color: '#7d2447', weight: 1, fillOpacity: 0.03, dashArray: '5,5' }} />
           )}
 
           {tramoPoints.map((p, i) => (
@@ -536,7 +536,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                         <Crosshair className="h-5 w-5 shrink-0 text-guinda" />
                         <span>
                           {tramoPoints.length === 1
-                            ? 'Haz clic en el siguiente punto del tramo (máx. 10 km del marcador)'
+                            ? 'Haz clic en el siguiente punto del tramo (máx. 5 km del marcador)'
                             : `Sigue agregando puntos o presiona "Terminar" (${tramoPoints.length} puntos)`}
                         </span>
                         <button
