@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check } from 'lucide-react'
 import Button from '../shared/Button'
@@ -169,6 +169,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const [tramoPoints, setTramoPoints] = useState<{ lat: number; lng: number }[]>([])
   const [tramoDetection, setTramoDetection] = useState<DeteccionTramo | null>(null)
   const [tramoDone, setTramoDone] = useState(false)
+  const [tramoError, setTramoError] = useState<string | null>(null)
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -186,6 +187,20 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
   const handleTramoClick = useCallback((latlng: { lat: number; lng: number }) => {
     if (tramoDone) return
+    if (!marker) return
+
+    const markerLL = L.latLng(marker.lat, marker.lng)
+    const clickLL = L.latLng(latlng.lat, latlng.lng)
+    const distM = markerLL.distanceTo(clickLL)
+    const limit = tramoPoints.length === 0 ? 500 : 10000
+
+    if (distM > limit) {
+      const label = limit === 500 ? '500 m' : '10 km'
+      setTramoError(`El punto está a ${Math.round(distM)} m del marcador (máximo ${label})`)
+      return
+    }
+    setTramoError(null)
+
     const next = [...tramoPoints, latlng]
     setTramoPoints(next)
     if (next.length >= 2 && capas) {
@@ -193,7 +208,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     } else {
       setTramoDetection(null)
     }
-  }, [tramoPoints, tramoDone, capas])
+  }, [tramoPoints, tramoDone, capas, marker])
 
   const handlePicar = () => {
     if (!lastClick.current || !capas) return
@@ -346,6 +361,13 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
           {marker && <Marker position={[marker.lat, marker.lng]} icon={icon} />}
 
+          {step === 'tramo' && marker && tramoPoints.length === 0 && (
+            <Circle center={[marker.lat, marker.lng]} radius={500} pathOptions={{ color: '#7d2447', weight: 1.5, fillOpacity: 0.04, dashArray: '5,5' }} />
+          )}
+          {step === 'tramo' && marker && tramoPoints.length >= 1 && (
+            <Circle center={[marker.lat, marker.lng]} radius={10000} pathOptions={{ color: '#7d2447', weight: 1, fillOpacity: 0.03, dashArray: '5,5' }} />
+          )}
+
           {tramoPoints.map((p, i) => (
             <TramoMarker key={i} position={[p.lat, p.lng]} label={i + 1} />
           ))}
@@ -494,12 +516,19 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                   <span>Ubicación confirmada</span>
                 </div>
 
+                {tramoError && (
+                  <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <Info className="h-4 w-4 shrink-0" />
+                    <span>{tramoError}</span>
+                  </div>
+                )}
+
                 {!td ? (
                   <>
                     {tramoPoints.length === 0 && (
                       <div className="flex items-center gap-3 text-sm text-gray-institutional/70">
                         <Crosshair className="h-5 w-5 shrink-0 text-guinda" />
-                        <span>Haz clic en el punto de inicio del tramo</span>
+                        <span>Haz clic en el punto de inicio del tramo (máx. 500 m del marcador)</span>
                       </div>
                     )}
                     {tramoPoints.length >= 1 && (
@@ -507,7 +536,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                         <Crosshair className="h-5 w-5 shrink-0 text-guinda" />
                         <span>
                           {tramoPoints.length === 1
-                            ? 'Haz clic en el siguiente punto del tramo'
+                            ? 'Haz clic en el siguiente punto del tramo (máx. 10 km del marcador)'
                             : `Sigue agregando puntos o presiona "Terminar" (${tramoPoints.length} puntos)`}
                         </span>
                         <button
