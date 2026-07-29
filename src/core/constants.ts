@@ -19,21 +19,23 @@ export interface TipoObra {
 }
 
 export const CATALOGO_TIPOS_OBRA: TipoObra[] = [
-  { nombre: 'Drenajes', precio: 5000 },
-  { nombre: 'Pavimentación', precio: 2300 },
-  { nombre: 'Adoquinamiento', precio: 2000 },
-  { nombre: 'Rehabilitación', precio: 1900 },
-  { nombre: 'Relaminación', precio: 1900 },
-  { nombre: 'Guarniciones', precio: 850 },
-  { nombre: 'Domo', precio: 4200 },
-  { nombre: 'Banqueta y Guarniciones', precio: 450 },
-  { nombre: 'Cancha de Futbol', precio: 1750 },
-  { nombre: 'Puente Vehicular', precio: 0 },
-  { nombre: 'Ampliación de Red de Agua Potable', precio: 3000 },
-  { nombre: 'Puente Peatonal', precio: 27384 },
-  { nombre: 'Construcción de Barda', precio: 800 },
-  { nombre: 'Ampliación de Red de Agua Pluvial', precio: 3000 },
-  { nombre: 'Introducción de Drenaje y Agua Potable', precio: 8000 },
+  { nombre: 'Pavimentación', precio: 0 },
+  { nombre: 'Guarniciones', precio: 0 },
+  { nombre: 'Banquetas', precio: 0 },
+  { nombre: 'Domos en parques públicos (no escuelas)', precio: 0 },
+  { nombre: 'Rehabilitación de espacios públicos', precio: 0 },
+  { nombre: 'Bacheo', precio: 0 },
+  { nombre: 'Maquinaria - Rastreo', precio: 0 },
+  { nombre: 'Maquinaria - Demoliciones', precio: 0 },
+  { nombre: 'Maquinaria - Fresado o Balastro', precio: 0 },
+  { nombre: 'Maquinaria - Reparación de reductores de velocidad', precio: 0 },
+  { nombre: 'Mantenimiento y construcción de aulas en espacios educativos', precio: 0 },
+  { nombre: 'Obras en Centro Histórico', precio: 0 },
+  { nombre: 'Obras en edificios públicos', precio: 0 },
+  { nombre: 'Mantenimiento y construcción de parques', precio: 0 },
+  { nombre: 'Ampliación de Red eléctrica y/o electrificación', precio: 0 },
+  { nombre: 'Drenaje (Pluvial o sanitario)', precio: 0 },
+  { nombre: 'Alcantarillado', precio: 0 },
 ]
 
 export const TIPOS_OBRA_NOMBRES: string[] = CATALOGO_TIPOS_OBRA.map(t => t.nombre)
