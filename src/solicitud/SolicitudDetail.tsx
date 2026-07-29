@@ -20,6 +20,7 @@ interface SolicitudDetailProps {
   solicitud: Solicitud
   onClose: () => void
   onEstatusChange?: (nuevo: EstatusFase) => void
+  onNavigate?: (solicitud: Solicitud) => void
   userRole?: string
 }
 
@@ -76,7 +77,7 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
 
 type DocTab = 'oficio' | 'ficha' | 'enviar'
 
-export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, userRole }: SolicitudDetailProps) {
+export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, onNavigate, userRole }: SolicitudDetailProps) {
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
@@ -101,6 +102,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
   const [enviandoEmail, setEnviandoEmail] = useState(false)
   const [emailEnviado, setEmailEnviado] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [vecinos, setVecinos] = useState<{ id_solicitud: number; folio_unico: string; distancia_m: number }[]>([])
+  const [vecinosLoading, setVecinosLoading] = useState(false)
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -132,6 +135,19 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
     }, 500)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [sigedCct])
+
+  useEffect(() => {
+    if (s.peso_ranking !== 12 || !s.id_solicitud) {
+      setVecinos([])
+      return
+    }
+    setVecinosLoading(true)
+    supabase.rpc('obtener_concentracion_vecinos', { p_id_solicitud: s.id_solicitud })
+      .then(({ data, error }) => {
+        if (!error && data) setVecinos(data as { id_solicitud: number; folio_unico: string; distancia_m: number }[])
+        setVecinosLoading(false)
+      })
+  }, [s.id_solicitud, s.peso_ranking])
 
   const handleGenerarDocumentos = async () => {
     setGenerando(true)
@@ -404,6 +420,38 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
                     </a>
                   ))}
                 </div>
+              </Card>
+            )}
+
+            {s.peso_ranking === 12 && (
+              <Card title="Ubicaciones cercanas">
+                {vecinosLoading ? (
+                  <p className="text-xs text-gray-institutional/50">Buscando solicitudes cercanas...</p>
+                ) : vecinos.length > 0 ? (
+                  <div className="flex flex-col gap-1.5">
+                    {vecinos.map(v => (
+                      <button
+                        key={v.id_solicitud}
+                        type="button"
+                        disabled={!onNavigate}
+                        onClick={async () => {
+                          const { data } = await supabase
+                            .from('solicitudes')
+                            .select('*')
+                            .eq('id_solicitud', v.id_solicitud)
+                            .single()
+                          if (data) onNavigate?.(data as Solicitud)
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm transition-colors hover:bg-guinda/5 disabled:cursor-default"
+                      >
+                        <span className="font-mono font-medium text-guinda">{v.folio_unico}</span>
+                        <span className="text-xs text-gray-institutional/60">{v.distancia_m}m</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-institutional/50">Sin solicitudes cercanas</p>
+                )}
               </Card>
             )}
           </div>
