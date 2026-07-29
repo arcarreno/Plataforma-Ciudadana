@@ -112,6 +112,7 @@ export default function AdminDashboard() {
           solicitud={selected}
           onClose={() => setSelected(null)}
           onEstatusChange={(nuevo) => handleEstatusChange(selected, nuevo)}
+          onNavigate={(s) => setSelected(s)}
           userRole={user?.rol}
         />
       )}
@@ -124,23 +125,23 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2">
+          <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 focus-within:ring-2 focus-within:ring-guinda/40 focus-within:border-transparent">
             <Search className="h-4 w-4 text-gray-institutional/40" />
             <input
               type="text"
               value={searchInput}
               onChange={e => handleSearch(e.target.value)}
               placeholder="Buscar..."
-              className="w-36 bg-transparent text-sm text-gray-institutional outline-none placeholder:text-gray-institutional/30 md:w-48"
+              className="w-36 bg-transparent text-sm text-gray-institutional [outline:0] placeholder:text-gray-institutional/30 md:w-48"
             />
           </div>
           <div className="relative">
-            <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2">
+            <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 focus-within:ring-2 focus-within:ring-guinda/40 focus-within:border-transparent">
               <Filter className="h-4 w-4 text-gray-institutional/40" />
               <select
                 value={filtroEstatus}
                 onChange={e => handleEstatusFilter(e.target.value)}
-                className="bg-transparent text-sm text-gray-institutional outline-none"
+                className="bg-transparent text-sm text-gray-institutional [outline:0]"
               >
                 <option value="">Todos los estatus</option>
                 <option value="Planeacion - Evaluacion">Planeación - Evaluación</option>
