@@ -27,6 +27,7 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortAsc, setSortAsc] = useState(false)
   const [filtroEstatus, setFiltroEstatus] = useState<string>('')
+  const [filtroPrioridad, setFiltroPrioridad] = useState<string>('')
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const debounceRef = useRef<number | undefined>(undefined)
@@ -53,6 +54,15 @@ export default function AdminDashboard() {
     if (filtroEstatus) {
       query = query.eq('estatus_fase', filtroEstatus)
     }
+    if (filtroPrioridad === 'alta') {
+      query = query.eq('peso_ranking', 15)
+    } else if (filtroPrioridad === 'media-alta') {
+      query = query.eq('peso_ranking', 12)
+    } else if (filtroPrioridad === 'media') {
+      query = query.eq('peso_ranking', 10)
+    } else if (filtroPrioridad === 'baja') {
+      query = query.eq('peso_ranking', 5)
+    }
 
     const from = (page - 1) * PAGE_SIZE
     const { data, count, error } = await query
@@ -64,7 +74,7 @@ export default function AdminDashboard() {
       setTotalCount(count ?? 0)
     }
     setLoading(false)
-  }, [searchQuery, filtroEstatus, page, sortAsc])
+  }, [searchQuery, filtroEstatus, filtroPrioridad, page, sortAsc])
 
   useEffect(() => {
     if (!user) { navigate('/'); return }
@@ -82,6 +92,11 @@ export default function AdminDashboard() {
 
   const handleEstatusFilter = (val: string) => {
     setFiltroEstatus(val)
+    setPage(1)
+  }
+
+  const handlePrioridadFilter = (val: string) => {
+    setFiltroPrioridad(val)
     setPage(1)
   }
 
@@ -148,6 +163,22 @@ export default function AdminDashboard() {
                 {ESTATUS_OPCIONES.map(e => (
                   <option key={e} value={e}>{e}</option>
                 ))}
+              </select>
+            </div>
+          </div>
+          <div className="relative">
+            <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 focus-within:ring-2 focus-within:ring-guinda/40 focus-within:border-transparent">
+              <Filter className="h-4 w-4 text-gray-institutional/40" />
+              <select
+                value={filtroPrioridad}
+                onChange={e => handlePrioridadFilter(e.target.value)}
+                className="bg-transparent text-sm text-gray-institutional [outline:0]"
+              >
+                <option value="">Todas las prioridades</option>
+                <option value="alta">Prioridad alta</option>
+                <option value="media-alta">Prioridad media-alta</option>
+                <option value="media">Prioridad media</option>
+                <option value="baja">Prioridad baja</option>
               </select>
             </div>
           </div>
