@@ -1,4 +1,4 @@
--- Retorna todo el cluster de concentración (BFS como el trigger)
+-- Retorna todo el cluster de concentración (BFS como el trigger, solo entre peso 12)
 CREATE OR REPLACE FUNCTION obtener_concentracion_vecinos(p_id_solicitud bigint)
 RETURNS TABLE(id_solicitud bigint, folio_unico text, distancia_m float8)
   LANGUAGE plpgsql STABLE
@@ -10,10 +10,10 @@ DECLARE
   v_ids bigint[];
   v_next bigint[];
 BEGIN
-  SELECT calle, latitud::float8, longitud::float8
+  SELECT s.calle, s.latitud::float8, s.longitud::float8
   INTO v_calle, v_origin_lat, v_origin_lng
-  FROM solicitudes
-  WHERE id_solicitud = p_id_solicitud;
+  FROM solicitudes s
+  WHERE s.id_solicitud = p_id_solicitud;
 
   IF v_calle IS NULL OR v_origin_lat IS NULL OR v_origin_lng IS NULL THEN
     RETURN;
@@ -27,7 +27,7 @@ BEGIN
     INTO v_next
     FROM solicitudes s
     WHERE s.calle = v_calle
-      AND s.peso_ranking != 15
+      AND s.peso_ranking = 12
       AND s.latitud IS NOT NULL AND s.longitud IS NOT NULL
       AND s.id_solicitud <> ALL (v_ids)
       AND EXISTS (
