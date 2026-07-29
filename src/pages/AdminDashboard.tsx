@@ -218,7 +218,7 @@ export default function AdminDashboard() {
             const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
             const esConcentracion = s.peso_ranking === 12
             const esMaxRanking = s.peso_ranking === 10
-            const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] || ESTATUS_COLORS['Planeacion - Evaluacion']
+            const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] ?? { bg: 'bg-gray-100', text: 'text-gray-700' }
             return (
               <button
                 key={s.id_solicitud}
