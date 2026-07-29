@@ -311,7 +311,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                       onChange={e => onEstatusChange(e.target.value as EstatusFase)}
                       className="rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
                     >
-                      <option value="Planeacion - Evaluacion">Planeación - Evaluación</option>
                       {ESTATUS_OPCIONES.map(e => (
                         <option key={e} value={e}>{e}</option>
                       ))}

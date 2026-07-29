@@ -10,7 +10,12 @@ import Button from '../shared/Button'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
 
 const ESTATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  'Planeacion - Evaluacion': { bg: 'bg-gray-100', text: 'text-gray-700' },
+  Revision: { bg: 'bg-amber-100', text: 'text-amber-800' },
+  'Dirección General de Planeación y Proyectos': { bg: 'bg-blue-100', text: 'text-blue-800' },
+  'Departamento de Pavimentos, Mantenimiento y Conservación': { bg: 'bg-sky-100', text: 'text-sky-800' },
+  'Departamento de Espacios Educativos': { bg: 'bg-teal-100', text: 'text-teal-800' },
+  'Departamento de Espacios Públicos': { bg: 'bg-emerald-100', text: 'text-emerald-800' },
+  'Departamento de Infraestructura Urbana': { bg: 'bg-violet-100', text: 'text-violet-800' },
   'Concluido favorable': { bg: 'bg-green-100', text: 'text-green-700' },
   'Concluido no favorable': { bg: 'bg-red-100', text: 'text-red-700' },
 }

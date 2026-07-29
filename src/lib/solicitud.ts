@@ -3,6 +3,7 @@ import type { Solicitud, SolicitudFormData } from '../types/solicitud'
 import {
   RANKING_PUNTOS_BASE,
   RANKING_PUNTOS_CON_EVIDENCIA,
+  TIPO_A_DEPARTAMENTO,
 } from '../core/constants'
 import { geolocalizarCalle } from './geolocalizarCalle'
 
@@ -72,6 +73,7 @@ export async function crearSolicitud(
     .from('solicitudes')
     .insert({
       ...rest,
+      estatus_fase: TIPO_A_DEPARTAMENTO[rest.tipo_solicitud] ?? 'Revision',
       latitud: lat,
       longitud: lng,
       tramo_lat_ini: tramo_lat_ini ? parseFloat(tramo_lat_ini) : null,

@@ -7,6 +7,12 @@ export const RANKING_PUNTOS_CARGO_PUBLICO = 15
 export const FOLIO_PREFIX = 'ST'
 
 export const ESTATUS_OPCIONES = [
+  'Revision',
+  'Dirección General de Planeación y Proyectos',
+  'Departamento de Pavimentos, Mantenimiento y Conservación',
+  'Departamento de Espacios Educativos',
+  'Departamento de Espacios Públicos',
+  'Departamento de Infraestructura Urbana',
   'Concluido favorable',
   'Concluido no favorable',
 ] as const
@@ -30,7 +36,6 @@ export const CATALOGO_TIPOS_OBRA: TipoObra[] = [
   { nombre: 'Maquinaria - Fresado o Balastro', precio: 0 },
   { nombre: 'Maquinaria - Reparación de reductores de velocidad', precio: 0 },
   { nombre: 'Mantenimiento y construcción de aulas en espacios educativos', precio: 0 },
-  { nombre: 'Obras en Centro Histórico', precio: 0 },
   { nombre: 'Obras en edificios públicos', precio: 0 },
   { nombre: 'Mantenimiento y construcción de parques', precio: 0 },
   { nombre: 'Ampliación de Red eléctrica y/o electrificación', precio: 0 },
@@ -39,6 +44,25 @@ export const CATALOGO_TIPOS_OBRA: TipoObra[] = [
 ]
 
 export const TIPOS_OBRA_NOMBRES: string[] = CATALOGO_TIPOS_OBRA.map(t => t.nombre)
+
+export const TIPO_A_DEPARTAMENTO: Record<string, string> = {
+  Pavimentación: 'Dirección General de Planeación y Proyectos',
+  Guarniciones: 'Dirección General de Planeación y Proyectos',
+  Banquetas: 'Dirección General de Planeación y Proyectos',
+  'Domos en parques públicos (no escuelas)': 'Dirección General de Planeación y Proyectos',
+  'Rehabilitación de espacios públicos': 'Dirección General de Planeación y Proyectos',
+  Bacheo: 'Departamento de Pavimentos, Mantenimiento y Conservación',
+  'Maquinaria - Rastreo': 'Departamento de Pavimentos, Mantenimiento y Conservación',
+  'Maquinaria - Demoliciones': 'Departamento de Pavimentos, Mantenimiento y Conservación',
+  'Maquinaria - Fresado o Balastro': 'Departamento de Pavimentos, Mantenimiento y Conservación',
+  'Maquinaria - Reparación de reductores de velocidad': 'Departamento de Pavimentos, Mantenimiento y Conservación',
+  'Mantenimiento y construcción de aulas en espacios educativos': 'Departamento de Espacios Educativos',
+  'Obras en edificios públicos': 'Departamento de Espacios Públicos',
+  'Mantenimiento y construcción de parques': 'Departamento de Espacios Públicos',
+  'Ampliación de Red eléctrica y/o electrificación': 'Departamento de Infraestructura Urbana',
+  'Drenaje (Pluvial o sanitario)': 'Departamento de Infraestructura Urbana',
+  Alcantarillado: 'Departamento de Infraestructura Urbana',
+}
 
 export function getPrecioObra(nombre: string): number {
   return CATALOGO_TIPOS_OBRA.find(t => t.nombre === nombre)?.precio ?? 0
