@@ -232,3 +232,14 @@ html[data-contrast="dark"] .leaflet-popup-tip { background: #2a2a2e !important; 
   transform: scale(1.8);
   transition: all 0.12s ease-out;
 }
+
+/* === Sileo toasts === */
+[data-sileo-viewport] {
+  z-index: 99999 !important;
+}
+[data-sileo-toast] {
+  filter: drop-shadow(0 0 2px #7d2447);
+}
+[data-sileo-description] {
+  text-align: center !important;
+}

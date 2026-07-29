@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check } from 'lucide-react'
+import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check, ChevronRight } from 'lucide-react'
 import Button from '../shared/Button'
 import { cargarCapas, detectarPunto, detectarTramo } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionPunto, DeteccionTramo } from './detectar-ubicacion'
-import { geolocalizarCalle } from '../lib/geolocalizarCalle'
+import { geolocalizarCalle, setCallesData } from '../lib/geolocalizarCalle'
 import type { CalleInfo } from '../lib/geolocalizarCalle'
+import logoSrc from '../assets/Logo_Semovinfra.jpg'
 
-const DEFAULT_CENTER: [number, number] = [19.0414, -98.2063]
+const DEFAULT_CENTER: [number, number] = [19.043702, -98.198194]
 const DEFAULT_ZOOM = 13
 
 const COLONIA_STYLE = { color: '#7d2447', weight: 2, fillColor: '#7d2447', fillOpacity: 0.08 }
@@ -70,14 +71,40 @@ function TramoMarker({ position, label }: { position: L.LatLngExpression; label:
   return null
 }
 
-function ResizeHandler() {
+function ResizeHandler({ inline }: { inline?: boolean }) {
   const map = useMap()
+  const firstValid = useRef(true)
   useEffect(() => {
     const el = map.getContainer()
-    const ro = new ResizeObserver(() => map.invalidateSize())
+    const resize = () => {
+      map.invalidateSize()
+      if (firstValid.current && el.offsetWidth > 200) {
+        firstValid.current = false
+        if (map.getZoom() < 10) {
+          map.setZoom(13)
+        }
+      }
+    }
+    const ro = new ResizeObserver(resize)
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [map])
+    const timers: ReturnType<typeof setTimeout>[] = []
+    if (inline) {
+      timers.push(
+        setTimeout(resize, 100),
+        setTimeout(resize, 400),
+        setTimeout(resize, 800),
+        setTimeout(resize, 1200),
+        setTimeout(resize, 1600),
+      )
+    } else {
+      timers.push(setTimeout(resize, 1200))
+      resize()
+    }
+    return () => {
+      ro.disconnect()
+      timers.forEach(clearTimeout)
+    }
+  }, [map, inline])
   return null
 }
 
@@ -103,6 +130,9 @@ function LocateOnMount() {
     const onFound = (e: L.LocationEvent) => {
       marker.setLatLng(e.latlng).addTo(map)
       circle.setLatLng(e.latlng).setRadius(e.accuracy ?? 100).addTo(map)
+      if ((e.accuracy ?? 999) < 100) {
+        map.setView(e.latlng, 16)
+      }
     }
     const onError = () => {
       marker.remove()
@@ -111,7 +141,7 @@ function LocateOnMount() {
 
     map.on('locationfound', onFound)
     map.on('locationerror', onError)
-    map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true })
+    map.locate({ setView: false, enableHighAccuracy: true, timeout: 8000 })
 
     return () => {
       map.off('locationfound', onFound)
@@ -163,6 +193,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const [manualJunta, setManualJunta] = useState('')
   const [calleInfo, setCalleInfo] = useState<CalleInfo | null>(null)
   const [buscandoCalle, setBuscandoCalle] = useState(false)
+  const [manualEntreCalles, setManualEntreCalles] = useState('')
   const lastClick = useRef<{ lat: number; lng: number } | null>(null)
   const pinDataRef = useRef<PinData | null>(null)
 
@@ -170,13 +201,20 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const [tramoDetection, setTramoDetection] = useState<DeteccionTramo | null>(null)
   const [tramoDone, setTramoDone] = useState(false)
   const [tramoError, setTramoError] = useState<string | null>(null)
+  const [tramoConfirmed, setTramoConfirmed] = useState(false)
+  const [showTramoInfoCard, setShowTramoInfoCard] = useState(false)
 
   useEffect(() => {
     cargarCapas().then(c => {
       setCapas(c)
-      setLoading(false)
+      setCallesData(c.calles as any)
+      if (inline) {
+        setTimeout(() => setLoading(false), 1500)
+      } else {
+        setLoading(false)
+      }
     })
-  }, [])
+  }, [inline])
 
   const handlePuntoClick = useCallback((latlng: { lat: number; lng: number }) => {
     setMarker(latlng)
@@ -200,6 +238,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
       return
     }
     setTramoError(null)
+    setTramoConfirmed(false)
 
     const next = [...tramoPoints, latlng]
     setTramoPoints(next)
@@ -228,13 +267,17 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     const isOutside = detection?.fuera_alcance
     if (isOutside && (!manualColonia.trim() || !manualJunta.trim())) return
 
+    const entreCalles = calleInfo?.entreCallesDetected !== undefined && calleInfo.entreCallesDetected < 2
+      ? manualEntreCalles.trim().toUpperCase()
+      : (calleInfo?.entreCalles || '')
+
     pinDataRef.current = {
       lat: detection.coordenadas.lat,
       lng: detection.coordenadas.lng,
       colonia: isOutside ? manualColonia.trim() : detection.colonia,
       junta_auxiliar: isOutside ? manualJunta.trim() : detection.junta_auxiliar,
       calle: calleInfo?.calle || '',
-      entre_calles: calleInfo?.entreCalles || '',
+      entre_calles: entreCalles,
       zona_zap: detection.zona_zap,
       cobertura_agua: detection.cobertura_agua,
     }
@@ -256,12 +299,13 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     setTramoPoints([])
     setTramoDetection(null)
     setTramoDone(false)
+    setTramoConfirmed(false)
   }
 
   const handleConfirmarTramo = () => {
     if (!pinDataRef.current) return
     if (tramoDetection) {
-      onConfirm({
+      const result: MapaCombinadoResult = {
         pin: pinDataRef.current,
         tramo: {
           lat_ini: tramoDetection.coordenadas.lat_ini,
@@ -275,7 +319,9 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           iglesias_cercanas: tramoDetection.iglesias_cercanas,
           transportes_cercanos: tramoDetection.transportes_cercanos,
         },
-      })
+      }
+      setTramoConfirmed(true)
+      onConfirm(result)
     }
   }
 
@@ -341,7 +387,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           )}
 
           <LocateOnMount />
-          <ResizeHandler />
+          <ResizeHandler inline={inline} />
 
           <ClickHandler
             stepRef={stepRef}
@@ -486,9 +532,28 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                                 <span className="font-medium text-gray-institutional">{calleInfo.calle}</span>
                               </div>
                             )}
-                            {calleInfo.entreCalles && (
+                            {calleInfo.entreCallesDetected >= 2 ? (
                               <div className="flex items-center gap-2 pl-5 text-xs text-gray-institutional/60">
                                 {calleInfo.entreCalles}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-1.5 pl-5">
+                                {calleInfo.entreCallesDetected === 1 && (
+                                  <div className="flex items-center gap-2 text-xs text-gray-institutional/60">
+                                    <span>{calleInfo.entreCalles}</span>
+                                  </div>
+                                )}
+                                <input
+                                  type="text"
+                                  value={manualEntreCalles}
+                                  onChange={e => setManualEntreCalles(e.target.value)}
+                                  placeholder={
+                                    calleInfo.entreCallesDetected === 1
+                                      ? 'Entre calle faltante...'
+                                      : 'Entre qué calles se encuentra? (ej: Reforma y 5 de Mayo)'
+                                  }
+                                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                                />
                               </div>
                             )}
                           </>
@@ -599,14 +664,23 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                       </div>
                     )}
 
-                    <div className="mt-1 flex gap-2">
-                      <Button type="button" size="sm" variant="secondary" onClick={handleResetTramo}>
-                        Reiniciar
-                      </Button>
-                      <Button type="button" size="sm" className="flex-1" onClick={handleConfirmarTramo}>
-                        <Check className="mr-1.5 h-4 w-4" />
-                        Confirmar tramo
-                      </Button>
+                    <div>
+                      {tramoConfirmed ? (
+                          <Button type="button" size="sm" className="w-full !bg-[#636569] !text-white !shadow-none" onClick={() => setShowTramoInfoCard(true)}>
+                            <Check className="mr-1.5 h-4 w-4" />
+                            Realizado
+                          </Button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button type="button" size="sm" variant="secondary" className="flex-1" onClick={handleResetTramo}>
+                            Borrar
+                          </Button>
+                          <Button type="button" size="sm" className="flex-1" onClick={handleConfirmarTramo}>
+                            <Check className="mr-1.5 h-4 w-4" />
+                            Confirmar tramo
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -621,6 +695,27 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           </div>
         </div>
       </div>
+
+      {showTramoInfoCard && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowTramoInfoCard(false)}>
+          <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
+            <div className="flex flex-col gap-4 px-6 pb-6 pt-0">
+              <div className="-mt-9 flex justify-center">
+                <img src={logoSrc} alt="Semovinfra" className="h-16 w-16 rounded-full object-cover shadow-lg" />
+              </div>
+              <p className="text-sm leading-relaxed text-gray-institutional">
+                Los datos de ubicación y tramo ya han sido rellenados de manera automática.
+                Solo necesita explicarnos la razón de su problema, subir evidencias si es que
+                las tiene y enviarnos su solicitud con el botón del final.
+              </p>
+              <Button type="button" size="sm" onClick={() => setShowTramoInfoCard(false)}>
+                Entendido <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

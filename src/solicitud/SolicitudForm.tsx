@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Upload, MapPin, Check, Navigation } from 'lucide-react'
+import { sileo } from 'sileo'
 import lottie from 'lottie-web'
-import loadingAnimation from '../assets/lottie/landing-construccion.json'
+import loadingAnimation from '../assets/lottie/celu.json'
 import Button from '../shared/Button'
 import Card from '../shared/Card'
 import { Input, Textarea } from '../shared/Input'
@@ -77,9 +78,10 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const [showLottie, setShowLottie] = useState(false)
   const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
   const [showMapaCombinado, setShowMapaCombinado] = useState(false)
-  const [mapClosing, setMapClosing] = useState(false)
+  const [isClosingAnimating, setIsClosingAnimating] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [showAviso, setShowAviso] = useState(false)
+  const [mapKey, setMapKey] = useState(0)
   const [tramoData, setTramoData] = useState<{
     distancia_m: number; ancho_calle_m: number
     escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
@@ -87,6 +89,9 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const lottieRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inlineMapRef = useRef(false)
+  const [cardOffset, setCardOffset] = useState(0)
   const [fileErrors, setFileErrors] = useState<string[]>([])
 
   useEffect(() => {
@@ -100,7 +105,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     return () => anim.destroy()
   }, [showLottie])
 
-  const handleMapCombinadoConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
+  const setMapData = (data: import('./MapaCombinado').MapaCombinadoResult) => {
     const { pin, tramo } = data
     set('latitud', String(pin.lat))
     set('longitud', String(pin.lng))
@@ -125,7 +130,15 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         puntos: tramo.puntos,
       })
     }
+  }
+
+  const handleMapCombinadoConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
+    setMapData(data)
     closeMap()
+  }
+
+  const handleMapInlineConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
+    setMapData(data)
   }
 
   const set = (field: keyof SolicitudFormData, value: unknown) => {
@@ -133,11 +146,53 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setErrors((prev) => ({ ...prev, [field]: undefined }))
   }
 
+  const clearMapData = () => {
+    set('latitud', '')
+    set('longitud', '')
+    set('colonia', '')
+    set('junta_auxiliar', '')
+    set('calle', '')
+    set('entre_calles', '')
+    set('zona_zap', false)
+    set('cobertura_agua', false)
+    set('tramo_lat_ini', '')
+    set('tramo_lng_ini', '')
+    set('tramo_lat_fin', '')
+    set('tramo_lng_fin', '')
+    setTramoData(null)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const errs = validarForm(form, omitirCurp)
     if (Object.keys(errs).length > 0) {
       setErrors(errs)
+      const FIELD_LABELS: Record<string, string> = {
+        nombre_solicitante: 'Nombre',
+        curp: 'CURP',
+        telefono: 'Teléfono',
+        correo: 'Correo electrónico',
+        aviso_privacidad_aceptado: 'Aviso de privacidad',
+        tipo_solicitud: 'Tipo de obra',
+        colonia: 'Colonia',
+        junta_auxiliar: 'Junta auxiliar',
+        latitud: 'Ubicación en el mapa',
+      }
+      for (const [key, msg] of Object.entries(errs)) {
+        if (msg) {
+          sileo.error({
+            title: FIELD_LABELS[key] ?? key,
+            description: msg,
+            fill: '#ffffff',
+            duration: 5000,
+            autopilot: true,
+            styles: {
+              title: 'text-guinda text-sm font-semibold text-center',
+              description: 'text-xs text-center text-gray-700',
+            },
+          })
+        }
+      }
       return
     }
 
@@ -145,15 +200,36 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setShowLottie(true)
     setResultado(null)
 
-    const res = await crearSolicitud(
-      {
-        ...form,
-        curp: omitirCurp ? 'SIN CURP' : form.curp.toUpperCase(),
-        nombre_solicitante: form.nombre_solicitante.trim(),
+    sileo.info({
+      title: 'Registrando solicitud',
+      description: 'Tu información está siendo procesada',
+      fill: '#ffffff',
+      duration: 6000,
+      autopilot: true,
+      styles: {
+        title: 'text-guinda text-sm font-semibold text-center',
+        description: 'text-xs text-center text-gray-700',
       },
-      omitirCurp ? RANKING_PUNTOS_CARGO_PUBLICO : undefined,
-      tramoData ?? undefined
-    )
+    })
+
+    let res: { data?: import('../types/solicitud').Solicitud; error?: string; advertencia?: string }
+    try {
+      res = await crearSolicitud(
+        {
+          ...form,
+          curp: omitirCurp ? 'SIN CURP' : form.curp.toUpperCase(),
+          nombre_solicitante: form.nombre_solicitante.trim(),
+        },
+        omitirCurp ? RANKING_PUNTOS_CARGO_PUBLICO : undefined,
+        tramoData ?? undefined
+      )
+    } catch (e) {
+      console.error('Error en crearSolicitud:', e)
+      setShowLottie(false)
+      setResultado({ error: 'Error inesperado al crear la solicitud' })
+      setSubmittedOnce(false)
+      return
+    }
 
     await new Promise(r => setTimeout(r, 3000))
     setShowLottie(false)
@@ -162,6 +238,17 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
       setResultado({ error: res.error })
       setSubmittedOnce(false)
     } else {
+      sileo.success({
+        title: 'Solicitud recibida',
+        description: `Folio ${res.data?.folio_unico} — pronto recibirás tu acuse en tu correo.`,
+        fill: '#ffffff',
+        duration: 6000,
+        autopilot: true,
+        styles: {
+          title: 'text-guinda text-sm font-semibold text-center',
+          description: 'text-xs text-center text-gray-700',
+        },
+      })
       setResultado({ folio: res.data?.folio_unico, advertencia: res.advertencia })
       setTramoData(null)
       setForm({
@@ -205,6 +292,40 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setFileErrors(errors)
   }
 
+  const inlineMap = showMapaCombinado
+  inlineMapRef.current = inlineMap
+
+  const closeMap = () => {
+    if (isClosingAnimating) return
+    setIsClosingAnimating(true)
+    setShowMapaCombinado(false)
+    setTimeout(() => setIsClosingAnimating(false), 1000)
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const w = container.offsetWidth
+    if (inlineMap) {
+      setCardOffset(0)
+    } else {
+      setCardOffset(Math.max(0, (w - 672) / 2))
+    }
+  }, [inlineMap])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width
+        setCardOffset(inlineMapRef.current ? 0 : Math.max(0, (w - 672) / 2))
+      }
+    })
+    ro.observe(container)
+    return () => ro.disconnect()
+  }, [])
+
   if (resultado?.folio) {
     return (
       <Card title="Solicitud registrada">
@@ -237,23 +358,14 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     )
   }
 
-  const inlineMap = showMapaCombinado || mapClosing
-
-  const closeMap = () => {
-    if (mapClosing) return
-    setMapClosing(true)
-    setTimeout(() => {
-      setShowMapaCombinado(false)
-      setMapClosing(false)
-    }, 500)
-  }
-
   return (
     <>
       {showLottie && (
-        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-6 bg-white">
-          <div ref={lottieRef} className="w-64" />
-          <p className="text-sm text-gray-institutional/60">Registrando tu solicitud...</p>
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-8 bg-white px-6">
+          <div ref={lottieRef} className="w-72 sm:w-96" />
+          <div className="rounded-full bg-[#41504D] px-6 py-3 text-center text-sm text-[#DBC6B3] sm:px-10 sm:text-base">
+            Estamos trabajando lo mas fuerte posible por una mejor ciudad
+          </div>
         </div>
       )}
 
@@ -310,8 +422,32 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
           </Card>
         </div>
 
-        <div className="md:flex md:gap-6">
-          <div className={`transition-all duration-500 ease-in-out min-w-0 w-full max-w-2xl mx-auto ${inlineMap ? 'md:w-[55%] md:mx-0' : ''}`}>
+        <div
+          ref={containerRef}
+          className="flex w-full"
+          style={{
+            gap: inlineMap ? '1.5rem' : '0',
+            transition: 'gap 400ms ease-in-out',
+            transitionDelay: inlineMap ? '800ms' : '0ms',
+          }}
+        >
+          <div
+            className="min-w-0"
+            style={{
+              transform: `translateX(${cardOffset}px)`,
+              flexGrow: 0,
+              flexShrink: 0,
+              flexBasis: inlineMap ? '50%' : '100%',
+              maxWidth: inlineMap ? 'calc(50% - 0.75rem)' : '42rem',
+              transitionProperty: 'transform, flex-basis, max-width',
+              transitionDuration: '400ms, 400ms, 400ms',
+              transitionTimingFunction: 'ease-in-out, ease-in-out, ease-in-out',
+              transitionDelay: inlineMap
+                ? '0ms, 400ms, 400ms'
+                : '200ms, 400ms, 400ms',
+              willChange: 'transform',
+            }}
+          >
             <Card title="Datos de la obra">
               <div className="flex flex-col gap-4">
                 <Select
@@ -340,7 +476,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
                         size="sm"
                         className="ml-auto shrink-0"
                         aria-label="Abrir mapa"
-                        onClick={() => setShowMapaCombinado(true)}
+                        disabled={isClosingAnimating}
+                        onClick={() => { clearMapData(); setMapKey(k => k + 1); setShowMapaCombinado(true) }}
                       >
                         <MapPin className="mr-1 h-4 w-4" />
                         {form.tramo_lat_ini ? 'Editar' : 'Mapa'}
@@ -417,12 +554,26 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             </Card>
           </div>
 
-          <div className={`hidden md:block transition-all duration-500 ease-in-out relative z-20 min-w-0 ${inlineMap ? 'md:max-w-full md:flex-1 md:opacity-100' : 'md:max-w-0 md:opacity-0 md:overflow-hidden'}`}>
+          <div
+            className="hidden md:block min-w-0 overflow-hidden"
+            style={{
+              flexGrow: inlineMap ? 1 : 0,
+              flexShrink: 1,
+              flexBasis: '0%',
+              opacity: inlineMap ? 1 : 0,
+              transitionProperty: 'flex-grow, opacity',
+              transitionDuration: '400ms, 400ms',
+              transitionTimingFunction: 'ease-in-out, ease-in-out',
+              transitionDelay: inlineMap ? '800ms, 800ms' : '0ms, 0ms',
+              willChange: 'flex-grow, opacity',
+            }}
+          >
             <div className="h-full w-full overflow-hidden rounded-xl">
               {showMapaCombinado && (
                 <MapaCombinado
+                  key={mapKey}
                   inline
-                  onConfirm={handleMapCombinadoConfirm}
+                  onConfirm={handleMapInlineConfirm}
                   onClose={closeMap}
                   initialLat={form.latitud}
                   initialLng={form.longitud}
@@ -504,8 +655,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             )}
           </Card>
 
-          <div className="flex justify-end">
-            <Button type="submit" size="lg" disabled={submittedOnce}>
+          <div className="flex justify-center">
+            <Button type="submit" size="lg" disabled={submittedOnce} className="mt-10">
               {submittedOnce ? 'Enviando' : 'Enviar solicitud'}
             </Button>
           </div>
@@ -515,6 +666,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
       {showMapaCombinado && (
         <div className="md:hidden">
           <MapaCombinado
+            key={mapKey}
             onConfirm={handleMapCombinadoConfirm}
             onClose={closeMap}
             initialLat={form.latitud}

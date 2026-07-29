@@ -1,0 +1,282 @@
+{
+  "colonias": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": { "name": "Colonia del Bosque" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [-98.219, 19.059],
+            [-98.210, 19.059],
+            [-98.210, 19.051],
+            [-98.219, 19.051],
+            [-98.219, 19.059]
+          ]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Fraccionamiento Los Pinos" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [-98.179, 19.057],
+            [-98.170, 19.057],
+            [-98.170, 19.049],
+            [-98.179, 19.049],
+            [-98.179, 19.057]
+          ]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Barrio de las Flores" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [-98.209, 19.044],
+            [-98.200, 19.044],
+            [-98.200, 19.036],
+            [-98.209, 19.036],
+            [-98.209, 19.044]
+          ]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Colonia Revolución" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [-98.226, 19.022],
+            [-98.217, 19.022],
+            [-98.217, 19.014],
+            [-98.226, 19.014],
+            [-98.226, 19.022]
+          ]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Unidad Habitacional XYZ" },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [-98.184, 19.027],
+            [-98.176, 19.027],
+            [-98.176, 19.019],
+            [-98.184, 19.019],
+            [-98.184, 19.027]
+          ]]
+        }
+      }
+    ]
+  },
+  "calles": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Benito Juárez", "highway": "residential", "colonia": "Colonia del Bosque" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.218, 19.053], [-98.211, 19.053]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Avenida Reforma", "highway": "residential", "colonia": "Colonia del Bosque" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.218, 19.055], [-98.211, 19.055]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle 5 de Mayo", "highway": "residential", "colonia": "Colonia del Bosque" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.218, 19.057], [-98.211, 19.057]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Hidalgo", "highway": "residential", "colonia": "Colonia del Bosque" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.216, 19.058], [-98.216, 19.052]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Morelos", "highway": "residential", "colonia": "Colonia del Bosque" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.213, 19.058], [-98.213, 19.052]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Zaragoza", "highway": "residential", "colonia": "Fraccionamiento Los Pinos" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.178, 19.051], [-98.171, 19.051]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Avenida Juárez", "highway": "residential", "colonia": "Fraccionamiento Los Pinos" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.178, 19.053], [-98.171, 19.053]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Independencia", "highway": "residential", "colonia": "Fraccionamiento Los Pinos" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.178, 19.055], [-98.171, 19.055]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Allende", "highway": "residential", "colonia": "Fraccionamiento Los Pinos" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.177, 19.056], [-98.177, 19.050]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Guerrero", "highway": "residential", "colonia": "Fraccionamiento Los Pinos" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.173, 19.056], [-98.173, 19.050]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle 16 de Septiembre", "highway": "residential", "colonia": "Barrio de las Flores" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.208, 19.038], [-98.201, 19.038]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Avenida Libertad", "highway": "residential", "colonia": "Barrio de las Flores" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.208, 19.040], [-98.201, 19.040]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Constitución", "highway": "residential", "colonia": "Barrio de las Flores" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.208, 19.042], [-98.201, 19.042]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Victoria", "highway": "residential", "colonia": "Barrio de las Flores" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.207, 19.043], [-98.207, 19.037]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Galeana", "highway": "residential", "colonia": "Barrio de las Flores" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.203, 19.043], [-98.203, 19.037]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Emiliano Zapata", "highway": "residential", "colonia": "Colonia Revolución" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.225, 19.016], [-98.218, 19.016]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Avenida Revolución", "highway": "residential", "colonia": "Colonia Revolución" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.225, 19.018], [-98.218, 19.018]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Vicente Guerrero", "highway": "residential", "colonia": "Colonia Revolución" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.225, 19.020], [-98.218, 19.020]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Miguel Hidalgo", "highway": "residential", "colonia": "Colonia Revolución" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.224, 19.021], [-98.224, 19.015]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle José María Morelos", "highway": "residential", "colonia": "Colonia Revolución" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.220, 19.021], [-98.220, 19.015]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Lázaro Cárdenas", "highway": "residential", "colonia": "Unidad Habitacional XYZ" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.183, 19.021], [-98.177, 19.021]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Avenida Tecnológico", "highway": "residential", "colonia": "Unidad Habitacional XYZ" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.183, 19.023], [-98.177, 19.023]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Industrias", "highway": "residential", "colonia": "Unidad Habitacional XYZ" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.183, 19.025], [-98.177, 19.025]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Ferrocarril", "highway": "residential", "colonia": "Unidad Habitacional XYZ" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.182, 19.026], [-98.182, 19.020]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Calle Progreso", "highway": "residential", "colonia": "Unidad Habitacional XYZ" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-98.179, 19.026], [-98.179, 19.020]]
+        }
+      }
+    ]
+  }
+}

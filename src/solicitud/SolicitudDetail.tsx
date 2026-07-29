@@ -201,41 +201,48 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, u
   const showGenerateButtons = userRole && esCargoPublico(userRole)
 
   const esMaxRanking = s.peso_ranking === 10
+  const esConcentracion = s.peso_ranking === 12
   const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 py-6">
       <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-2xl shadow-xl">
         <div className={`flex items-center justify-between px-6 py-4 ${
-          esMaxRanking
-            ? 'bg-[#41504D]'
-            : esPrioridad
-              ? 'bg-guinda'
-              : 'bg-white border border-gray-100'
+          esPrioridad
+            ? 'bg-guinda'
+            : esConcentracion
+              ? 'bg-[#DBC6B3]'
+              : esMaxRanking
+                ? 'bg-[#41504D]'
+                : 'bg-white border border-gray-100'
         }`}>
           <div className="flex items-baseline gap-3">
             <p className={`text-xl font-bold tracking-wider ${
-              esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white' : 'text-guinda'
+              esPrioridad ? 'text-white' : esConcentracion ? 'text-black' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-guinda'
             }`}>{s.folio_unico}</p>
             <span className={`text-[20px] font-semibold ${
               esPrioridad
                 ? 'text-white/70'
-                : esMaxRanking
-                  ? 'text-[#DBC6B3]/70'
-                  : 'text-guinda/60'
+                : esConcentracion
+                  ? 'text-black/70'
+                  : esMaxRanking
+                    ? 'text-[#DBC6B3]/70'
+                    : 'text-guinda/60'
             }`}>
-              {esPrioridad ? 'Prioridad alta' : esMaxRanking ? 'Prioridad media' : 'Prioridad baja'}
+              {esPrioridad ? 'Prioridad alta' : esConcentracion ? 'Prioridad media-alta' : esMaxRanking ? 'Prioridad media' : 'Prioridad baja'}
             </span>
           </div>
           <button
             type="button"
             onClick={onClose}
             className={`rounded-xl p-1.5 transition-colors ${
-              esMaxRanking
-                ? 'text-[#DBC6B3]/60 hover:bg-[#DBC6B3]/10 hover:text-[#DBC6B3]'
-                : esPrioridad
-                  ? 'text-white/60 hover:bg-white/10 hover:text-white'
-                  : 'text-gray-institutional hover:bg-gray-100 hover:text-guinda'
+              esPrioridad
+                ? 'text-white/60 hover:bg-white/10 hover:text-white'
+                : esConcentracion
+                  ? 'text-black/60 hover:bg-black/10 hover:text-black'
+                  : esMaxRanking
+                    ? 'text-[#DBC6B3]/60 hover:bg-[#DBC6B3]/10 hover:text-[#DBC6B3]'
+                    : 'text-gray-institutional hover:bg-gray-100 hover:text-guinda'
             }`}
           >
             <X className="h-5 w-5" />

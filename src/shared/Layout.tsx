@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { Toaster } from 'sileo'
+import 'sileo/styles.css'
 import type { FontSize, Contrast, VoiceType } from '../core/theme'
 import { useTalkBack } from '../hooks/useTalkBack'
 import Header from './Header'
@@ -50,6 +52,10 @@ export default function Layout() {
         <Outlet />
       </main>
       <Footer />
+      <Toaster
+        position="top-center"
+        options={{ fill: '#ffffff', roundness: 14, duration: 5000, autopilot: true }}
+      />
     </div>
   )
 }

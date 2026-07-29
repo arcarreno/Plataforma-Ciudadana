@@ -2,6 +2,7 @@ export const APP_NAME = 'Atención Ciudadana'
 export const MAX_SOLICITUDES_PER_MONTH = 3
 export const RANKING_PUNTOS_BASE = 5
 export const RANKING_PUNTOS_CON_EVIDENCIA = 10
+export const RANKING_PUNTOS_CONCENTRACION = 12
 export const RANKING_PUNTOS_CARGO_PUBLICO = 15
 export const FOLIO_PREFIX = 'ST'
 

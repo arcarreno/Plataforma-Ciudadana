@@ -179,6 +179,7 @@ export default function AdminDashboard() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {solicitudes.map(s => {
             const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
+            const esConcentracion = s.peso_ranking === 12
             const esMaxRanking = s.peso_ranking === 10
             const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] || ESTATUS_COLORS['Planeacion - Evaluacion']
             return (
@@ -187,38 +188,42 @@ export default function AdminDashboard() {
                 type="button"
                 onClick={() => setSelected(s)}
                 className={`group cursor-pointer rounded-2xl p-5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
-                  esMaxRanking
-                    ? 'border border-[#41504D]/30 bg-[#41504D] text-[#DBC6B3]'
-                    : esPrioridad
-                      ? 'border border-guinda/20 bg-guinda text-white'
-                      : 'border border-gray-100 bg-white'
+                  esPrioridad
+                    ? 'border border-guinda/20 bg-guinda text-white'
+                    : esConcentracion
+                      ? 'border border-[#DBC6B3]/50 bg-[#DBC6B3] text-black'
+                      : esMaxRanking
+                        ? 'border border-[#41504D]/30 bg-[#41504D] text-[#DBC6B3]'
+                        : 'border border-gray-100 bg-white'
                 }`}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <p className={`font-mono text-sm font-bold tracking-wider ${
-                    esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white/90' : 'text-guinda'
+                    esPrioridad ? 'text-white/90' : esConcentracion ? 'text-black/90' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-guinda'
                   }`}>
                     {s.folio_unico}
                   </p>
                   <span className={`rounded-lg px-2 py-0.5 text-[10px] font-medium ${
-                    esMaxRanking
-                      ? 'bg-[#DBC6B3]/20 text-[#DBC6B3]'
-                      : esPrioridad
-                        ? 'bg-white/20 text-white'
-                        : `${estatusColor.bg} ${estatusColor.text}`
+                    esPrioridad
+                      ? 'bg-white/20 text-white'
+                      : esConcentracion
+                        ? 'bg-black/10 text-black'
+                        : esMaxRanking
+                          ? 'bg-[#DBC6B3]/20 text-[#DBC6B3]'
+                          : `${estatusColor.bg} ${estatusColor.text}`
                   }`}>
                     {s.estatus_fase}
                   </span>
                 </div>
 
                 <p className={`mb-3 text-sm font-medium ${
-                  esMaxRanking ? 'text-[#DBC6B3]' : esPrioridad ? 'text-white' : 'text-gray-institutional'
+                  esPrioridad ? 'text-white' : esConcentracion ? 'text-black' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-gray-institutional'
                 }`}>
                   {s.nombre_solicitante}
                 </p>
 
                 <div className={`flex flex-col gap-1 text-xs ${
-                  esMaxRanking ? 'text-[#DBC6B3]/70' : esPrioridad ? 'text-white/70' : 'text-gray-institutional/60'
+                  esPrioridad ? 'text-white/70' : esConcentracion ? 'text-black/70' : esMaxRanking ? 'text-[#DBC6B3]/70' : 'text-gray-institutional/60'
                 }`}>
                   <div className="flex justify-between">
                     <span>CURP:</span>
@@ -234,13 +239,13 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex justify-between">
                     <span>Junta aux.:</span>
-                    <span className={esMaxRanking ? 'text-[#DBC6B3]/80' : esPrioridad ? 'text-white/80' : 'text-green-700'}>{s.junta_auxiliar}</span>
+                    <span className={esPrioridad ? 'text-white/80' : esConcentracion ? 'text-black/80' : esMaxRanking ? 'text-[#DBC6B3]/80' : 'text-green-700'}>{s.junta_auxiliar}</span>
                   </div>
                 </div>
 
                 {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null) && (
                   <div className={`mt-2 flex flex-wrap gap-2 text-[10px] ${
-                    esMaxRanking ? 'text-[#DBC6B3]/60' : esPrioridad ? 'text-white/60' : 'text-gray-institutional/50'
+                    esPrioridad ? 'text-white/60' : esConcentracion ? 'text-black/60' : esMaxRanking ? 'text-[#DBC6B3]/60' : 'text-gray-institutional/50'
                   }`}>
                     {s.zona_zap != null && (
                       <span className="flex items-center gap-1">
@@ -269,7 +274,7 @@ export default function AdminDashboard() {
 
                 {s.rutas_evidencia && s.rutas_evidencia.length > 0 && (
                   <div className={`mt-3 flex items-center gap-1.5 text-xs ${
-                    esMaxRanking ? 'text-[#DBC6B3]/80' : esPrioridad ? 'text-white/80' : 'text-guinda'
+                    esPrioridad ? 'text-white/80' : esConcentracion ? 'text-black/80' : esMaxRanking ? 'text-[#DBC6B3]/80' : 'text-guinda'
                   }`}>
                     <FileText className="h-3.5 w-3.5" />
                     <span>{s.rutas_evidencia.length} archivo(s)</span>

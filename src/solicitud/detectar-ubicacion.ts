@@ -14,6 +14,7 @@ export interface CapasGeoJSON {
   iglesias: GeoJSON.FeatureCollection
   stv: GeoJSON.FeatureCollection
   coberturaAgua: GeoJSON.FeatureCollection
+  calles: GeoJSON.FeatureCollection
 }
 
 export interface DeteccionPunto {
@@ -90,8 +91,9 @@ export function cargarCapas(): Promise<CapasGeoJSON> {
     fetchJSON('/data/Iglesias.geojson'),
     fetchJSON('/data/STV.geojson'),
     fetchJSON('/data/COBERTURA_AGUAS DE PUEBLA.geojson'),
-  ]).then(([colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua]) => ({
-    colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua,
+    fetchJSON('/data/CALLES_PUEBLA.geojson'),
+  ]).then(([colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua, calles]) => ({
+    colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua, calles,
   }))
 }
 

@@ -1,104 +1,113 @@
-interface NominatimAddress {
-  road?: string
-  neighbourhood?: string
-  suburb?: string
-  city?: string
-}
-
-interface NominatimResponse {
-  address?: NominatimAddress
-  display_name?: string
-}
-
-interface OverpassElement {
-  tags?: { name?: string; highway?: string }
-}
+import pointToLineDistance from '@turf/point-to-line-distance'
+import nearestPointOnLine from '@turf/nearest-point-on-line'
+import along from '@turf/along'
+import lineSlice from '@turf/line-slice'
+import lineIntersect from '@turf/line-intersect'
+import { point, lineString } from '@turf/helpers'
+import type { Feature, LineString, FeatureCollection } from 'geojson'
 
 export interface CalleInfo {
   calle: string
   entreCalles: string
+  entreCallesDetected: number
 }
 
-const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org'
-const OVERPASS_BASE = 'https://overpass-api.de/api/interpreter'
-const UA = 'AtencionCiudadana/1.0'
+let callesCache: FeatureCollection<LineString> | null = null
+
+export function setCallesData(data: FeatureCollection<LineString>) {
+  callesCache = data
+}
+
+const MAX_DIST_M = 30
+const SLICE_RADIUS_M = 150
+
+const EXCLUDE_NAMES = /^(RUTA\s|RUTAS\s|L\d+\s*BRT|BRT\s*L\d+|METRO|METROBÚS|MACROBÚS|TROLEBÚS|TREN\s+LIGERO)/i
+
+function isTransitRoute(name: string): boolean {
+  return EXCLUDE_NAMES.test(name)
+}
 
 function stripType(name: string): string {
-  return name.replace(/^(Calle|Avenida|Privada|Calzada|Boulevard)\s+/i, '').trim()
-}
-
-function cacheKey(lat: number, lon: number): string {
-  return `geocalle:${lat.toFixed(3)},${lon.toFixed(3)}`
-}
-
-function writeCache(lat: number, lon: number, info: CalleInfo): void {
-  try {
-    localStorage.setItem(cacheKey(lat, lon), JSON.stringify(info))
-  } catch {}
-}
-
-function readCache(lat: number, lon: number): CalleInfo | null {
-  try {
-    const raw = localStorage.getItem(cacheKey(lat, lon))
-    return raw ? (JSON.parse(raw) as CalleInfo) : null
-  } catch {
-    return null
-  }
-}
-
-async function fetchNominatim(lat: number, lon: number): Promise<string> {
-  const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&zoom=18`
-  const resp = await fetch(url, { headers: { 'User-Agent': UA } })
-  const data: NominatimResponse = await resp.json()
-  return data.address?.road?.toUpperCase() || ''
-}
-
-async function fetchOverpass(lat: number, lon: number): Promise<string[]> {
-  const query = `[out:json][timeout:5];way["highway"](around:150,${lat},${lon});out tags;`
-  const body = 'data=' + encodeURIComponent(query)
-  const resp = await fetch(OVERPASS_BASE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
-    body,
-  })
-  const data: { elements: OverpassElement[] } = await resp.json()
-  const seen = new Set<string>()
-  return data.elements
-    .map(el => el.tags?.name?.toUpperCase().trim())
-    .filter((n): n is string => !!n && !seen.has(n) && !!seen.add(n))
-}
-
-function buildEntreCalles(calle: string, nearby: string[]): string {
-  const mainBase = stripType(calle)
-  const streets = nearby.filter(n => stripType(n) !== mainBase)
-  if (streets.length === 0) return ''
-  const entre1 = streets[0]
-  const entre2 = streets[1]
-  if (entre1 && entre2) return `ENTRE ${entre1} Y ${entre2}`
-  return `ENTRE ${entre1}`
+  return name.replace(/^(Calle|Avenida|Privada|Calzada|Boulevard|Cerrada|Diagonal|Andador|Prolongación)\s+/i, '').trim()
 }
 
 export async function geolocalizarCalle(lat: number, lon: number): Promise<CalleInfo> {
-  const cached = readCache(lat, lon)
-  if (cached) return cached
+  const data = callesCache
+  if (!data || !data.features.length) return { calle: '', entreCalles: '', entreCallesDetected: 0 }
 
-  try {
-    const [calle, nearby] = await Promise.all([
-      fetchNominatim(lat, lon),
-      fetchOverpass(lat, lon),
-    ])
+  const pt = point([lon, lat])
 
-    if (!calle) return { calle: '', entreCalles: '' }
+  let bestDist = Infinity
+  let bestName = ''
+  let bestFeature: Feature<LineString> | null = null
 
-    const result: CalleInfo = {
-      calle,
-      entreCalles: buildEntreCalles(calle, nearby),
-    }
+  for (const f of data.features) {
+    if (!f.geometry || f.geometry.type !== 'LineString') continue
+    const coords = f.geometry.coordinates
+    if (coords.length < 2) continue
 
-    writeCache(lat, lon, result)
-    return result
-  } catch (err) {
-    console.warn('Error en geolocalización:', err)
-    return { calle: '', entreCalles: '' }
+    try {
+      const line = lineString(coords)
+      const dist = pointToLineDistance(pt, line, { units: 'meters' })
+      if (dist < bestDist) {
+        bestDist = dist
+        bestName = f.properties?.name ?? ''
+        bestFeature = f
+      }
+    } catch {}
+  }
+
+  if (bestDist > MAX_DIST_M || !bestName) return { calle: '', entreCalles: '', entreCallesDetected: 0 }
+
+  const calle = bestName.toUpperCase()
+
+  if (!bestFeature) return { calle, entreCalles: '', entreCallesDetected: 0 }
+
+  const mainLine = lineString(bestFeature.geometry.coordinates)
+  const nearest = nearestPointOnLine(mainLine, pt, { units: 'meters' })
+  const clickProgress = nearest.properties.location
+
+  const startDist = Math.max(0, clickProgress - SLICE_RADIUS_M)
+  const endDist = clickProgress + SLICE_RADIUS_M
+  const sliceStart = along(mainLine, startDist, { units: 'meters' })
+  const sliceEnd = along(mainLine, endDist, { units: 'meters' })
+  const slicedMain = lineSlice(sliceStart, sliceEnd, mainLine)
+
+  const crossNames: string[] = []
+
+  for (const f of data.features) {
+    if (!f.geometry || f.geometry.type !== 'LineString') continue
+    const name = f.properties?.name
+    if (!name) continue
+
+    const normalized = name.toUpperCase()
+    if (stripType(normalized) === stripType(calle)) continue
+    if (isTransitRoute(normalized)) continue
+
+    const coords = f.geometry.coordinates
+    if (coords.length < 2) continue
+
+    try {
+      const otherLine = lineString(coords)
+      const inter = lineIntersect(slicedMain, otherLine)
+      if (inter.features.length > 0) {
+        crossNames.push(normalized)
+      }
+    } catch {}
+  }
+
+  const unique = [...new Set(crossNames)]
+
+  let entreCalles = ''
+  if (unique.length >= 2) {
+    entreCalles = `ENTRE ${unique[0]} Y ${unique[1]}`
+  } else if (unique.length === 1) {
+    entreCalles = `ENTRE ${unique[0]}`
+  }
+
+  return {
+    calle,
+    entreCalles,
+    entreCallesDetected: unique.length,
   }
 }
