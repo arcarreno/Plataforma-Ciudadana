@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES, CATALOGO_TIPOS_OBRA } from '../core/constants'
@@ -96,9 +96,10 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const [sigedError, setSigedError] = useState<string | null>(null)
   const [vecinos, setVecinos] = useState<{ id_solicitud: number; folio_unico: string; distancia_m: number }[]>([])
   const [vecinosLoading, setVecinosLoading] = useState(false)
-  const [showOficioEditor, setShowOficioEditor] = useState(false)
-  const [showFichaEditor, setShowFichaEditor] = useState(false)
-  const [fichaMapUrl, setFichaMapUrl] = useState<string | null>(null)
+  const [documentTab, setDocumentTab] = useState<'oficio' | 'ficha' | 'enviar' | null>(null)
+  const [enviandoEmail, setEnviandoEmail] = useState(false)
+  const [emailEnviado, setEmailEnviado] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -144,39 +145,39 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
       })
   }, [s.id_solicitud, s.peso_ranking])
 
-  const captureMap = async (): Promise<string | null> => {
-    const mapContainer = document.querySelector('.leaflet-container') as HTMLElement | null
-    if (!mapContainer) return null
-    try {
-      const tiles = mapContainer.querySelectorAll('.leaflet-tile-pane img')
-      if (tiles.length === 0) return null
-      const canvas = document.createElement('canvas')
-      const rect = mapContainer.getBoundingClientRect()
-      canvas.width = rect.width
-      canvas.height = rect.height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return null
-      for (const tile of Array.from(tiles)) {
-        const img = tile as HTMLImageElement
-        const style = window.getComputedStyle(img)
-        const transform = style.transform || (style as any).webkitTransform
-        const match = transform?.match(/translate3d\(([^,]+)px,\s*([^,]+)px/)
-        if (match) {
-          ctx.drawImage(img, parseFloat(match[1]), parseFloat(match[2]))
-        }
-      }
-      return canvas.toDataURL('image/jpeg', 0.85)
-    } catch {
-      return null
-    }
+  const handleOpenDocumentModal = () => {
+    setDocumentTab('oficio')
   }
 
-  const handleOpenOficioEditor = () => setShowOficioEditor(true)
+  const handleTabChange = (tab: 'oficio' | 'ficha' | 'enviar') => {
+    setDocumentTab(tab)
+  }
 
-  const handleOpenFichaEditor = async () => {
-    const url = await captureMap()
-    setFichaMapUrl(url)
-    setShowFichaEditor(true)
+  const handleEnviarDocumentacion = async () => {
+    setEnviandoEmail(true)
+    setEmailError(null)
+    try {
+      const res = await fetch('/api/enviar-documentacion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          correo: s.correo,
+          folio: s.folio_unico,
+          oficioPdf: null,
+          fichaPdf: null,
+          oficioNombre: `Oficio_${s.folio_unico}.pdf`,
+          fichaNombre: `Ficha_tecnica_${s.folio_unico}.pdf`,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Error al enviar')
+      }
+      setEmailEnviado(true)
+    } catch (err: any) {
+      setEmailError(err?.message || 'Error al enviar correo')
+    }
+    setEnviandoEmail(false)
   }
 
   const showGenerateButtons = userRole && esCargoPublico(userRole)
@@ -222,636 +223,735 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const puedeEditar = userRole && esCargoPublico(userRole)
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 py-6">
-      <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-2xl shadow-xl">
-        <div className={`flex items-center justify-between px-6 py-4 ${
-          esPrioridad
-            ? 'bg-guinda'
-            : esConcentracion
-              ? 'bg-[#DBC6B3]'
-              : esMaxRanking
-                ? 'bg-[#41504D]'
-                : 'bg-white border border-gray-100'
-        }`}>
-          <div className="flex items-baseline gap-3">
-            <p className={`text-xl font-bold tracking-wider ${
-              esPrioridad ? 'text-white' : esConcentracion ? 'text-black' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-guinda'
-            }`}>{s.folio_unico}</p>
-            <span className={`text-[20px] font-semibold ${
-              esPrioridad
-                ? 'text-white/70'
-                : esConcentracion
-                  ? 'text-black/70'
-                  : esMaxRanking
-                    ? 'text-[#DBC6B3]/70'
-                    : 'text-guinda/60'
-            }`}>
-              {esPrioridad ? 'Prioridad alta' : esConcentracion ? 'Prioridad media-alta' : esMaxRanking ? 'Prioridad media' : 'Prioridad baja'}
-            </span>
+    <>
+      {documentTab ? (
+        <div className="fixed inset-0 z-[9999] flex flex-col bg-black/60">
+          {/* Header guinda con tabs */}
+          <div className="flex items-center justify-between bg-guinda px-4 py-3 text-white">
+            <div className="flex items-center gap-4">
+              <span className="text-lg font-bold tracking-wider">{s.folio_unico}</span>
+              <div className="flex gap-1">
+                  {(['oficio', 'ficha', 'enviar'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => handleTabChange(tab)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                      documentTab === tab
+                        ? 'bg-white text-guinda'
+                        : 'text-white/80 hover:bg-white/10'
+                    }`}
+                  >
+                    {tab === 'oficio' && <FileText className="mr-1.5 inline h-4 w-4" />}
+                    {tab === 'ficha' && <FileText className="mr-1.5 inline h-4 w-4" />}
+                    {tab === 'enviar' && <Send className="mr-1.5 inline h-4 w-4" />}
+                    {tab === 'oficio' ? 'Oficio PDF' : tab === 'ficha' ? 'Ficha técnica' : 'Enviar documentación'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDocumentTab(null)}
+              className="rounded-lg p-1.5 transition-colors hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`rounded-xl p-1.5 transition-colors ${
-              esPrioridad
-                ? 'text-white/60 hover:bg-white/10 hover:text-white'
-                : esConcentracion
-                  ? 'text-black/60 hover:bg-black/10 hover:text-black'
-                  : esMaxRanking
-                    ? 'text-[#DBC6B3]/60 hover:bg-[#DBC6B3]/10 hover:text-[#DBC6B3]'
-                    : 'text-gray-institutional hover:bg-gray-100 hover:text-guinda'
-            }`}
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
 
-        <div className="bg-white p-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="flex flex-col gap-4">
-            <Card title="Datos del solicitante">
-              <div className="flex flex-col gap-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-guinda" />
-                  <span className="text-gray-institutional">{s.nombre_solicitante}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FileWarning className="h-4 w-4 text-guinda" />
-                  <span className="font-mono text-xs text-gray-institutional/70">{s.curp}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-guinda" />
-                  <span className="text-gray-institutional">{s.telefono}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-guinda" />
-                  <span className="text-gray-institutional">{s.correo}</span>
-                </div>
-              </div>
-            </Card>
-
-            <Card title="Datos de la obra" className="relative">
-              {puedeEditar && (
-                <button
-                  type="button"
-                  onClick={() => { setEditForm(prev => ({ ...prev, tipo_solicitud: s.tipo_solicitud, colonia: s.colonia, junta_auxiliar: s.junta_auxiliar })); setEditObraOpen(true) }}
-                  className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
-                  aria-label="Editar datos de la obra"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
-              <div className="flex flex-col gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-institutional/60">Tipo</span>
-                  <span className="font-medium text-gray-institutional">{s.tipo_solicitud}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-institutional/60">Colonia</span>
-                  <span className="font-medium text-gray-institutional">{s.colonia}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-institutional/60">Junta auxiliar</span>
-                  <span className="font-medium text-green-700">{s.junta_auxiliar}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-institutional/60">Estatus</span>
-                  {onEstatusChange ? (
-                    <select
-                      value={s.estatus_fase || ''}
-                      onChange={e => onEstatusChange(e.target.value as EstatusFase)}
-                      className="max-w-[200px] truncate rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
-                    >
-                      {ESTATUS_OPCIONES.map(e => (
-                        <option key={e} value={e} className="truncate">{e}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="rounded-lg bg-guinda/10 px-2 py-0.5 text-xs font-medium text-guinda">
-                      {s.estatus_fase}
-                    </span>
-                  )}
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-institutional/60">Peso ranking</span>
-                  <span className={`font-medium ${s.peso_ranking != null && s.peso_ranking >= 15 ? 'rounded-lg bg-amber-100 px-2 py-0.5 text-amber-800' : 'text-gray-institutional'}`}>
-                    {s.peso_ranking}
-                    {s.peso_ranking != null && s.peso_ranking >= 15 && <span className="ml-1">★</span>}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-institutional/60">Fecha</span>
-                  <span className="text-xs text-gray-institutional/70">
-                    {s.fecha_creacion
-                      ? new Date(s.fecha_creacion).toLocaleDateString('es-MX', {
-                          day: '2-digit', month: 'long', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit',
-                        })
-                      : '—'}
-                  </span>
-                </div>
-              </div>
-            </Card>
-
-            {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
-              <Card title="Información del tramo">
-                <div className="flex flex-col gap-2 text-sm">
-                  {s.distancia_tramo_m != null && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-institutional/60">Distancia del tramo</span>
-                      <span className="font-medium text-guinda">{s.distancia_tramo_m} m</span>
+          {/* Content */}
+          <div className="relative flex-1 overflow-hidden">
+            {documentTab === 'oficio' && <VistaOficioEditable solicitud={s} />}
+            {documentTab === 'ficha' && <VistaFichaEditable solicitud={s} sigedData={sigedData} />}
+            {documentTab === 'enviar' && (
+              <div className="flex h-full flex-col items-center justify-center bg-gray-50 p-8">
+                <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-100">
+                  <div className="mb-6 text-center">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-guinda/10">
+                      <Send className="h-6 w-6 text-guinda" />
                     </div>
-                  )}
-                  {s.ancho_calle_m != null && (
+                    <h3 className="text-lg font-bold text-gray-900">Enviar documentación</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Se enviarán ambos documentos por correo electrónico al solicitante.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-institutional/60">Ancho de calle</span>
-                      <span className="font-medium text-guinda">~{s.ancho_calle_m} m</span>
+                      <span className="text-gray-500">Folio</span>
+                      <span className="font-mono font-medium text-gray-900">{s.folio_unico}</span>
                     </div>
-                  )}
-                  {s.zona_zap != null && (
                     <div className="flex justify-between">
-                      <span className="text-gray-institutional/60">Zona ZAP</span>
-                      <span className={`font-medium ${s.zona_zap ? 'text-amber-700' : 'text-gray-institutional'}`}>
-                        {s.zona_zap ? 'Si' : 'No'}
+                      <span className="text-gray-500">Solicitante</span>
+                      <span className="font-medium text-gray-900">{s.nombre_solicitante}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Correo</span>
+                      <span className="flex items-center gap-1.5 font-medium text-gray-900">
+                        <Mail className="h-3.5 w-3.5 text-gray-400" />
+                        {s.correo || 'Sin correo'}
                       </span>
                     </div>
-                  )}
-                  {s.cobertura_agua != null && (
                     <div className="flex justify-between">
-                      <span className="text-gray-institutional/60">Cobertura de agua</span>
-                      <span className={`font-medium ${s.cobertura_agua ? 'text-blue-600' : 'text-gray-institutional'}`}>
-                        {s.cobertura_agua ? 'Si' : 'No aplica'}
-                      </span>
+                      <span className="text-gray-500">Documentos</span>
+                      <span className="text-gray-900">Oficio + Ficha técnica (PDF)</span>
                     </div>
-                  )}
-                  <div className="flex items-start gap-2 text-xs">
-                    <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
-                    <span className="text-gray-institutional">
-                      {s.escuelas_cercanas?.length ? s.escuelas_cercanas.join(', ') : 'Ninguna encontrada'}
-                    </span>
                   </div>
-                  <div className="flex items-start gap-2 text-xs">
-                    <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
-                    <span className="text-gray-institutional">
-                      {s.iglesias_cercanas?.length ? s.iglesias_cercanas.join(', ') : 'Ninguna encontrada'}
-                    </span>
-                  </div>
-                  {s.transportes_cercanos && s.transportes_cercanos.length > 0 && (
-                    <div className="flex items-start gap-2 text-xs">
-                      <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
-                      <span className="text-gray-institutional">{s.transportes_cercanos.join(', ')}</span>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
 
-            {s.descripcion && (
-              <Card title="Descripción">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-institutional">
-                  {s.descripcion}
-                </p>
-              </Card>
-            )}
-
-            {s.rutas_evidencia && s.rutas_evidencia.length > 0 && (
-              <Card title={`Evidencia (${s.rutas_evidencia.length})`}>
-                <div className="flex flex-wrap gap-2">
-                  {s.rutas_evidencia.map((r, i) => (
-                    <a
-                      key={i}
-                      href={supabase.storage.from('evidencias').getPublicUrl(r).data.publicUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs text-guinda transition-colors hover:bg-guinda/5"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      <span className="max-w-[160px] truncate">{r.split('/').pop()}</span>
-                    </a>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {s.peso_ranking === 12 && (
-              <Card title="Ubicaciones cercanas">
-                {vecinosLoading ? (
-                  <p className="text-xs text-gray-institutional/50">Buscando solicitudes cercanas...</p>
-                ) : vecinos.length > 0 ? (
-                  <div className="flex flex-col gap-1.5">
-                    {vecinos.map(v => (
-                      <button
-                        key={v.id_solicitud}
-                        type="button"
-                        disabled={!onNavigate}
-                        onClick={async () => {
-                          const { data } = await supabase
-                            .from('solicitudes')
-                            .select('*')
-                            .eq('id_solicitud', v.id_solicitud)
-                            .single()
-                          if (data) onNavigate?.(data as Solicitud)
-                        }}
-                        className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm transition-colors hover:bg-guinda/5 disabled:cursor-default"
+                  <div className="mt-6">
+                    {emailEnviado ? (
+                      <div className="flex items-center justify-center gap-2 rounded-xl bg-green-50 p-4 text-sm text-green-700">
+                        <CheckCircle className="h-5 w-5" />
+                        Documentación enviada correctamente
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={handleEnviarDocumentacion}
+                        disabled={enviandoEmail || !s.correo}
+                        className="flex w-full items-center justify-center gap-2"
                       >
-                        <span className="font-mono font-medium text-guinda">{v.folio_unico}</span>
-                        <span className="text-xs text-gray-institutional/60">{v.distancia_m}m</span>
-                      </button>
-                    ))}
+                        {enviandoEmail ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Enviando...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4" />
+                            Enviar documentación
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {emailError && (
+                      <p className="mt-2 text-center text-sm text-red-500">{emailError}</p>
+                    )}
+                    {!s.correo && (
+                      <p className="mt-2 text-center text-sm text-amber-600">
+                        No hay correo registrado para este solicitante
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-xs text-gray-institutional/50">Sin solicitudes cercanas</p>
-                )}
-              </Card>
+                </div>
+              </div>
             )}
           </div>
+        </div>
+      ) : (
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 py-6">
+          <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-2xl shadow-xl">
+            <div className={`flex items-center justify-between px-6 py-4 ${
+              esPrioridad
+                ? 'bg-guinda'
+                : esConcentracion
+                  ? 'bg-[#DBC6B3]'
+                  : esMaxRanking
+                    ? 'bg-[#41504D]'
+                    : 'bg-white border border-gray-100'
+            }`}>
+              <div className="flex items-baseline gap-3">
+                <p className={`text-xl font-bold tracking-wider ${
+                  esPrioridad ? 'text-white' : esConcentracion ? 'text-black' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-guinda'
+                }`}>{s.folio_unico}</p>
+                <span className={`text-[20px] font-semibold ${
+                  esPrioridad
+                    ? 'text-white/70'
+                    : esConcentracion
+                      ? 'text-black/70'
+                      : esMaxRanking
+                        ? 'text-[#DBC6B3]/70'
+                        : 'text-guinda/60'
+                }`}>
+                  {esPrioridad ? 'Prioridad alta' : esConcentracion ? 'Prioridad media-alta' : esMaxRanking ? 'Prioridad media' : 'Prioridad baja'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className={`rounded-xl p-1.5 transition-colors ${
+                  esPrioridad
+                    ? 'text-white/60 hover:bg-white/10 hover:text-white'
+                    : esConcentracion
+                      ? 'text-black/60 hover:bg-black/10 hover:text-black'
+                      : esMaxRanking
+                        ? 'text-[#DBC6B3]/60 hover:bg-[#DBC6B3]/10 hover:text-[#DBC6B3]'
+                        : 'text-gray-institutional hover:bg-gray-100 hover:text-guinda'
+                }`}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-          <div className="flex flex-col gap-4">
-            <Card title="Ubicación">
-              {ubicacionFullscreen && (
-                <div className="fixed inset-0 z-[10001] bg-black">
-                  <div className="h-full w-full">
+            <div className="bg-white p-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="flex flex-col gap-4">
+                <Card title="Datos del solicitante">
+                  <div className="flex flex-col gap-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-guinda" />
+                      <span className="text-gray-institutional">{s.nombre_solicitante}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FileWarning className="h-4 w-4 text-guinda" />
+                      <span className="font-mono text-xs text-gray-institutional/70">{s.curp}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-guinda" />
+                      <span className="text-gray-institutional">{s.telefono}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-guinda" />
+                      <span className="text-gray-institutional">{s.correo}</span>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card title="Datos de la obra" className="relative">
+                  {puedeEditar && (
+                    <button
+                      type="button"
+                      onClick={() => { setEditForm(prev => ({ ...prev, tipo_solicitud: s.tipo_solicitud, colonia: s.colonia, junta_auxiliar: s.junta_auxiliar })); setEditObraOpen(true) }}
+                      className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
+                      aria-label="Editar datos de la obra"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  )}
+                  <div className="flex flex-col gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Tipo</span>
+                      <span className="font-medium text-gray-institutional">{s.tipo_solicitud}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Colonia</span>
+                      <span className="font-medium text-gray-institutional">{s.colonia}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Junta auxiliar</span>
+                      <span className="font-medium text-green-700">{s.junta_auxiliar}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Estatus</span>
+                      {onEstatusChange ? (
+                        <select
+                          value={s.estatus_fase || ''}
+                          onChange={e => onEstatusChange(e.target.value as EstatusFase)}
+                          className="max-w-[200px] truncate rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
+                        >
+                          {ESTATUS_OPCIONES.map(e => (
+                            <option key={e} value={e} className="truncate">{e}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="rounded-lg bg-guinda/10 px-2 py-0.5 text-xs font-medium text-guinda">
+                          {s.estatus_fase}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Peso ranking</span>
+                      <span className={`font-medium ${s.peso_ranking != null && s.peso_ranking >= 15 ? 'rounded-lg bg-amber-100 px-2 py-0.5 text-amber-800' : 'text-gray-institutional'}`}>
+                        {s.peso_ranking}
+                        {s.peso_ranking != null && s.peso_ranking >= 15 && <span className="ml-1">★</span>}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-institutional/60">Fecha</span>
+                      <span className="text-xs text-gray-institutional/70">
+                        {s.fecha_creacion
+                          ? new Date(s.fecha_creacion).toLocaleDateString('es-MX', {
+                              day: '2-digit', month: 'long', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })
+                          : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+
+                {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
+                  <Card title="Información del tramo">
+                    <div className="flex flex-col gap-2 text-sm">
+                      {s.distancia_tramo_m != null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-institutional/60">Distancia del tramo</span>
+                          <span className="font-medium text-guinda">{s.distancia_tramo_m} m</span>
+                        </div>
+                      )}
+                      {s.ancho_calle_m != null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-institutional/60">Ancho de calle</span>
+                          <span className="font-medium text-guinda">~{s.ancho_calle_m} m</span>
+                        </div>
+                      )}
+                      {s.zona_zap != null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-institutional/60">Zona ZAP</span>
+                          <span className={`font-medium ${s.zona_zap ? 'text-amber-700' : 'text-gray-institutional'}`}>
+                            {s.zona_zap ? 'Si' : 'No'}
+                          </span>
+                        </div>
+                      )}
+                      {s.cobertura_agua != null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-institutional/60">Cobertura de agua</span>
+                          <span className={`font-medium ${s.cobertura_agua ? 'text-blue-600' : 'text-gray-institutional'}`}>
+                            {s.cobertura_agua ? 'Si' : 'No aplica'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-start gap-2 text-xs">
+                        <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
+                        <span className="text-gray-institutional">
+                          {s.escuelas_cercanas?.length ? s.escuelas_cercanas.join(', ') : 'Ninguna encontrada'}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2 text-xs">
+                        <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
+                        <span className="text-gray-institutional">
+                          {s.iglesias_cercanas?.length ? s.iglesias_cercanas.join(', ') : 'Ninguna encontrada'}
+                        </span>
+                      </div>
+                      {s.transportes_cercanos && s.transportes_cercanos.length > 0 && (
+                        <div className="flex items-start gap-2 text-xs">
+                          <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
+                          <span className="text-gray-institutional">{s.transportes_cercanos.join(', ')}</span>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
+                {s.descripcion && (
+                  <Card title="Descripción">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-institutional">
+                      {s.descripcion}
+                    </p>
+                  </Card>
+                )}
+
+                {s.rutas_evidencia && s.rutas_evidencia.length > 0 && (
+                  <Card title={`Evidencia (${s.rutas_evidencia.length})`}>
+                    <div className="flex flex-wrap gap-2">
+                      {s.rutas_evidencia.map((r, i) => (
+                        <a
+                          key={i}
+                          href={supabase.storage.from('evidencias').getPublicUrl(r).data.publicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs text-guinda transition-colors hover:bg-guinda/5"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span className="max-w-[160px] truncate">{r.split('/').pop()}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+
+                {s.peso_ranking === 12 && (
+                  <Card title="Ubicaciones cercanas">
+                    {vecinosLoading ? (
+                      <p className="text-xs text-gray-institutional/50">Buscando solicitudes cercanas...</p>
+                    ) : vecinos.length > 0 ? (
+                      <div className="flex flex-col gap-1.5">
+                        {vecinos.map(v => (
+                          <button
+                            key={v.id_solicitud}
+                            type="button"
+                            disabled={!onNavigate}
+                            onClick={async () => {
+                              const { data } = await supabase
+                                .from('solicitudes')
+                                .select('*')
+                                .eq('id_solicitud', v.id_solicitud)
+                                .single()
+                              if (data) onNavigate?.(data as Solicitud)
+                            }}
+                            className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm transition-colors hover:bg-guinda/5 disabled:cursor-default"
+                          >
+                            <span className="font-mono font-medium text-guinda">{v.folio_unico}</span>
+                            <span className="text-xs text-gray-institutional/60">{v.distancia_m}m</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-institutional/50">Sin solicitudes cercanas</p>
+                    )}
+                  </Card>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <Card title="Ubicación">
+                  {ubicacionFullscreen && (
+                    <div className="fixed inset-0 z-[10001] bg-black">
+                      <div className="h-full w-full">
+                        <MapContainer
+                          center={[s.latitud, s.longitud]}
+                          zoom={16}
+                          className="h-full w-full"
+                          zoomControl={true}
+                        >
+                          {!satelliteUbicacion ? (
+                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                          ) : (
+                            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
+                          )}
+                          <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
+                          {showLayersUbicacion && capas?.colonias && (
+                            <GeoJSON key="colonias" data={capas.colonias} style={COLONIA_STYLE} interactive={false} />
+                          )}
+                          {showLayersUbicacion && capas?.juntas && (
+                            <GeoJSON key="juntas" data={capas.juntas} style={JUNTA_STYLE} interactive={false} />
+                          )}
+                          {showLayersUbicacion && capas?.zonasZap && (
+                            <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
+                          )}
+                          <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSatelliteUbicacion(prev => !prev)}
+                              className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                              aria-label={satelliteUbicacion ? 'Vista calle' : 'Vista satélite'}
+                            >
+                              {satelliteUbicacion ? <Map className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+                              {satelliteUbicacion ? 'Calle' : 'Satélite'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowLayersUbicacion(prev => !prev)}
+                              className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                              aria-label={showLayersUbicacion ? 'Ocultar capas' : 'Mostrar capas'}
+                            >
+                              {showLayersUbicacion ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              <Layers className="h-3.5 w-3.5" />
+                              Capas
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setUbicacionFullscreen(false)}
+                              className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+                            >
+                              <Minimize2 className="h-5 w-5 text-gray-700" />
+                            </button>
+                          </div>
+                        </MapContainer>
+                      </div>
+                    </div>
+                  )}
+                  <div className="relative h-48 overflow-hidden rounded-xl">
                     <MapContainer
                       center={[s.latitud, s.longitud]}
                       zoom={16}
                       className="h-full w-full"
-                      zoomControl={true}
+                      zoomControl={false}
+                      dragging={false}
+                      scrollWheelZoom={false}
                     >
-                      {!satelliteUbicacion ? (
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-                      ) : (
-                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
-                      )}
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
                       <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
-                      {showLayersUbicacion && capas?.colonias && (
-                        <GeoJSON key="colonias" data={capas.colonias} style={COLONIA_STYLE} interactive={false} />
-                      )}
-                      {showLayersUbicacion && capas?.juntas && (
-                        <GeoJSON key="juntas" data={capas.juntas} style={JUNTA_STYLE} interactive={false} />
-                      )}
-                      {showLayersUbicacion && capas?.zonasZap && (
-                        <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
-                      )}
-                      <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSatelliteUbicacion(prev => !prev)}
-                          className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
-                          aria-label={satelliteUbicacion ? 'Vista calle' : 'Vista satélite'}
-                        >
-                          {satelliteUbicacion ? <Map className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
-                          {satelliteUbicacion ? 'Calle' : 'Satélite'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowLayersUbicacion(prev => !prev)}
-                          className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
-                          aria-label={showLayersUbicacion ? 'Ocultar capas' : 'Mostrar capas'}
-                        >
-                          {showLayersUbicacion ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                          <Layers className="h-3.5 w-3.5" />
-                          Capas
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setUbicacionFullscreen(false)}
-                          className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
-                        >
-                          <Minimize2 className="h-5 w-5 text-gray-700" />
-                        </button>
-                      </div>
                     </MapContainer>
-                  </div>
-                </div>
-              )}
-              <div className="relative h-48 overflow-hidden rounded-xl">
-                <MapContainer
-                  center={[s.latitud, s.longitud]}
-                  zoom={16}
-                  className="h-full w-full"
-                  zoomControl={false}
-                  dragging={false}
-                  scrollWheelZoom={false}
-                >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-                  <DetailMarker position={[s.latitud, s.longitud]} icon={icon} />
-                </MapContainer>
-                <button
-                  type="button"
-                  onClick={() => setUbicacionFullscreen(true)}
-                  className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
-                >
-                  <Maximize2 className="h-4 w-4 text-gray-700" />
-                </button>
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
-                <MapPin className="h-3.5 w-3.5 text-guinda" />
-                {s.latitud.toFixed(6)}, {s.longitud.toFixed(6)}
-              </div>
-            </Card>
-
-            {hasTramo && (() => {
-              const puntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
-                ? s.tramo_puntos
-                : [
-                    { lat: s.tramo_lat_ini!, lng: s.tramo_lng_ini! },
-                    { lat: s.tramo_lat_fin!, lng: s.tramo_lng_fin! },
-                  ]
-              const center: [number, number] = [
-                puntos.reduce((s, p) => s + p.lat, 0) / puntos.length,
-                puntos.reduce((s, p) => s + p.lng, 0) / puntos.length,
-              ]
-              const numMarkers = [
-                marker1,
-                marker2,
-                ...Array.from({ length: Math.max(0, puntos.length - 2) }, (_, i) =>
-                  L.divIcon({
-                    className: 'flex items-center justify-center',
-                    html: `<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${i + 3}</div>`,
-                    iconSize: [20, 20],
-                    iconAnchor: [10, 10],
-                  })
-                ),
-              ]
-
-              const polyline = (
-                <Polyline
-                  positions={puntos.map(p => [p.lat, p.lng])}
-                  pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
-                />
-              )
-              const markers = puntos.map((p, i) => (
-                <DetailMarker key={i} position={[p.lat, p.lng]} icon={numMarkers[i] || numMarkers[numMarkers.length - 1]} />
-              ))
-
-              const compactMap = (
-                <MapContainer
-                  center={center}
-                  zoom={17}
-                  className="h-full w-full"
-                  zoomControl={false}
-                  dragging={false}
-                  scrollWheelZoom={false}
-                >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-                  {polyline}
-                  {markers}
-                </MapContainer>
-              )
-
-              const fullMap = (
-                <MapContainer
-                  center={center}
-                  zoom={17}
-                  className="h-full w-full"
-                  zoomControl={true}
-                >
-                  {!satelliteTramo ? (
-                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-                  ) : (
-                    <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
-                  )}
-                  {polyline}
-                  {markers}
-                  {showLayersTramo && capas?.colonias && (
-                    <GeoJSON key="colonias" data={capas.colonias} style={COLONIA_STYLE} interactive={false} />
-                  )}
-                  {showLayersTramo && capas?.juntas && (
-                    <GeoJSON key="juntas" data={capas.juntas} style={JUNTA_STYLE} interactive={false} />
-                  )}
-                  {showLayersTramo && capas?.zonasZap && (
-                    <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
-                  )}
-                  <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setSatelliteTramo(prev => !prev)}
-                      className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
-                      aria-label={satelliteTramo ? 'Vista calle' : 'Vista satélite'}
-                    >
-                      {satelliteTramo ? <Map className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
-                      {satelliteTramo ? 'Calle' : 'Satélite'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowLayersTramo(prev => !prev)}
-                      className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
-                      aria-label={showLayersTramo ? 'Ocultar capas' : 'Mostrar capas'}
-                    >
-                      {showLayersTramo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                      <Layers className="h-3.5 w-3.5" />
-                      Capas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTramoFullscreen(false)}
-                      className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
-                    >
-                      <Minimize2 className="h-5 w-5 text-gray-700" />
-                    </button>
-                  </div>
-                </MapContainer>
-              )
-
-              return (
-                <Card title="Tramo">
-                  {tramoFullscreen && (
-                    <div className="fixed inset-0 z-[10001] bg-black">
-                      <div className="h-full w-full">{fullMap}</div>
-                    </div>
-                  )}
-                  <div className="relative h-48 overflow-hidden rounded-xl">
-                    {compactMap}
-                    <button
-                      type="button"
-                      onClick={() => setTramoFullscreen(true)}
+                      onClick={() => setUbicacionFullscreen(true)}
                       className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
                     >
                       <Maximize2 className="h-4 w-4 text-gray-700" />
                     </button>
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
-                    <Ruler className="h-3.5 w-3.5 text-guinda" />
-                    {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
+                    <MapPin className="h-3.5 w-3.5 text-guinda" />
+                    {s.latitud.toFixed(6)}, {s.longitud.toFixed(6)}
                   </div>
                 </Card>
-              )
-            })()}
 
-            <Card title="Información Geográfica" className="relative">
-              {puedeEditar && (
-                <button
-                  type="button"
-                  onClick={() => { setEditForm(prev => ({ ...prev, calle: s.calle || '', entre_calles: s.entre_calles || '' })); setEditGeoOpen(true) }}
-                  className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
-                  aria-label="Editar información geográfica"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
-              <div className="flex flex-col gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-3.5 w-3.5 text-guinda" />
-                  <span className="text-gray-institutional/60">
-                    {s.latitud.toFixed(6)}, {s.longitud.toFixed(6)}
-                  </span>
-                </div>
+                {hasTramo && (() => {
+                  const puntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
+                    ? s.tramo_puntos
+                    : [
+                        { lat: s.tramo_lat_ini!, lng: s.tramo_lng_ini! },
+                        { lat: s.tramo_lat_fin!, lng: s.tramo_lng_fin! },
+                      ]
+                  const center: [number, number] = [
+                    puntos.reduce((s, p) => s + p.lat, 0) / puntos.length,
+                    puntos.reduce((s, p) => s + p.lng, 0) / puntos.length,
+                  ]
+                  const numMarkers = [
+                    marker1,
+                    marker2,
+                    ...Array.from({ length: Math.max(0, puntos.length - 2) }, (_, i) =>
+                      L.divIcon({
+                        className: 'flex items-center justify-center',
+                        html: `<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${i + 3}</div>`,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10],
+                      })
+                    ),
+                  ]
 
-                {calleInfo?.calle && (
-                  <div className="flex items-center gap-2">
-                    <Navigation className="h-3.5 w-3.5 text-guinda" />
-                    <span className="font-medium text-gray-institutional">
-                      {calleInfo.calle}
-                    </span>
-                  </div>
-                )}
+                  const polyline = (
+                    <Polyline
+                      positions={puntos.map(p => [p.lat, p.lng])}
+                      pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }}
+                    />
+                  )
+                  const markers = puntos.map((p, i) => (
+                    <DetailMarker key={i} position={[p.lat, p.lng]} icon={numMarkers[i] || numMarkers[numMarkers.length - 1]} />
+                  ))
 
-                {calleInfo?.entreCalles && (
-                  <div className="flex items-center gap-2 pl-5">
-                    <span className="text-gray-institutional/60">
-                      {calleInfo.entreCalles}
-                    </span>
-                  </div>
-                )}
+                  const compactMap = (
+                    <MapContainer
+                      center={center}
+                      zoom={17}
+                      className="h-full w-full"
+                      zoomControl={false}
+                      dragging={false}
+                      scrollWheelZoom={false}
+                    >
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                      {polyline}
+                      {markers}
+                    </MapContainer>
+                  )
 
-                {hasTramo && (
-                  <div className="flex items-center gap-2">
-                    <Ruler className="h-3.5 w-3.5 text-guinda" />
-                    <span className="text-gray-institutional/60">
-                      {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
-                    </span>
-                  </div>
-                )}
+                  const fullMap = (
+                    <MapContainer
+                      center={center}
+                      zoom={17}
+                      className="h-full w-full"
+                      zoomControl={true}
+                    >
+                      {!satelliteTramo ? (
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                      ) : (
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
+                      )}
+                      {polyline}
+                      {markers}
+                      {showLayersTramo && capas?.colonias && (
+                        <GeoJSON key="colonias" data={capas.colonias} style={COLONIA_STYLE} interactive={false} />
+                      )}
+                      {showLayersTramo && capas?.juntas && (
+                        <GeoJSON key="juntas" data={capas.juntas} style={JUNTA_STYLE} interactive={false} />
+                      )}
+                      {showLayersTramo && capas?.zonasZap && (
+                        <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
+                      )}
+                      <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSatelliteTramo(prev => !prev)}
+                          className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                          aria-label={satelliteTramo ? 'Vista calle' : 'Vista satélite'}
+                        >
+                          {satelliteTramo ? <Map className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+                          {satelliteTramo ? 'Calle' : 'Satélite'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowLayersTramo(prev => !prev)}
+                          className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
+                          aria-label={showLayersTramo ? 'Ocultar capas' : 'Mostrar capas'}
+                        >
+                          {showLayersTramo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          <Layers className="h-3.5 w-3.5" />
+                          Capas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTramoFullscreen(false)}
+                          className="rounded-lg bg-white/90 p-2 shadow-lg hover:bg-white"
+                        >
+                          <Minimize2 className="h-5 w-5 text-gray-700" />
+                        </button>
+                      </div>
+                    </MapContainer>
+                  )
 
-                {s.iglesias_cercanas && s.iglesias_cercanas.length > 0 && (
-                  <div className="flex items-start gap-2 text-purple-600">
-                    <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span className="line-clamp-2">{s.iglesias_cercanas.join(', ')}</span>
-                  </div>
-                )}
+                  return (
+                    <Card title="Tramo">
+                      {tramoFullscreen && (
+                        <div className="fixed inset-0 z-[10001] bg-black">
+                          <div className="h-full w-full">{fullMap}</div>
+                        </div>
+                      )}
+                      <div className="relative h-48 overflow-hidden rounded-xl">
+                        {compactMap}
+                        <button
+                          type="button"
+                          onClick={() => setTramoFullscreen(true)}
+                          className="absolute right-2 top-2 z-[2000] rounded-lg bg-white p-1.5 shadow-lg hover:bg-gray-50"
+                        >
+                          <Maximize2 className="h-4 w-4 text-gray-700" />
+                        </button>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-gray-institutional/60">
+                        <Ruler className="h-3.5 w-3.5 text-guinda" />
+                        {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
+                      </div>
+                    </Card>
+                  )
+                })()}
 
-                {detection?.fuera_alcance && (
-                  <p className="text-xs text-red-500">Fuera del área de cobertura</p>
-                )}
-              </div>
-            </Card>
-
-            <Card title="Datos SIGED (ficha técnica)">
-              <div className="flex flex-col gap-3 text-sm">
-                <p className="text-xs text-gray-institutional/60">
-                  CCT de la escuela — se busca automáticamente para complementar la ficha técnica.
-                </p>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={sigedCct}
-                    onChange={e => setSigedCct(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
-                    placeholder="21DPR0881C"
-                    maxLength={10}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-1.5 pr-8 text-xs font-mono uppercase outline-none focus:border-guinda"
-                  />
-                  {sigedLoading && (
-                    <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-guinda" />
+                <Card title="Información Geográfica" className="relative">
+                  {puedeEditar && (
+                    <button
+                      type="button"
+                      onClick={() => { setEditForm(prev => ({ ...prev, calle: s.calle || '', entre_calles: s.entre_calles || '' })); setEditGeoOpen(true) }}
+                      className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
+                      aria-label="Editar información geográfica"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
                   )}
-                </div>
-
-                {sigedError && (
-                  <p className="text-xs text-red-500">{sigedError}</p>
-                )}
-
-                {sigedData && (
-                  <div className="rounded-xl bg-blue-50 p-3">
-                    <div className="mb-2 flex items-center gap-2">
-                      <School className="h-4 w-4 text-blue-600" />
-                      <span className="text-xs font-bold text-blue-800">{sigedData.nombre}</span>
+                  <div className="flex flex-col gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-guinda" />
+                      <span className="text-gray-institutional/60">
+                        {s.latitud.toFixed(6)}, {s.longitud.toFixed(6)}
+                      </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">CCT</span>
-                        <span className="font-mono font-medium text-gray-institutional">{sigedData.cct}</span>
+
+                    {calleInfo?.calle && (
+                      <div className="flex items-center gap-2">
+                        <Navigation className="h-3.5 w-3.5 text-guinda" />
+                        <span className="font-medium text-gray-institutional">
+                          {calleInfo.calle}
+                        </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Nivel</span>
-                        <span className="font-medium text-guinda">{sigedData.nivel}</span>
+                    )}
+
+                    {calleInfo?.entreCalles && (
+                      <div className="flex items-center gap-2 pl-5">
+                        <span className="text-gray-institutional/60">
+                          {calleInfo.entreCalles}
+                        </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Subnivel</span>
-                        <span className="text-gray-institutional">{sigedData.subnivel}</span>
+                    )}
+
+                    {hasTramo && (
+                      <div className="flex items-center gap-2">
+                        <Ruler className="h-3.5 w-3.5 text-guinda" />
+                        <span className="text-gray-institutional/60">
+                          {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
+                        </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Turno</span>
-                        <span className="text-gray-institutional">{sigedData.turno}</span>
+                    )}
+
+                    {s.iglesias_cercanas && s.iglesias_cercanas.length > 0 && (
+                      <div className="flex items-start gap-2 text-purple-600">
+                        <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="line-clamp-2">{s.iglesias_cercanas.join(', ')}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Sostenimiento</span>
-                        <span className="text-gray-institutional">{sigedData.sostenimiento}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Total alumnos</span>
-                        <span className="font-bold text-guinda">{sigedData.totalAlumnos}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Alumnos (H/M)</span>
-                        <span className="text-gray-institutional">{sigedData.alumnosHombres}/{sigedData.alumnosMujeres}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Docentes</span>
-                        <span className="text-gray-institutional">{sigedData.docentes}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Grupos</span>
-                        <span className="text-gray-institutional">{sigedData.grupos}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Municipio</span>
-                        <span className="text-gray-institutional">{sigedData.municipio}</span>
-                      </div>
-                      <div className="col-span-2 flex justify-between">
-                        <span className="text-gray-500">Domicilio</span>
-                        <span className="max-w-[200px] text-right text-gray-institutional">{sigedData.domicilio}</span>
-                      </div>
-                      <div className="col-span-2 flex justify-between">
-                        <span className="text-gray-500">Fuente</span>
-                        <span className="text-xs text-gray-400">{sigedData.fuente}</span>
-                      </div>
-                    </div>
+                    )}
+
+                    {detection?.fuera_alcance && (
+                      <p className="text-xs text-red-500">Fuera del área de cobertura</p>
+                    )}
                   </div>
-                )}
-              </div>
-            </Card>
-          </div>
-        </div>
+                </Card>
 
-          {showGenerateButtons && (
-          <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4">
-            <p className="text-xs font-medium text-gray-institutional/50">Documentos</p>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={handleOpenOficioEditor} className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Editar oficio
-              </Button>
-              <Button onClick={handleOpenFichaEditor} className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Editar ficha técnica
-              </Button>
+                <Card title="Datos SIGED (ficha técnica)">
+                  <div className="flex flex-col gap-3 text-sm">
+                    <p className="text-xs text-gray-institutional/60">
+                      CCT de la escuela — se busca automáticamente para complementar la ficha técnica.
+                    </p>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={sigedCct}
+                        onChange={e => setSigedCct(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                        placeholder="21DPR0881C"
+                        maxLength={10}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-1.5 pr-8 text-xs font-mono uppercase outline-none focus:border-guinda"
+                      />
+                      {sigedLoading && (
+                        <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-guinda" />
+                      )}
+                    </div>
+
+                    {sigedError && (
+                      <p className="text-xs text-red-500">{sigedError}</p>
+                    )}
+
+                    {sigedData && (
+                      <div className="rounded-xl bg-blue-50 p-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <School className="h-4 w-4 text-blue-600" />
+                          <span className="text-xs font-bold text-blue-800">{sigedData.nombre}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">CCT</span>
+                            <span className="font-mono font-medium text-gray-institutional">{sigedData.cct}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Nivel</span>
+                            <span className="font-medium text-guinda">{sigedData.nivel}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Subnivel</span>
+                            <span className="text-gray-institutional">{sigedData.subnivel}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Turno</span>
+                            <span className="text-gray-institutional">{sigedData.turno}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Sostenimiento</span>
+                            <span className="text-gray-institutional">{sigedData.sostenimiento}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Total alumnos</span>
+                            <span className="font-bold text-guinda">{sigedData.totalAlumnos}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Alumnos (H/M)</span>
+                            <span className="text-gray-institutional">{sigedData.alumnosHombres}/{sigedData.alumnosMujeres}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Docentes</span>
+                            <span className="text-gray-institutional">{sigedData.docentes}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Grupos</span>
+                            <span className="text-gray-institutional">{sigedData.grupos}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Municipio</span>
+                            <span className="text-gray-institutional">{sigedData.municipio}</span>
+                          </div>
+                          <div className="col-span-2 flex justify-between">
+                            <span className="text-gray-500">Domicilio</span>
+                            <span className="max-w-[200px] text-right text-gray-institutional">{sigedData.domicilio}</span>
+                          </div>
+                          <div className="col-span-2 flex justify-between">
+                            <span className="text-gray-500">Fuente</span>
+                            <span className="text-xs text-gray-400">{sigedData.fuente}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+
+              {showGenerateButtons && (
+              <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4">
+                <p className="text-xs font-medium text-gray-institutional/50">Documentos</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={handleOpenDocumentModal} className="flex w-full items-center justify-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Generar oficio y ficha técnica
+                  </Button>
+                </div>
+              </div>
+            )}
             </div>
           </div>
-        )}
         </div>
-      </div>
-
-      {showOficioEditor && (
-        <VistaOficioEditable
-          solicitud={s}
-          onClose={() => setShowOficioEditor(false)}
-        />
-      )}
-      {showFichaEditor && fichaMapUrl && (
-        <VistaFichaEditable
-          solicitud={s}
-          mapDataUrl={fichaMapUrl}
-          onClose={() => setShowFichaEditor(false)}
-        />
       )}
 
       {editGeoOpen && (
@@ -955,8 +1055,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
           </div>
         </div>
       )}
-
-
-    </div>
+    </>
   )
 }

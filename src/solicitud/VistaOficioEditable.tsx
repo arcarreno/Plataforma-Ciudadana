@@ -3,7 +3,6 @@ import DOMPurify from 'dompurify'
 import letterhead from '../assets/letterhead.jpg'
 import type { Solicitud } from '../types/solicitud'
 import { exportToPdf } from '../lib/exportPdf'
-import { exportToWord } from '../lib/exportWord'
 
 const PX_PER_CM = 37.8
 const FOOTER_TEXT_CM = 24
@@ -38,18 +37,16 @@ function escapeHtml(text: string): string {
 
 interface Props {
   solicitud: Solicitud
-  onClose: () => void
 }
 
-export default function VistaOficioEditable({ solicitud, onClose }: Props) {
+export default function VistaOficioEditable({ solicitud }: Props) {
   const s = solicitud
   const fecha = s.fecha_creacion ? new Date(s.fecha_creacion).toLocaleDateString('es-MX') : '—'
 
   const [editData, setEditData] = useState({
     yearTag: formatYearTag(),
     oficioNum: `OFICIO Núm. SEMOVINFRA-${escapeHtml(s.folio_unico || '')}/2026`,
-    destinatario: (s.nombre_solicitante || '').toUpperCase(),
-    cargo: 'CIUDADANO(A)',
+    destinatario: `<strong>CIUDADANO(A)</strong> ${escapeHtml(s.nombre_solicitante || '').toUpperCase()}`,
     fundamento: 'Con fundamento en lo dispuesto por los artículos 8 de la Constitución Política de los Estados Unidos Mexicanos; 3, 4, 5, 6 fracción I.2 y 12 fracción I, IV y X del Reglamento Interior de la Secretaría de Movilidad e Infraestructura del Honorable Ayuntamiento del Municipio de Puebla, por este medio respetuosamente me permito informarle que sus solicitudes han sido remitidas a las áreas correspondientes para su análisis, programación y en su caso atención de las mismas.',
     parrafoCompromiso: 'Reiteramos nuestro compromiso de trabajar en beneficio de la comunidad, asegurando que los recursos sean utilizados de manera óptima para la mejora de la infraestructura urbana.',
     parrafoContacto: 'Asimismo, se informa que esta Secretaría se encuentra a su disposición para contribuir en la atención a la ciudadanía, dentro de las facultades conferidas por su reglamento. En razón de lo antes expuesto, y con el objetivo de facilitar la colaboración, se proporcionan los siguientes números de contacto de la dependencia:',
@@ -75,6 +72,9 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
   const pageRefs = useRef<HTMLElement[]>([])
   const measureRef = useRef<HTMLDivElement>(null)
   const resizeCleanup = useRef<(() => void) | null>(null)
+  const [ccpPosition, setCcpPosition] = useState({ x: 0, y: 0 })
+  const [isDraggingCcp, setIsDraggingCcp] = useState(false)
+  const ccpDragStart = useRef({ mouseX: 0, mouseY: 0, elemX: 0, elemY: 0 })
 
   const tableRows = useMemo(() => [{
     _key: 0,
@@ -121,10 +121,7 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     const container = document.querySelector('.oficio-page-container')
     if (container) {
       const cr = container.getBoundingClientRect()
-      if (e.clientY < cr.top - 40 || e.clientY > cr.bottom + 40) {
-        cleanupDragListeners()
-        return
-      }
+      if (e.clientY < cr.top - 40 || e.clientY > cr.bottom + 40) { cleanupDragListeners(); return }
     }
     const items = document.querySelectorAll('[data-block]')
     let targetType: string | null = null
@@ -134,10 +131,7 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
       const r = el.getBoundingClientRect()
       if (e.clientY >= r.top && e.clientY <= r.bottom) {
         const bt = (el as HTMLElement).dataset.block
-        if (bt && bt !== dragging) {
-          targetType = bt
-          insertAfter = e.clientY > r.top + r.height / 2
-        }
+        if (bt && bt !== dragging) { targetType = bt; insertAfter = e.clientY > r.top + r.height / 2 }
       }
     })
     const next = { ...dragStateRef.current, over: targetType, insertAfter }
@@ -167,6 +161,27 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     document.removeEventListener('mouseup', onDragDrop)
   }
 
+  const startDragCcp = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingCcp(true)
+    ccpDragStart.current = { mouseX: e.clientX, mouseY: e.clientY, elemX: ccpPosition.x, elemY: ccpPosition.y }
+    document.addEventListener('mousemove', onDragCcpMove)
+    document.addEventListener('mouseup', onDragCcpEnd)
+  }
+
+  const onDragCcpMove = (e: MouseEvent) => {
+    const dx = e.clientX - ccpDragStart.current.mouseX
+    const dy = e.clientY - ccpDragStart.current.mouseY
+    setCcpPosition({ x: ccpDragStart.current.elemX + dx, y: ccpDragStart.current.elemY + dy })
+  }
+
+  const onDragCcpEnd = () => {
+    setIsDraggingCcp(false)
+    document.removeEventListener('mousemove', onDragCcpMove)
+    document.removeEventListener('mouseup', onDragCcpEnd)
+  }
+
   const initResize = useCallback((e: React.MouseEvent, colIdx: number) => {
     e.preventDefault()
     if (resizeCleanup.current) resizeCleanup.current()
@@ -190,13 +205,11 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
       if (rafId) cancelAnimationFrame(rafId)
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
+      document.body.style.cursor = ''; document.body.style.userSelect = ''
       resizeCleanup.current = null
     }
     resizeCleanup.current = onMouseUp
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
   }, [])
@@ -219,15 +232,6 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     }
   }
 
-  const handleNormal = (e: React.MouseEvent) => {
-    e.preventDefault()
-    const sel = window.getSelection()
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
-    const range = sel.getRangeAt(0)
-    const text = range.toString()
-    range.deleteContents()
-    range.insertNode(document.createTextNode(text))
-  }
 
   const handleExportPdf = async () => {
     setExporting(true)
@@ -240,74 +244,6 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     setExporting(false)
   }
 
-  const handleExportWord = async () => {
-    setExporting(true)
-    try {
-      await exportToWord({
-        filename: `Oficio_${s.folio_unico}`,
-        htmlContent: buildWordHtml(),
-      })
-    } catch (err) {
-      console.error('Error al exportar Word:', err)
-    }
-    setExporting(false)
-  }
-
-  function buildWordHtml(): string {
-    const rowsHtml = tableRows.map(r => `<tr>
-      <td>${escapeHtml(r.control)}</td>
-      <td>${escapeHtml(r.solicitud)}</td>
-      <td>${escapeHtml(r.oficioRecibido)}</td>
-      <td>${escapeHtml(r.turnadoA)}</td>
-    </tr>`).join('')
-    const contactosHtml = CONTACTOS.map(c => `<tr>
-      <td>${escapeHtml(c.area)}</td>
-      <td>${escapeHtml(c.telefono)}</td>
-    </tr>`).join('')
-    return `
-      <div style="text-align:right;margin-bottom:40px;">
-        <div style="font-size:9pt;font-style:italic;">&quot;${DOMPurify.sanitize(editData.yearTag)}&quot;</div>
-        <div style="font-size:10.5pt;font-weight:bold;">${DOMPurify.sanitize(editData.oficioNum)}</div>
-      </div>
-      <div style="font-size:10.5pt;margin-bottom:20px;">${DOMPurify.sanitize(editData.destinatario)}</div>
-      <div style="font-size:10.5pt;font-weight:bold;margin-bottom:4px;">${DOMPurify.sanitize(editData.cargo)}</div>
-      <div style="font-size:10.5pt;font-weight:bold;margin-bottom:20px;">P R E S E N T E</div>
-      <div style="font-size:10.5pt;text-align:justify;line-height:1.4;">
-        <p style="text-indent:0.5in;">${DOMPurify.sanitize(editData.fundamento)}</p>
-        <table style="width:100%;border-collapse:collapse;margin:15px 0;">
-          <thead><tr>
-            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">N° Control</th>
-            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Solicitud/Petición</th>
-            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Oficio Recibido</th>
-            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Turnado A:</th>
-          </tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-        <p style="text-indent:0.5in;">${DOMPurify.sanitize(editData.parrafoCompromiso)}</p>
-        <p style="text-indent:0.5in;">${DOMPurify.sanitize(editData.parrafoContacto)}</p>
-        <table style="width:100%;border-collapse:collapse;margin:15px 0;">
-          <thead><tr>
-            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">ÁREA</th>
-            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Número de contacto</th>
-          </tr></thead>
-          <tbody>${contactosHtml}</tbody>
-        </table>
-        <p style="text-indent:0in;">${DOMPurify.sanitize(editData.cierre)}</p>
-      </div>
-      <div style="text-align:center;margin-top:40px;">
-        <div style="font-size:11pt;font-weight:bold;">${DOMPurify.sanitize(editData.firmaAtentamente)}</div>
-        <div style="font-size:11pt;font-weight:bold;">${DOMPurify.sanitize(editData.firmaCiudad)}</div>
-        <div style="font-size:11pt;font-weight:bold;font-style:italic;">${DOMPurify.sanitize(editData.firmaLema)}</div>
-        <div style="font-size:11pt;font-weight:bold;margin-top:30px;">${DOMPurify.sanitize(editData.firmaNombre)}</div>
-        <div style="font-size:11pt;font-weight:bold;">${DOMPurify.sanitize(editData.firmaCargo)}</div>
-      </div>
-      <div style="font-size:7pt;margin-top:30px;">
-        <div>${DOMPurify.sanitize(editData.archivo)}</div>
-        <div>${DOMPurify.sanitize(editData.ccp)}</div>
-        <div>${DOMPurify.sanitize(editData.iniciales)}</div>
-      </div>`
-  }
-
   useEffect(() => {
     pageRefs.current = pageRefs.current.slice(0, measuredPages ? measuredPages.length : 0)
   }, [measuredPages])
@@ -315,8 +251,9 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
   useEffect(() => {
     return () => {
       if (resizeCleanup.current) resizeCleanup.current()
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onDragCcpMove)
+      document.removeEventListener('mouseup', onDragCcpEnd)
+      document.body.style.cursor = ''; document.body.style.userSelect = ''
     }
   }, [])
 
@@ -337,15 +274,6 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     let theadH = 0
     const theadEl = content.querySelector('.tabla-oficio thead') as HTMLElement
     if (theadEl) theadH = theadEl.getBoundingClientRect().height
-
-    const newColWidths: Record<number, number> = {}
-    const tableEl = content.querySelector('.tabla-oficio') as HTMLTableElement
-    if (tableEl) {
-      tableEl.querySelectorAll('th').forEach((th, i) => { newColWidths[i] = th.getBoundingClientRect().width })
-    }
-    if (Object.keys(colWidths).length === 0) {
-      // leave measuredColWidths as default
-    }
 
     const result: any[] = []
     let cur: any = { isFirst: true, segmentIds: [], rowIds: [], blockTypes: [] }
@@ -492,11 +420,34 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     }
     if (blockType === 'ccp') {
       return (
-        <div key="b-ccp" className="block-item">
+        <div key="b-ccp" className="block-item ccp-draggable-oficio"
+          style={{
+            position: 'absolute',
+            left: `${ccpPosition.x}px`,
+            top: `${ccpPosition.y}px`,
+            cursor: isDraggingCcp ? 'grabbing' : 'grab',
+            zIndex: 100,
+            background: 'transparent',
+            border: isDraggingCcp ? '1px dashed #7D2447' : '1px solid transparent',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            transition: isDraggingCcp ? 'none' : 'border-color 0.15s',
+          }}
+          onMouseDown={startDragCcp}
+        >
           <div className="oficio-ccp">
-            <div contentEditable suppressContentEditableWarning onBlur={e => setEdit('archivo', e)} dangerouslySetInnerHTML={{ __html: editData.archivo }} />
-            <div contentEditable suppressContentEditableWarning onBlur={e => setEdit('ccp', e)} dangerouslySetInnerHTML={{ __html: editData.ccp }} />
-            <div contentEditable suppressContentEditableWarning onBlur={e => setEdit('iniciales', e)} dangerouslySetInnerHTML={{ __html: editData.iniciales }} />
+            <div contentEditable suppressContentEditableWarning
+              onClick={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()}
+              onBlur={e => setEdit('archivo', e)} dangerouslySetInnerHTML={{ __html: editData.archivo }} />
+            <div contentEditable suppressContentEditableWarning
+              onClick={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()}
+              onBlur={e => setEdit('ccp', e)} dangerouslySetInnerHTML={{ __html: editData.ccp }} />
+            <div contentEditable suppressContentEditableWarning
+              onClick={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()}
+              onBlur={e => setEdit('iniciales', e)} dangerouslySetInnerHTML={{ __html: editData.iniciales }} />
           </div>
         </div>
       )
@@ -504,17 +455,19 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     return null
   })
 
-  const renderHeaderContent = () => (
+  const renderHeaderContent = (pageNum?: number, totalPages?: number) => (
     <>
       <div className="header-year" contentEditable suppressContentEditableWarning onBlur={e => setEdit('yearTag', e)} dangerouslySetInnerHTML={{ __html: editData.yearTag }} />
       <div className="header-oficio-num" contentEditable suppressContentEditableWarning onBlur={e => setEdit('oficioNum', e)} dangerouslySetInnerHTML={{ __html: editData.oficioNum }} />
+      {pageNum != null && totalPages != null && (
+        <div className="header-page-num">HOJA {pageNum}/{totalPages}</div>
+      )}
     </>
   )
 
   const renderDestinatarioContent = () => (
     <>
       <div className="destinatario-line" contentEditable suppressContentEditableWarning onBlur={e => setEdit('destinatario', e)} dangerouslySetInnerHTML={{ __html: editData.destinatario }} />
-      <div className="destinatario-line cargo-line" contentEditable suppressContentEditableWarning onBlur={e => setEdit('cargo', e)} dangerouslySetInnerHTML={{ __html: editData.cargo }} />
       <div className="destinatario-line presente-line">P R E S E N T E</div>
       <div className="texto-cuerpo">
         <p contentEditable suppressContentEditableWarning onBlur={e => setEdit('fundamento', e)} dangerouslySetInnerHTML={{ __html: editData.fundamento }} />
@@ -522,22 +475,22 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
     </>
   )
 
-  const renderTable = (rows: typeof tableRows) => (
+  const renderTable = (rows: typeof tableRows, inMeasure = false) => (
     <div data-block="mainTable" className="block-item">
       <table className="tabla-oficio">
         <thead>
           <tr>
             {['N° Control', 'Solicitud/Petición', 'Oficio Recibido', 'Turnado A:'].map((label, j) => (
-              <th key={j} style={colStyle(j)}>
+              <th key={j} style={inMeasure ? undefined : colStyle(j)}>
                 {label}
-                <div className="resize-handle" onMouseDown={e => initResize(e, j)} />
+                {!inMeasure && <div className="resize-handle" onMouseDown={e => initResize(e, j)} />}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map(r => (
-            <tr key={r._key}>
+            <tr key={r._key} data-segment={`row-${r._key}`}>
               <td style={colStyle(0)}>{r.control}</td>
               <td style={colStyle(1)}>{r.solicitud}</td>
               <td style={colStyle(2)}>{r.oficioRecibido}</td>
@@ -550,52 +503,48 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
   )
 
   return (
-    <div className="fixed inset-0 z-[10000] flex flex-col bg-[#eaeaea]">
-      {/* Toolbar */}
-      <div className="flex items-center justify-center px-4 py-3">
-        <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
-          <button className="rounded-lg bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300" onClick={onClose}>← Volver</button>
-          <div className="mx-1 h-6 w-px bg-black/10" />
-          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50" onMouseDown={handleBold} disabled={exporting} title="Negritas"><strong>B</strong></button>
-          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-sm text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50" onMouseDown={handleNormal} disabled={exporting} title="Texto normal">N</button>
-          <div className="mx-1 h-6 w-px bg-black/10" />
-          <button className="rounded-full bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50" onClick={handleExportPdf} disabled={exporting}>
-            {exporting ? 'PDF...' : 'PDF'}
-          </button>
-          <button className="rounded-full bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50" onClick={handleExportWord} disabled={exporting}>
-            {exporting ? 'Word...' : 'Word'}
-          </button>
-        </div>
-      </div>
-
-      {/* Measurement container */}
+    <div className="flex h-full flex-col bg-[#eaeaea]">
+      {/* Measurement container — hidden, continuous flow */}
       <div ref={measureRef} className="oficio-wrapper" style={{ ...pageStyle, visibility: 'hidden', position: 'fixed', top: 0, left: '-9999px', zIndex: -1 }}>
         <div data-segment="header" className="oficio-header-abs">{renderHeaderContent()}</div>
         <div className="oficio-content" style={{ paddingTop: `${TOP_PAD_P1}cm`, paddingBottom: '0.5cm' }}>
           <div data-segment="destinatario-block">{renderDestinatarioContent()}</div>
-          {tableRows.length > 0 && <div data-segment="table-block">{renderTable(tableRows)}</div>}
+          {tableRows.length > 0 && renderTable(tableRows, true)}
           {blockKeys.map(b => <div key={b} data-segment={`block-${b}`}>{renderBlocks([b])}</div>)}
         </div>
       </div>
 
+      {/* Floating toolbar pill */}
+      <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
+        <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
+          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50" onMouseDown={handleBold} disabled={exporting} title="Negritas"><strong>B</strong></button>
+          <div className="mx-1 h-6 w-px bg-black/10" />
+          <button className="rounded-full bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50" onClick={handleExportPdf} disabled={exporting}>
+            {exporting ? 'PDF...' : 'PDF'}
+          </button>
+        </div>
+      </div>
+
       {/* Visible pages */}
-      <div className="flex-1 overflow-y-auto">
-        {measuredPages && measuredPages.length > 0 && (
+      <div className="flex-1 overflow-y-auto pt-16 pb-8">
+        {measuredPages && measuredPages.length > 0 ? (
           <div className="oficio-page-container">
             {measuredPages.map((page, i) => {
               const topPad = page.isFirst ? TOP_PAD_P1 : TOP_PAD_CONT
               return (
                 <div key={`page-${i}`} className={`oficio-wrapper${!page.isFirst ? ' page-continuation' : ''}`}
                   ref={el => { if (el) pageRefs.current[i] = el }} style={pageStyle}>
-                  <div className="oficio-header-abs">{renderHeaderContent()}</div>
+                  <div className="oficio-header-abs">{renderHeaderContent(i + 1, measuredPages.length)}</div>
                   <div className="oficio-content" style={{ paddingTop: `${topPad}cm`, paddingBottom: `${page.paddingBottom}cm` }}>
                     {page.isFirst && <div data-segment="destinatario-block">{renderDestinatarioContent()}</div>}
-                    {page.rowIds.length > 0 && (() => {
-                      const pageRows = tableRows.filter(r => page.rowIds.includes(`row-${r._key}`))
-                      return renderTable(pageRows.length > 0 ? pageRows : tableRows)
-                    })()}
+                    {page.rowIds.length > 0 && renderTable(tableRows.filter(r => page.rowIds.includes(`row-${r._key}`)))}
                     {renderBlocks(page.blockTypes.filter((b: string) => b !== 'ccp'))}
                   </div>
+                  {page.blockTypes.includes('ccp') && i === measuredPages.length - 1 && (
+                    <div style={{ position: 'absolute', bottom: '5.5cm', left: '3.0cm', zIndex: 100 }}>
+                      {renderBlocks(['ccp'])}
+                    </div>
+                  )}
                   <div className="oficio-footer">
                     <div className="footer-text">
                       GOBIERNO DE LA CIUDAD 2024 - 2027<br />
@@ -608,221 +557,62 @@ export default function VistaOficioEditable({ solicitud, onClose }: Props) {
               )
             })}
           </div>
+        ) : (
+          <div className="flex items-center justify-center py-16 text-sm text-gray-500">Preparando documento...</div>
         )}
       </div>
 
       <style>{`
-        .oficio-header-abs {
-          position: absolute;
-          top: 1.5cm;
-          right: 3.0cm;
-          text-align: right;
-          z-index: 2;
-        }
-        .header-year {
-          font-size: 9pt;
-          font-style: italic;
-          color: #000;
-          opacity: 0.75;
-        }
-        .header-oficio-num {
-          font-size: 10.5pt;
-          font-weight: 700;
-          margin-top: 2px;
-          opacity: 0.75;
-        }
-        .header-year[contenteditable]:hover,
-        .header-year[contenteditable]:focus,
-        .header-oficio-num[contenteditable]:hover,
-        .header-oficio-num[contenteditable]:focus {
-          outline: 1px dashed #7d2447;
-          background: #f5eef2;
-        }
-        .oficio-wrapper {
-          width: 21.6cm;
-          min-height: 27.9cm;
-          margin: 0 auto;
-          background: #fff;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-          position: relative;
-          overflow: hidden;
-          font-family: 'Poppins', 'Calibri', sans-serif;
-        }
-        .oficio-wrapper::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: rgba(255,255,255,0.18);
-          z-index: 0;
-          pointer-events: none;
-        }
-        .oficio-content {
-          position: relative;
-          z-index: 1;
-          padding: 1.5cm 3.0cm 6.5cm;
-        }
-        .destinatario-line {
-          font-size: 10.5pt;
-          margin-bottom: 2px;
-          line-height: 1.3;
-        }
-        .destinatario-line[contenteditable]:hover,
-        .destinatario-line[contenteditable]:focus {
-          outline: 1px dashed #7d2447;
-          background: #f5eef2;
-        }
-        .cargo-line { font-weight: 700; margin-bottom: 2px; }
-        .presente-line { font-weight: 700; margin-bottom: 18px; }
-        .texto-cuerpo {
-          font-size: 10.5pt;
-          text-align: justify;
-          line-height: 1.45;
-        }
-        .texto-cuerpo p {
-          margin-bottom: 10px;
-          text-indent: 0.5in;
-        }
-        .texto-cuerpo p[contenteditable]:hover,
-        .texto-cuerpo p[contenteditable]:focus {
-          outline: 1px dashed #7d2447;
-          background: #f5eef2;
-        }
-        .tabla-oficio {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 14px 0;
-          font-size: 9pt;
-        }
-        .tabla-oficio th {
-          background: #E7E6E6;
-          border: 1px solid #000;
-          padding: 6px 8px;
-          text-align: center;
-          font-weight: 700;
-          font-size: 9pt;
-          position: relative;
-        }
-        .tabla-oficio td {
-          border: 1px solid #000;
-          padding: 4px 8px;
-          text-align: center;
-          font-size: 9pt;
-        }
-        .tabla-oficio td[contenteditable]:hover,
-        .tabla-oficio td[contenteditable]:focus {
-          outline: 1px dashed #7d2447;
-          background: #f5eef2;
-        }
-        .resize-handle {
-          position: absolute;
-          top: 0;
-          right: -3px;
-          width: 6px;
-          height: 100%;
-          cursor: col-resize;
-          z-index: 5;
-          background: transparent;
-        }
-        .resize-handle:hover { background: rgba(0,0,0,0.15); }
-        .tabla-contactos {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 2.54cm 0 14px;
-        }
-        .tabla-contactos th {
-          background: #E7E6E6;
-          border: 1px solid #000;
-          padding: 6px 8px;
-          text-align: center;
-          font-weight: 700;
-          font-size: 10pt;
-        }
-        .tabla-contactos td {
-          border: 1px solid #000;
-          padding: 4px 8px;
-          text-align: center;
-          font-size: 10pt;
-        }
-        .oficio-firma { text-align: center; margin-top: 30px; }
-        .firma-atentamente { font-size: 11pt; font-weight: 700; }
-        .firma-ciudad { font-size: 11pt; font-weight: 700; margin-top: 2px; }
-        .firma-lema { font-size: 11pt; font-weight: 700; font-style: italic; margin-top: 2px; }
-        .firma-nombre { font-size: 11pt; font-weight: 700; margin-top: 28px; }
-        .firma-cargo { font-size: 11pt; font-weight: 700; }
-        .firma-atentamente[contenteditable]:hover,
-        .firma-atentamente[contenteditable]:focus,
-        .firma-ciudad[contenteditable]:hover,
-        .firma-ciudad[contenteditable]:focus,
-        .firma-lema[contenteditable]:hover,
-        .firma-lema[contenteditable]:focus,
-        .firma-nombre[contenteditable]:hover,
-        .firma-nombre[contenteditable]:focus,
-        .firma-cargo[contenteditable]:hover,
-        .firma-cargo[contenteditable]:focus {
-          outline: 1px dashed #7d2447;
-          background: #f5eef2;
-        }
-        .oficio-ccp {
-          font-size: 7pt;
-          margin-top: 24px;
-          line-height: 1.4;
-        }
-        .oficio-ccp div[contenteditable]:hover,
-        .oficio-ccp div[contenteditable]:focus {
-          outline: 1px dashed #7d2447;
-          background: #f5eef2;
-        }
-        .oficio-footer {
-          position: absolute;
-          top: 22cm;
-          left: 0;
-          width: 100%;
-          text-align: left;
-          z-index: 1;
-          padding: 2.75cm 0 0 12.99cm;
-          pointer-events: none;
-          opacity: 0.75;
-        }
-        .footer-text {
-          font-family: 'Poppins', 'Calibri', sans-serif;
-          font-size: 8.5pt;
-          font-weight: 700;
-          color: #ADA37E;
-          line-height: 1.5;
-        }
-        .block-item {
-          position: relative;
-        }
-        .drag-handle {
-          position: absolute;
-          left: -24px;
-          top: 50%;
-          transform: translateY(-50%);
-          cursor: grab;
-          font-size: 18px;
-          color: #ccc;
-          user-select: none;
-          opacity: 0;
-          transition: opacity 0.15s;
-          padding: 4px;
-        }
-        .block-item:hover .drag-handle { opacity: 1; }
-        .drag-handle:hover { color: #7d2447; }
-        .dragging { opacity: 0.4; }
-        .drag-over { border-top: 2px solid #7d2447 !important; }
-        .drag-before { border-bottom: 2px solid #7d2447 !important; }
-        .oficio-page-container {
-          max-width: 21.6cm;
-          margin: 0 auto;
-          display: flex;
-          flex-direction: column;
-          gap: 32px;
-          padding: 20px 0;
-        }
-        @media print {
-          body { background: #fff; }
-          .oficio-wrapper { box-shadow: none; break-inside: avoid; }
-        }
+        .oficio-header-abs { position:absolute; top:3.0cm; right:3.0cm; text-align:right; z-index:2; }
+        .header-year { font-size:9pt; font-style:italic; color:#000; opacity:0.75; }
+        .header-oficio-num { font-size:10.5pt; font-weight:700; margin-top:2px; opacity:0.75; }
+        .header-page-num { font-size:10.5pt; font-weight:700; opacity:0.75; margin-top:4px; }
+        .header-year[contenteditable]:hover,.header-year[contenteditable]:focus,
+        .header-oficio-num[contenteditable]:hover,.header-oficio-num[contenteditable]:focus { outline:1px dashed #7d2447; background:#f5eef2; }
+        .oficio-wrapper { width:21.6cm; height:27.9cm; margin:0 auto; background:#fff; box-shadow:0 4px 20px rgba(0,0,0,0.12); position:relative; overflow:hidden; font-family:'Poppins','Calibri',sans-serif; }
+        .oficio-wrapper::after { content:''; position:absolute; inset:0; background:rgba(255,255,255,0.18); z-index:0; pointer-events:none; }
+        .oficio-content { position:relative; z-index:1; padding:1.5cm 3.0cm 6.5cm; }
+        .destinatario-line { font-size:10.5pt; margin-bottom:2px; line-height:1.3; }
+        .destinatario-line[contenteditable]:hover,.destinatario-line[contenteditable]:focus { outline:1px dashed #7d2447; background:#f5eef2; }
+        .presente-line { font-weight:700; margin-bottom:18px; }
+        .texto-cuerpo { font-size:10.5pt; text-align:justify; line-height:1.45; }
+        .texto-cuerpo p { margin-bottom:10px; text-indent:0.5in; }
+        .texto-cuerpo p[contenteditable]:hover,.texto-cuerpo p[contenteditable]:focus { outline:1px dashed #7d2447; background:#f5eef2; }
+        .tabla-oficio { width:100%; border-collapse:collapse; margin:14px 0; font-size:9pt; }
+        .tabla-oficio th { background:#E7E6E6; border:1px solid #000; padding:6px 8px; text-align:center; font-weight:700; font-size:9pt; position:relative; }
+        .tabla-oficio td { border:1px solid #000; padding:4px 8px; text-align:center; font-size:9pt; }
+        .tabla-oficio td[contenteditable]:hover,.tabla-oficio td[contenteditable]:focus { outline:1px dashed #7d2447; background:#f5eef2; }
+        .resize-handle { position:absolute; top:0; right:-3px; width:6px; height:100%; cursor:col-resize; z-index:5; background:transparent; }
+        .resize-handle:hover { background:rgba(0,0,0,0.15); }
+        .tabla-contactos { width:100%; border-collapse:collapse; margin:0.5cm 0 14px; }
+        .tabla-contactos th { background:#E7E6E6; border:1px solid #000; padding:6px 8px; text-align:center; font-weight:700; font-size:10pt; }
+        .tabla-contactos td { border:1px solid #000; padding:4px 8px; text-align:center; font-size:10pt; }
+        .oficio-firma { text-align:center; margin-top:30px; }
+        .firma-atentamente { font-size:11pt; font-weight:700; }
+        .firma-ciudad { font-size:11pt; font-weight:700; margin-top:2px; }
+        .firma-lema { font-size:11pt; font-weight:700; font-style:italic; margin-top:2px; }
+        .firma-nombre { font-size:11pt; font-weight:700; margin-top:28px; }
+        .firma-cargo { font-size:11pt; font-weight:700; }
+        .firma-atentamente[contenteditable]:hover,.firma-atentamente[contenteditable]:focus,
+        .firma-ciudad[contenteditable]:hover,.firma-ciudad[contenteditable]:focus,
+        .firma-lema[contenteditable]:hover,.firma-lema[contenteditable]:focus,
+        .firma-nombre[contenteditable]:hover,.firma-nombre[contenteditable]:focus,
+        .firma-cargo[contenteditable]:hover,.firma-cargo[contenteditable]:focus { outline:1px dashed #7d2447; background:#f5eef2; }
+        .oficio-ccp { font-size:7pt; margin-top:24px; line-height:1.4; }
+        .oficio-ccp div[contenteditable]:hover,.oficio-ccp div[contenteditable]:focus { outline:1px dashed #7d2447; background:#f5eef2; }
+        .oficio-footer { position:absolute; top:22cm; left:0; width:100%; text-align:left; z-index:1; padding:2.75cm 0 0 12.99cm; pointer-events:none; opacity:0.75; }
+        .footer-text { font-family:'Poppins','Calibri',sans-serif; font-size:8.5pt; font-weight:700; color:#ADA37E; line-height:1.5; }
+        .block-item { position:relative; }
+        .drag-handle { position:absolute; left:-24px; top:50%; transform:translateY(-50%); cursor:grab; font-size:18px; color:#ccc; user-select:none; opacity:0; transition:opacity 0.15s; padding:4px; }
+        .block-item:hover .drag-handle { opacity:1; }
+        .drag-handle:hover { color:#7d2447; }
+        .dragging { opacity:0.4; }
+        .drag-over { border-top:2px solid #7d2447 !important; }
+        .drag-before { border-bottom:2px solid #7d2447 !important; }
+        .oficio-page-container { max-width:21.6cm; margin:0 auto; display:flex; flex-direction:column; gap:32px; padding:20px 0; }
+        .ccp-draggable-oficio:hover { border-color:rgba(125,36,71,0.3) !important; }
+        .ccp-draggable-oficio .oficio-ccp { white-space:nowrap; min-width:16.6cm; }
+        @media print { body { background:#fff; } .oficio-wrapper { box-shadow:none; break-inside:avoid; } }
       `}</style>
     </div>
   )
