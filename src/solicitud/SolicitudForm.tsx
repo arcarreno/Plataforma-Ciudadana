@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
-import { Upload, MapPin, Check, Navigation } from 'lucide-react'
+import { Upload, MapPin, Check, Navigation, ChevronRight } from 'lucide-react'
+import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 import { sileo } from 'sileo'
 import lottie from 'lottie-web'
 import loadingAnimation from '../assets/lottie/celu.json'
@@ -341,33 +342,39 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
 
   if (resultado?.folio) {
     return (
-      <Card title="Solicitud registrada">
-        <div className="flex flex-col items-center gap-4 py-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-green-100">
-            <Check className="h-8 w-8 text-green-600" />
-          </div>
-          <p className="text-lg font-semibold text-guinda">
-            ¡Solicitud registrada con éxito!
-          </p>
-          <p className="text-gray-institutional/70">
-            Tu número de folio es:
-          </p>
-          <p className="rounded-xl bg-guinda/5 px-6 py-3 text-2xl font-bold tracking-wider text-guinda">
-            {resultado.folio}
-          </p>
-          <p className="text-xs text-gray-institutional/50">
-            Pronto recibirás tu acuse en tu correo electrónico.
-          </p>
-          {resultado.advertencia && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-              {resultado.advertencia}
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+        <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl">
+          <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
+          <div className="flex flex-col items-center gap-4 px-6 pb-6 pt-0">
+            <div className="-mt-9 flex justify-center">
+              <img src={logoSemovinfra} alt="Semovinfra" className="h-16 w-16 rounded-full object-cover shadow-lg" />
             </div>
-          )}
-          <Button onClick={() => { setResultado(null); setSubmittedOnce(false) }}>
-            Nueva solicitud
-          </Button>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+              <Check className="h-5 w-5 text-green-600" />
+            </div>
+            <p className="text-lg font-semibold text-guinda">
+              ¡Solicitud registrada con éxito!
+            </p>
+            <p className="text-gray-institutional/70">
+              Tu número de folio es:
+            </p>
+            <p className="rounded-xl bg-guinda/5 px-6 py-3 text-2xl font-bold tracking-wider text-guinda">
+              {resultado.folio}
+            </p>
+            <p className="text-xs text-gray-institutional/50">
+              Pronto recibirás tu acuse en tu correo electrónico.
+            </p>
+            {resultado.advertencia && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                {resultado.advertencia}
+              </div>
+            )}
+            <Button onClick={() => { setResultado(null); setSubmittedOnce(false) }}>
+              Nueva solicitud
+            </Button>
+          </div>
         </div>
-      </Card>
+      </div>
     )
   }
 
@@ -377,7 +384,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-8 bg-white px-6">
           <div ref={lottieRef} className="w-72 sm:w-96" />
           <div className="rounded-full bg-[#41504D] px-6 py-3 text-center text-sm text-[#DBC6B3] sm:px-10 sm:text-base">
-            Estamos trabajando lo mas fuerte posible por una mejor ciudad
+            Estamos trabajando lo mas rapido posible por una mejor ciudad
           </div>
         </div>
       )}
@@ -688,23 +695,23 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         </div>
       )}
       {showInfoModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-          <div className="max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="mb-3 text-lg font-semibold text-gray-institutional">
-              Datos automáticos
-            </h3>
-            <p className="text-sm leading-relaxed text-gray-institutional/70">
-              Al ubicar el punto en el mapa, los datos de colonia y junta auxiliar
-              se extraen automáticamente de nuestra base de datos. Pueden haber
-              variaciones en la delimitación, pero al tener las coordenadas
-              exactas podremos llegar a tu calle lo más pronto posible.
-            </p>
-            <button
-              className="mt-4 w-full rounded-xl bg-guinda px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-guinda/90"
-              onClick={() => setShowInfoModal(false)}
-            >
-              Entendido
-            </button>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowInfoModal(false)}>
+          <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
+            <div className="flex flex-col gap-4 px-6 pb-6 pt-0">
+              <div className="-mt-9 flex justify-center">
+                <img src={logoSemovinfra} alt="Semovinfra" className="h-16 w-16 rounded-full object-cover shadow-lg" />
+              </div>
+              <p className="text-sm leading-relaxed text-gray-institutional">
+                Al ubicar el punto en el mapa, los datos de colonia y junta auxiliar
+                se extraen automáticamente de nuestra base de datos. Pueden haber
+                variaciones en la delimitación, pero al tener las coordenadas
+                exactas podremos llegar a tu calle lo más pronto posible.
+              </p>
+              <Button type="button" size="sm" onClick={() => setShowInfoModal(false)}>
+                Entendido <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       )}
