@@ -273,9 +273,16 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     const isOutside = detection?.fuera_alcance
     if (isOutside && (!manualColonia.trim() || !manualJunta.trim())) return
 
-    const entreCalles = calleInfo?.entreCallesDetected !== undefined && calleInfo.entreCallesDetected < 2
-      ? manualEntreCalles.trim().toUpperCase()
-      : (calleInfo?.entreCalles || '')
+    const entreCalles = (() => {
+      if (calleInfo?.entreCallesDetected === 1) {
+        const manual = manualEntreCalles.trim().toUpperCase()
+        return manual ? `${calleInfo.entreCalles} Y ${manual}` : calleInfo.entreCalles
+      }
+      if (calleInfo?.entreCallesDetected === 0) {
+        return manualEntreCalles.trim().toUpperCase() || ''
+      }
+      return calleInfo?.entreCalles || ''
+    })()
 
     pinDataRef.current = {
       lat: detection.coordenadas.lat,
