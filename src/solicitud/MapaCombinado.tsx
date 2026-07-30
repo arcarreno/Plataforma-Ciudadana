@@ -127,23 +127,29 @@ function LocateOnMount() {
       weight: 1,
     })
 
+    let highAccuracyFallback = true
+
     const onFound = (e: L.LocationEvent) => {
       marker.setLatLng(e.latlng).addTo(map)
       circle.setLatLng(e.latlng).setRadius(e.accuracy ?? 100).addTo(map)
       if ((e.accuracy ?? 999) < 100) {
         map.setView(e.latlng, 16)
       }
+      map.stopLocate()
     }
     const onError = () => {
-      marker.remove()
-      circle.remove()
+      if (highAccuracyFallback) {
+        highAccuracyFallback = false
+        map.locate({ setView: false, enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 })
+      }
     }
 
     map.on('locationfound', onFound)
     map.on('locationerror', onError)
-    map.locate({ setView: false, enableHighAccuracy: true, timeout: 8000 })
+    map.locate({ setView: false, enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 })
 
     return () => {
+      map.stopLocate()
       map.off('locationfound', onFound)
       map.off('locationerror', onError)
       marker.remove()

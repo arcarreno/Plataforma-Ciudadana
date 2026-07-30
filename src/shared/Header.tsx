@@ -52,7 +52,7 @@ export default function Header({
       <LoginModal key={String(loginOpen)} open={loginOpen} onClose={() => setLoginOpen(false)} />
       <header className="sticky top-0 z-30 bg-white/80 shadow-header backdrop-blur-lg">
         <div className="relative mx-auto flex max-w-[1400px] items-center justify-between px-4 py-[11px] md:px-8 lg:px-12">
-          <img src={mosaico} alt="" className="pointer-events-none absolute -bottom-[15px] left-0 w-full h-[31px]" />
+          <img src={mosaico} alt="" className="contrast-mosaico pointer-events-none absolute -bottom-[15px] left-0 w-full h-[31px]" />
           <button
             type="button"
             onClick={() => {

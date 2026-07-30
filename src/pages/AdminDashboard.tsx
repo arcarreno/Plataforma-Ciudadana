@@ -161,12 +161,12 @@ export default function AdminDashboard() {
               <select
                 value={filtroEstatus}
                 onChange={e => handleEstatusFilter(e.target.value)}
-                className="bg-transparent text-sm text-gray-institutional [outline:0]"
+                className="max-w-[140px] truncate bg-transparent text-sm text-gray-institutional [outline:0]"
               >
                 <option value="">Todos los estatus</option>
                 <option value="Planeacion - Evaluacion">Planeación - Evaluación</option>
                 {ESTATUS_OPCIONES.map(e => (
-                  <option key={e} value={e}>{e}</option>
+                  <option key={e} value={e} className="truncate">{e}</option>
                 ))}
               </select>
             </div>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { Upload, MapPin, Check, Navigation } from 'lucide-react'
 import { sileo } from 'sileo'
 import lottie from 'lottie-web'
@@ -92,6 +92,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const containerRef = useRef<HTMLDivElement>(null)
   const inlineMapRef = useRef(false)
   const [cardOffset, setCardOffset] = useState(0)
+  const [ready, setReady] = useState(false)
+  const initialOffsetRef = useRef(true)
   const [fileErrors, setFileErrors] = useState<string[]>([])
 
   useEffect(() => {
@@ -302,7 +304,18 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setTimeout(() => setIsClosingAnimating(false), 1000)
   }
 
+  useLayoutEffect(() => {
+    if (!initialOffsetRef.current) return
+    initialOffsetRef.current = false
+    const container = containerRef.current
+    if (!container) return
+    const w = container.offsetWidth
+    setCardOffset(inlineMap ? 0 : Math.max(0, (w - 672) / 2))
+    requestAnimationFrame(() => setReady(true))
+  }, [inlineMap])
+
   useEffect(() => {
+    if (initialOffsetRef.current) return
     const container = containerRef.current
     if (!container) return
     const w = container.offsetWidth
@@ -439,12 +452,12 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
               flexShrink: 0,
               flexBasis: inlineMap ? '50%' : '100%',
               maxWidth: inlineMap ? 'calc(50% - 0.75rem)' : '42rem',
-              transitionProperty: 'transform, flex-basis, max-width',
-              transitionDuration: '400ms, 400ms, 400ms',
+              transitionProperty: ready ? 'transform, flex-basis, max-width' : 'flex-basis, max-width',
+              transitionDuration: ready ? '400ms, 400ms, 400ms' : '400ms, 400ms',
               transitionTimingFunction: 'ease-in-out, ease-in-out, ease-in-out',
-              transitionDelay: inlineMap
-                ? '0ms, 400ms, 400ms'
-                : '200ms, 400ms, 400ms',
+              transitionDelay: ready
+                ? (inlineMap ? '0ms, 400ms, 400ms' : '200ms, 400ms, 400ms')
+                : '400ms, 400ms',
               willChange: 'transform',
             }}
           >

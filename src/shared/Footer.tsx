@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="mx-auto max-w-[1400px] px-4 py-8 text-center md:px-8 lg:px-12">
         <div className="flex flex-col items-center gap-3">
           <img src={slogan} alt="" className="w-[210px] h-auto" />
-          <img src={mosaico} alt="" className="w-auto h-auto" />
+          <img src={mosaico} alt="" className="contrast-mosaico w-auto h-auto" />
           <p className="text-xs text-gray-institutional/70">
             Plataforma Ciudadana para Solicitar Obras Públicas
           </p>

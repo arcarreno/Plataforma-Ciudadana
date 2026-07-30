@@ -100,6 +100,10 @@ html[data-contrast="dark"] .leaflet-layer { filter: invert(0.75) hue-rotate(180d
 html[data-contrast="dark"] .leaflet-popup-content-wrapper { background: #2a2a2e !important; color: #e2e2e6 !important; }
 html[data-contrast="dark"] .leaflet-popup-tip { background: #2a2a2e !important; }
 
+/* Mosaico SVGs — invert so guinda becomes visible on dark backgrounds */
+html[data-contrast="dark"] .contrast-mosaico { filter: invert(1); }
+html[data-contrast="dark"] .contrast-mosaico-bg { filter: invert(1); }
+
 ::selection {
   background-color: var(--color-guinda);
   color: white;

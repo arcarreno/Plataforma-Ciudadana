@@ -112,7 +112,7 @@ export default function Inicio() {
 
       <section className="relative -mx-4 py-8 md:-mx-8">
         <div
-          className="pointer-events-none absolute inset-0"
+          className="contrast-mosaico-bg pointer-events-none absolute inset-0"
           style={{
             backgroundImage: `url(${mosaico})`,
             backgroundRepeat: 'repeat',
