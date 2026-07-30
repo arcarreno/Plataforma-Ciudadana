@@ -1,0 +1,829 @@
+import { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect } from 'react'
+import DOMPurify from 'dompurify'
+import letterhead from '../assets/letterhead.jpg'
+import type { Solicitud } from '../types/solicitud'
+import { exportToPdf } from '../lib/exportPdf'
+import { exportToWord } from '../lib/exportWord'
+
+const PX_PER_CM = 37.8
+const FOOTER_TEXT_CM = 24
+const TOP_PAD_P1 = 5.5
+const TOP_PAD_CONT = 5.5
+const PAGE1_CONTENT_H = (FOOTER_TEXT_CM - TOP_PAD_P1) * PX_PER_CM
+const CONT_CONTENT_H = (FOOTER_TEXT_CM - TOP_PAD_CONT) * PX_PER_CM
+const TABLE_MARGIN_PX = 28
+
+const CONTACTOS = [
+  { area: 'Atención Ciudadana de la SEMOVINFRA', telefono: '222 309 4400 Ext. 5776 y 5744' },
+  { area: 'Secretaría Particular', telefono: '222 309 4400 Ext. 5657' },
+  { area: 'Subsecretaría de Infraestructura', telefono: '222 309 4400 Ext. 5678' },
+  { area: 'Subsecretaría de Movilidad y Seguridad Vial', telefono: '222 309 4400 Ext. 6014' },
+  { area: 'Dirección General de Planeación y Proyectos', telefono: '222 309 4400 Ext. 5787' },
+  { area: 'Dirección Jurídica', telefono: '222 309 4400 Ext. 5693' },
+]
+
+function formatDate(): string {
+  const d = new Date()
+  const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+  return `${String(d.getDate()).padStart(2, '0')} DE ${meses[d.getMonth()]} DE ${d.getFullYear()}`
+}
+
+function formatYearTag(): string {
+  return `${new Date().getFullYear()}, Año de Margarita Maza Parada`
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+interface Props {
+  solicitud: Solicitud
+  onClose: () => void
+}
+
+export default function VistaOficioEditable({ solicitud, onClose }: Props) {
+  const s = solicitud
+  const fecha = s.fecha_creacion ? new Date(s.fecha_creacion).toLocaleDateString('es-MX') : '—'
+
+  const [editData, setEditData] = useState({
+    yearTag: formatYearTag(),
+    oficioNum: `OFICIO Núm. SEMOVINFRA-${escapeHtml(s.folio_unico || '')}/2026`,
+    destinatario: (s.nombre_solicitante || '').toUpperCase(),
+    cargo: 'CIUDADANO(A)',
+    fundamento: 'Con fundamento en lo dispuesto por los artículos 8 de la Constitución Política de los Estados Unidos Mexicanos; 3, 4, 5, 6 fracción I.2 y 12 fracción I, IV y X del Reglamento Interior de la Secretaría de Movilidad e Infraestructura del Honorable Ayuntamiento del Municipio de Puebla, por este medio respetuosamente me permito informarle que sus solicitudes han sido remitidas a las áreas correspondientes para su análisis, programación y en su caso atención de las mismas.',
+    parrafoCompromiso: 'Reiteramos nuestro compromiso de trabajar en beneficio de la comunidad, asegurando que los recursos sean utilizados de manera óptima para la mejora de la infraestructura urbana.',
+    parrafoContacto: 'Asimismo, se informa que esta Secretaría se encuentra a su disposición para contribuir en la atención a la ciudadanía, dentro de las facultades conferidas por su reglamento. En razón de lo antes expuesto, y con el objetivo de facilitar la colaboración, se proporcionan los siguientes números de contacto de la dependencia:',
+    cierre: 'Sin otro particular, agradezco su atención y reitero mi distinguida consideración.',
+    firmaAtentamente: 'ATENTAMENTE',
+    firmaCiudad: `CUATRO VECES HEROICA PUEBLA DE ZARAGOZA, A ${formatDate()}`,
+    firmaLema: '"LA CAPITAL IMPARABLE"',
+    firmaNombre: 'ANA MARÍA VALENCIA PACHECO',
+    firmaCargo: 'SECRETARIA TÉCNICA DE LA SECRETARÍA DE MOVILIDAD E INFRAESTRUCTURA',
+    archivo: 'Archivo.',
+    ccp: 'c.c.p. Julio César Gil Torres- Director Jurídico de la SEMOVINFRA-para su conocimiento-Presente.',
+    iniciales: 'AAMVP/jol',
+  })
+
+  const setEdit = (field: string, e: React.FocusEvent<HTMLElement>) => {
+    const html = e.currentTarget?.innerHTML ?? ''
+    setEditData(prev => ({ ...prev, [field]: DOMPurify.sanitize(html) }))
+  }
+
+  const [exporting, setExporting] = useState(false)
+  const [colWidths, setColWidths] = useState<Record<number, number>>({})
+  const [measuredPages, setMeasuredPages] = useState<any[] | null>(null)
+  const pageRefs = useRef<HTMLElement[]>([])
+  const measureRef = useRef<HTMLDivElement>(null)
+  const resizeCleanup = useRef<(() => void) | null>(null)
+
+  const tableRows = useMemo(() => [{
+    _key: 0,
+    control: s.folio_unico || '—',
+    solicitud: s.tipo_solicitud,
+    oficioRecibido: fecha,
+    turnadoA: s.estatus_fase || '—',
+  }], [s.folio_unico, s.tipo_solicitud, fecha, s.estatus_fase])
+
+  const movableDefaults = ['compromiso', 'contacto', 'contactsTable', 'cierre', 'firma'] as const
+  type BlockType = typeof movableDefaults[number]
+  const [blockOrder, setBlockOrder] = useState<BlockType[]>([...movableDefaults])
+  const [dragState, setDragState] = useState<{ dragging: string | null; over: string | null; insertAfter: boolean }>({ dragging: null, over: null, insertAfter: false })
+  const dragGhostRef = useRef<HTMLElement | null>(null)
+  const draggingRef = useRef<string | null>(null)
+  const dragStateRef = useRef(dragState)
+
+  const blockKeys = useMemo(() => [...blockOrder, 'ccp'], [blockOrder])
+
+  const startDrag = (blockType: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    const blockEl = (e.currentTarget as HTMLElement).closest('[data-block]') as HTMLElement
+    if (!blockEl) return
+    const rect = blockEl.getBoundingClientRect()
+    const ghost = blockEl.cloneNode(true) as HTMLElement
+    ghost.style.cssText = `position:fixed;pointer-events:none;z-index:9999;opacity:0.85;width:${rect.width}px;box-shadow:0 8px 32px rgba(0,0,0,0.15);border-radius:4px;overflow:hidden;background:#fff;transform:rotate(1.5deg) scale(1.02);left:${e.clientX - rect.width / 2}px;top:${e.clientY - 30}px;transition:none;`
+    ;[...ghost.querySelectorAll('[contenteditable]')].forEach(el => el.removeAttribute('contenteditable'))
+    ;[...ghost.querySelectorAll('.drag-handle, .resize-handle')].forEach(el => (el as HTMLElement).remove())
+    document.body.appendChild(ghost)
+    dragGhostRef.current = ghost
+    draggingRef.current = blockType
+    const next = { dragging: blockType, over: null, insertAfter: false }
+    setDragState(next)
+    dragStateRef.current = next
+    document.addEventListener('mousemove', onDragMove)
+    document.addEventListener('mouseup', onDragDrop)
+  }
+
+  const onDragMove = (e: MouseEvent) => {
+    if (!dragGhostRef.current) return
+    const gw = dragGhostRef.current.offsetWidth
+    dragGhostRef.current.style.left = (e.clientX - gw / 2) + 'px'
+    dragGhostRef.current.style.top = (e.clientY - 30) + 'px'
+    const container = document.querySelector('.oficio-page-container')
+    if (container) {
+      const cr = container.getBoundingClientRect()
+      if (e.clientY < cr.top - 40 || e.clientY > cr.bottom + 40) {
+        cleanupDragListeners()
+        return
+      }
+    }
+    const items = document.querySelectorAll('[data-block]')
+    let targetType: string | null = null
+    let insertAfter = false
+    const dragging = draggingRef.current
+    items.forEach(el => {
+      const r = el.getBoundingClientRect()
+      if (e.clientY >= r.top && e.clientY <= r.bottom) {
+        const bt = (el as HTMLElement).dataset.block
+        if (bt && bt !== dragging) {
+          targetType = bt
+          insertAfter = e.clientY > r.top + r.height / 2
+        }
+      }
+    })
+    const next = { ...dragStateRef.current, over: targetType, insertAfter }
+    dragStateRef.current = next
+    setDragState(next)
+  }
+
+  const onDragDrop = () => {
+    cleanupDragListeners()
+    if (dragGhostRef.current) { dragGhostRef.current.remove(); dragGhostRef.current = null }
+    const { dragging, over, insertAfter } = dragStateRef.current
+    draggingRef.current = null
+    if (!dragging || !over || dragging === over) { setDragState({ dragging: null, over: null, insertAfter: false }); return }
+    const idx = blockOrder.indexOf(dragging as BlockType)
+    const targetIdx = blockOrder.indexOf(over as BlockType)
+    if (idx === -1 || targetIdx === -1) { setDragState({ dragging: null, over: null, insertAfter: false }); return }
+    const next = [...blockOrder]
+    const [moved] = next.splice(idx, 1)
+    const adjTarget = next.indexOf(over as BlockType)
+    next.splice(insertAfter ? adjTarget + 1 : adjTarget, 0, moved as BlockType)
+    setBlockOrder(next)
+    setDragState({ dragging: null, over: null, insertAfter: false })
+  }
+
+  const cleanupDragListeners = () => {
+    document.removeEventListener('mousemove', onDragMove)
+    document.removeEventListener('mouseup', onDragDrop)
+  }
+
+  const initResize = useCallback((e: React.MouseEvent, colIdx: number) => {
+    e.preventDefault()
+    if (resizeCleanup.current) resizeCleanup.current()
+    const th = (e.currentTarget as HTMLElement).parentElement!
+    const startX = e.clientX
+    const startWidth = th.offsetWidth
+    let rafId: number | null = null
+    const onMouseMove = (me: MouseEvent) => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        setColWidths(prev => {
+          const rawWidth = startWidth + (me.clientX - startX)
+          const newWidth = Math.max(60, rawWidth)
+          const totalOther = Object.entries(prev).filter(([k]) => Number(k) !== colIdx).reduce((s, [, v]) => s + v, 0)
+          return { ...prev, [colIdx]: Math.min(newWidth, Math.max(60, 590 - totalOther)) }
+        })
+      })
+    }
+    const onMouseUp = () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      resizeCleanup.current = null
+    }
+    resizeCleanup.current = onMouseUp
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [])
+
+  const handleBold = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+    const range = sel.getRangeAt(0)
+    let node = range.commonAncestorContainer
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentNode!
+    const existingBold = (node as HTMLElement).closest?.('strong, b')
+    if (existingBold) {
+      const outer = existingBold.parentNode!
+      while (existingBold.firstChild) outer.insertBefore(existingBold.firstChild, existingBold)
+      outer.removeChild(existingBold)
+    } else {
+      const strong = document.createElement('strong')
+      try { range.surroundContents(strong) } catch { const c = range.extractContents(); strong.appendChild(c); range.insertNode(strong) }
+    }
+  }
+
+  const handleNormal = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+    const range = sel.getRangeAt(0)
+    const text = range.toString()
+    range.deleteContents()
+    range.insertNode(document.createTextNode(text))
+  }
+
+  const handleExportPdf = async () => {
+    setExporting(true)
+    try {
+      const elements = pageRefs.current.filter(Boolean)
+      if (elements.length > 0) await exportToPdf(elements, `Oficio_${s.folio_unico}`, 'portrait', 2)
+    } catch (err) {
+      console.error('Error al exportar PDF:', err)
+    }
+    setExporting(false)
+  }
+
+  const handleExportWord = async () => {
+    setExporting(true)
+    try {
+      await exportToWord({
+        filename: `Oficio_${s.folio_unico}`,
+        htmlContent: buildWordHtml(),
+      })
+    } catch (err) {
+      console.error('Error al exportar Word:', err)
+    }
+    setExporting(false)
+  }
+
+  function buildWordHtml(): string {
+    const rowsHtml = tableRows.map(r => `<tr>
+      <td>${escapeHtml(r.control)}</td>
+      <td>${escapeHtml(r.solicitud)}</td>
+      <td>${escapeHtml(r.oficioRecibido)}</td>
+      <td>${escapeHtml(r.turnadoA)}</td>
+    </tr>`).join('')
+    const contactosHtml = CONTACTOS.map(c => `<tr>
+      <td>${escapeHtml(c.area)}</td>
+      <td>${escapeHtml(c.telefono)}</td>
+    </tr>`).join('')
+    return `
+      <div style="text-align:right;margin-bottom:40px;">
+        <div style="font-size:9pt;font-style:italic;">&quot;${DOMPurify.sanitize(editData.yearTag)}&quot;</div>
+        <div style="font-size:10.5pt;font-weight:bold;">${DOMPurify.sanitize(editData.oficioNum)}</div>
+      </div>
+      <div style="font-size:10.5pt;margin-bottom:20px;">${DOMPurify.sanitize(editData.destinatario)}</div>
+      <div style="font-size:10.5pt;font-weight:bold;margin-bottom:4px;">${DOMPurify.sanitize(editData.cargo)}</div>
+      <div style="font-size:10.5pt;font-weight:bold;margin-bottom:20px;">P R E S E N T E</div>
+      <div style="font-size:10.5pt;text-align:justify;line-height:1.4;">
+        <p style="text-indent:0.5in;">${DOMPurify.sanitize(editData.fundamento)}</p>
+        <table style="width:100%;border-collapse:collapse;margin:15px 0;">
+          <thead><tr>
+            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">N° Control</th>
+            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Solicitud/Petición</th>
+            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Oficio Recibido</th>
+            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Turnado A:</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <p style="text-indent:0.5in;">${DOMPurify.sanitize(editData.parrafoCompromiso)}</p>
+        <p style="text-indent:0.5in;">${DOMPurify.sanitize(editData.parrafoContacto)}</p>
+        <table style="width:100%;border-collapse:collapse;margin:15px 0;">
+          <thead><tr>
+            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">ÁREA</th>
+            <th style="background:#E7E6E6;border:1px solid #000;padding:4px 6px;">Número de contacto</th>
+          </tr></thead>
+          <tbody>${contactosHtml}</tbody>
+        </table>
+        <p style="text-indent:0in;">${DOMPurify.sanitize(editData.cierre)}</p>
+      </div>
+      <div style="text-align:center;margin-top:40px;">
+        <div style="font-size:11pt;font-weight:bold;">${DOMPurify.sanitize(editData.firmaAtentamente)}</div>
+        <div style="font-size:11pt;font-weight:bold;">${DOMPurify.sanitize(editData.firmaCiudad)}</div>
+        <div style="font-size:11pt;font-weight:bold;font-style:italic;">${DOMPurify.sanitize(editData.firmaLema)}</div>
+        <div style="font-size:11pt;font-weight:bold;margin-top:30px;">${DOMPurify.sanitize(editData.firmaNombre)}</div>
+        <div style="font-size:11pt;font-weight:bold;">${DOMPurify.sanitize(editData.firmaCargo)}</div>
+      </div>
+      <div style="font-size:7pt;margin-top:30px;">
+        <div>${DOMPurify.sanitize(editData.archivo)}</div>
+        <div>${DOMPurify.sanitize(editData.ccp)}</div>
+        <div>${DOMPurify.sanitize(editData.iniciales)}</div>
+      </div>`
+  }
+
+  useEffect(() => {
+    pageRefs.current = pageRefs.current.slice(0, measuredPages ? measuredPages.length : 0)
+  }, [measuredPages])
+
+  useEffect(() => {
+    return () => {
+      if (resizeCleanup.current) resizeCleanup.current()
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const el = measureRef.current
+    if (!el) return
+    const content = el.querySelector('.oficio-content') as HTMLElement
+    if (!content) return
+    const segEls = content.querySelectorAll('[data-segment]')
+    const measured: { id: string; height: number }[] = []
+    segEls.forEach(el => {
+      measured.push({ id: el.getAttribute('data-segment') || '', height: el.getBoundingClientRect().height })
+    })
+    if (measured.length === 0) {
+      setMeasuredPages(prev => (prev && prev.length === 1 && prev[0].segmentIds.length === 0) ? prev : [{ isFirst: true, segmentIds: [], rowIds: [], blockTypes: [], paddingBottom: 0.5 }])
+      return
+    }
+    let theadH = 0
+    const theadEl = content.querySelector('.tabla-oficio thead') as HTMLElement
+    if (theadEl) theadH = theadEl.getBoundingClientRect().height
+
+    const newColWidths: Record<number, number> = {}
+    const tableEl = content.querySelector('.tabla-oficio') as HTMLTableElement
+    if (tableEl) {
+      tableEl.querySelectorAll('th').forEach((th, i) => { newColWidths[i] = th.getBoundingClientRect().width })
+    }
+    if (Object.keys(colWidths).length === 0) {
+      // leave measuredColWidths as default
+    }
+
+    const result: any[] = []
+    let cur: any = { isFirst: true, segmentIds: [], rowIds: [], blockTypes: [] }
+    let accumulated = 0
+    let limit = PAGE1_CONTENT_H
+
+    for (const seg of measured) {
+      const id = seg.id
+      if (id === 'header') continue
+      let effectiveH = seg.height
+      const isRow = id.startsWith('row-')
+      const isBlock = id.startsWith('block-')
+      if (isRow && cur.rowIds.length === 0) {
+        if (theadH > 0) effectiveH += theadH
+        effectiveH += TABLE_MARGIN_PX
+      }
+      if (accumulated + effectiveH > limit) {
+        cur.accumulated = accumulated
+        result.push(cur)
+        cur = { isFirst: false, segmentIds: [], rowIds: [], blockTypes: [] }
+        accumulated = 0
+        limit = CONT_CONTENT_H
+        if (isRow) effectiveH = seg.height + theadH + TABLE_MARGIN_PX
+      }
+      cur.segmentIds.push(id)
+      if (isRow) cur.rowIds.push(id)
+      if (isBlock) cur.blockTypes.push(id.replace('block-', ''))
+      accumulated += effectiveH
+    }
+    if (cur.segmentIds.length > 0) {
+      const topPad = cur.isFirst ? TOP_PAD_P1 : TOP_PAD_CONT
+      const remainingPx = (FOOTER_TEXT_CM - topPad) * PX_PER_CM - accumulated
+      cur.paddingBottom = Math.max(0.5, remainingPx / PX_PER_CM)
+      cur.accumulated = accumulated
+      result.push(cur)
+    }
+
+    let firmaIdx = -1, ccpIdx = -1
+    result.forEach((p, i) => {
+      if (p.blockTypes.includes('firma')) firmaIdx = i
+      if (p.blockTypes.includes('ccp')) ccpIdx = i
+    })
+    if (firmaIdx >= 0 && ccpIdx > firmaIdx) {
+      const ccpPage = result[ccpIdx]
+      ccpPage.blockTypes = ccpPage.blockTypes.filter((b: string) => b !== 'ccp')
+      ccpPage.segmentIds = ccpPage.segmentIds.filter((s: string) => s !== 'block-ccp')
+      result[firmaIdx].blockTypes.push('ccp')
+      result[firmaIdx].segmentIds.push('block-ccp')
+      const firmaTopPad = result[firmaIdx].isFirst ? TOP_PAD_P1 : TOP_PAD_CONT
+      result[firmaIdx].accumulated = (result[firmaIdx].accumulated || 0)
+      const newRemainingPx = (FOOTER_TEXT_CM - firmaTopPad) * PX_PER_CM - result[firmaIdx].accumulated
+      result[firmaIdx].paddingBottom = Math.max(0.5, newRemainingPx / PX_PER_CM)
+      if (ccpPage.blockTypes.length === 0 && ccpPage.rowIds.length === 0 && ccpPage.segmentIds.length === 0) {
+        result.splice(ccpIdx, 1)
+      } else {
+        const ccpPageTopPad = ccpPage.isFirst ? TOP_PAD_P1 : TOP_PAD_CONT
+        ccpPage.accumulated = (ccpPage.accumulated || 0)
+        const ccpRemainingPx = (FOOTER_TEXT_CM - ccpPageTopPad) * PX_PER_CM - ccpPage.accumulated
+        ccpPage.paddingBottom = Math.max(0.5, ccpRemainingPx / PX_PER_CM)
+      }
+    }
+
+    setMeasuredPages(prev => {
+      const prevJson = JSON.stringify(prev)
+      const newJson = JSON.stringify(result)
+      return prevJson === newJson ? prev : result
+    })
+  }, [editData, blockOrder, colWidths])
+
+  const pageStyle: React.CSSProperties = {
+    backgroundImage: `url(${letterhead})`,
+    backgroundSize: '21.6cm 27.9cm',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'top center',
+  }
+
+  const colStyle = (colIdx: number): React.CSSProperties | undefined => {
+    const w = colWidths[colIdx]
+    return w ? { width: w } : undefined
+  }
+
+  const renderBlocks = (blocks: string[]) => blocks.map(blockType => {
+    const isOver = dragState.over === blockType && !dragState.insertAfter
+    const isBefore = dragState.over === blockType && dragState.insertAfter
+    const isDragging = dragState.dragging === blockType
+    const blockClass = `block-item${isOver ? ' drag-over' : ''}${isBefore ? ' drag-before' : ''}${isDragging ? ' dragging' : ''}`
+
+    if (blockType === 'compromiso') {
+      return (
+        <div key="b-compromiso" data-block="compromiso" className={blockClass}>
+          <div className="drag-handle" onMouseDown={e => startDrag('compromiso', e)}>⠿</div>
+          <div className="texto-cuerpo">
+            <p contentEditable suppressContentEditableWarning onBlur={e => setEdit('parrafoCompromiso', e)} dangerouslySetInnerHTML={{ __html: editData.parrafoCompromiso }} />
+          </div>
+        </div>
+      )
+    }
+    if (blockType === 'contacto') {
+      return (
+        <div key="b-contacto" data-block="contacto" className={blockClass}>
+          <div className="drag-handle" onMouseDown={e => startDrag('contacto', e)}>⠿</div>
+          <div className="texto-cuerpo">
+            <p contentEditable suppressContentEditableWarning onBlur={e => setEdit('parrafoContacto', e)} dangerouslySetInnerHTML={{ __html: editData.parrafoContacto }} />
+          </div>
+        </div>
+      )
+    }
+    if (blockType === 'contactsTable') {
+      return (
+        <div key="b-contactsTable" data-block="contactsTable" className={blockClass}>
+          <div className="drag-handle" onMouseDown={e => startDrag('contactsTable', e)}>⠿</div>
+          <table className="tabla-contactos">
+            <thead><tr><th>ÁREA</th><th>Número de contacto</th></tr></thead>
+            <tbody>{CONTACTOS.map((c, j) => <tr key={j}><td>{c.area}</td><td>{c.telefono}</td></tr>)}</tbody>
+          </table>
+        </div>
+      )
+    }
+    if (blockType === 'cierre') {
+      return (
+        <div key="b-cierre" data-block="cierre" className={blockClass}>
+          <div className="drag-handle" onMouseDown={e => startDrag('cierre', e)}>⠿</div>
+          <div className="texto-cuerpo">
+            <p contentEditable suppressContentEditableWarning onBlur={e => setEdit('cierre', e)} dangerouslySetInnerHTML={{ __html: editData.cierre }} />
+          </div>
+        </div>
+      )
+    }
+    if (blockType === 'firma') {
+      return (
+        <div key="b-firma" data-block="firma" className={blockClass}>
+          <div className="drag-handle" onMouseDown={e => startDrag('firma', e)}>⠿</div>
+          <div className="oficio-firma">
+            <div className="firma-atentamente" contentEditable suppressContentEditableWarning onBlur={e => setEdit('firmaAtentamente', e)} dangerouslySetInnerHTML={{ __html: editData.firmaAtentamente }} />
+            <div className="firma-ciudad" contentEditable suppressContentEditableWarning onBlur={e => setEdit('firmaCiudad', e)} dangerouslySetInnerHTML={{ __html: editData.firmaCiudad }} />
+            <div className="firma-lema" contentEditable suppressContentEditableWarning onBlur={e => setEdit('firmaLema', e)} dangerouslySetInnerHTML={{ __html: editData.firmaLema }} />
+            <div style={{ lineHeight: '1.2' }}>&nbsp;</div>
+            <div style={{ lineHeight: '1.2' }}>&nbsp;</div>
+            <div className="firma-nombre" contentEditable suppressContentEditableWarning onBlur={e => setEdit('firmaNombre', e)} dangerouslySetInnerHTML={{ __html: editData.firmaNombre }} />
+            <div className="firma-cargo" contentEditable suppressContentEditableWarning onBlur={e => setEdit('firmaCargo', e)} dangerouslySetInnerHTML={{ __html: editData.firmaCargo }} />
+          </div>
+        </div>
+      )
+    }
+    if (blockType === 'ccp') {
+      return (
+        <div key="b-ccp" className="block-item">
+          <div className="oficio-ccp">
+            <div contentEditable suppressContentEditableWarning onBlur={e => setEdit('archivo', e)} dangerouslySetInnerHTML={{ __html: editData.archivo }} />
+            <div contentEditable suppressContentEditableWarning onBlur={e => setEdit('ccp', e)} dangerouslySetInnerHTML={{ __html: editData.ccp }} />
+            <div contentEditable suppressContentEditableWarning onBlur={e => setEdit('iniciales', e)} dangerouslySetInnerHTML={{ __html: editData.iniciales }} />
+          </div>
+        </div>
+      )
+    }
+    return null
+  })
+
+  const renderHeaderContent = () => (
+    <>
+      <div className="header-year" contentEditable suppressContentEditableWarning onBlur={e => setEdit('yearTag', e)} dangerouslySetInnerHTML={{ __html: editData.yearTag }} />
+      <div className="header-oficio-num" contentEditable suppressContentEditableWarning onBlur={e => setEdit('oficioNum', e)} dangerouslySetInnerHTML={{ __html: editData.oficioNum }} />
+    </>
+  )
+
+  const renderDestinatarioContent = () => (
+    <>
+      <div className="destinatario-line" contentEditable suppressContentEditableWarning onBlur={e => setEdit('destinatario', e)} dangerouslySetInnerHTML={{ __html: editData.destinatario }} />
+      <div className="destinatario-line cargo-line" contentEditable suppressContentEditableWarning onBlur={e => setEdit('cargo', e)} dangerouslySetInnerHTML={{ __html: editData.cargo }} />
+      <div className="destinatario-line presente-line">P R E S E N T E</div>
+      <div className="texto-cuerpo">
+        <p contentEditable suppressContentEditableWarning onBlur={e => setEdit('fundamento', e)} dangerouslySetInnerHTML={{ __html: editData.fundamento }} />
+      </div>
+    </>
+  )
+
+  const renderTable = (rows: typeof tableRows) => (
+    <div data-block="mainTable" className="block-item">
+      <table className="tabla-oficio">
+        <thead>
+          <tr>
+            {['N° Control', 'Solicitud/Petición', 'Oficio Recibido', 'Turnado A:'].map((label, j) => (
+              <th key={j} style={colStyle(j)}>
+                {label}
+                <div className="resize-handle" onMouseDown={e => initResize(e, j)} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r._key}>
+              <td style={colStyle(0)}>{r.control}</td>
+              <td style={colStyle(1)}>{r.solicitud}</td>
+              <td style={colStyle(2)}>{r.oficioRecibido}</td>
+              <td style={{ fontWeight: 700, ...colStyle(3) }}>{r.turnadoA}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex flex-col bg-[#eaeaea]">
+      {/* Toolbar */}
+      <div className="flex items-center justify-center px-4 py-3">
+        <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
+          <button className="rounded-lg bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300" onClick={onClose}>← Volver</button>
+          <div className="mx-1 h-6 w-px bg-black/10" />
+          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50" onMouseDown={handleBold} disabled={exporting} title="Negritas"><strong>B</strong></button>
+          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-sm text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50" onMouseDown={handleNormal} disabled={exporting} title="Texto normal">N</button>
+          <div className="mx-1 h-6 w-px bg-black/10" />
+          <button className="rounded-full bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50" onClick={handleExportPdf} disabled={exporting}>
+            {exporting ? 'PDF...' : 'PDF'}
+          </button>
+          <button className="rounded-full bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50" onClick={handleExportWord} disabled={exporting}>
+            {exporting ? 'Word...' : 'Word'}
+          </button>
+        </div>
+      </div>
+
+      {/* Measurement container */}
+      <div ref={measureRef} className="oficio-wrapper" style={{ ...pageStyle, visibility: 'hidden', position: 'fixed', top: 0, left: '-9999px', zIndex: -1 }}>
+        <div data-segment="header" className="oficio-header-abs">{renderHeaderContent()}</div>
+        <div className="oficio-content" style={{ paddingTop: `${TOP_PAD_P1}cm`, paddingBottom: '0.5cm' }}>
+          <div data-segment="destinatario-block">{renderDestinatarioContent()}</div>
+          {tableRows.length > 0 && <div data-segment="table-block">{renderTable(tableRows)}</div>}
+          {blockKeys.map(b => <div key={b} data-segment={`block-${b}`}>{renderBlocks([b])}</div>)}
+        </div>
+      </div>
+
+      {/* Visible pages */}
+      <div className="flex-1 overflow-y-auto">
+        {measuredPages && measuredPages.length > 0 && (
+          <div className="oficio-page-container">
+            {measuredPages.map((page, i) => {
+              const topPad = page.isFirst ? TOP_PAD_P1 : TOP_PAD_CONT
+              return (
+                <div key={`page-${i}`} className={`oficio-wrapper${!page.isFirst ? ' page-continuation' : ''}`}
+                  ref={el => { if (el) pageRefs.current[i] = el }} style={pageStyle}>
+                  <div className="oficio-header-abs">{renderHeaderContent()}</div>
+                  <div className="oficio-content" style={{ paddingTop: `${topPad}cm`, paddingBottom: `${page.paddingBottom}cm` }}>
+                    {page.isFirst && <div data-segment="destinatario-block">{renderDestinatarioContent()}</div>}
+                    {page.rowIds.length > 0 && (() => {
+                      const pageRows = tableRows.filter(r => page.rowIds.includes(`row-${r._key}`))
+                      return renderTable(pageRows.length > 0 ? pageRows : tableRows)
+                    })()}
+                    {renderBlocks(page.blockTypes.filter((b: string) => b !== 'ccp'))}
+                  </div>
+                  <div className="oficio-footer">
+                    <div className="footer-text">
+                      GOBIERNO DE LA CIUDAD 2024 - 2027<br />
+                      TEL +52 (222) 309 46 00 EXT. 5748<br />
+                      PROL. REFORMA #3308, COL. AMOR, C.P. 72140<br />
+                      PUEBLA, PUE., MÉXICO
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        .oficio-header-abs {
+          position: absolute;
+          top: 1.5cm;
+          right: 3.0cm;
+          text-align: right;
+          z-index: 2;
+        }
+        .header-year {
+          font-size: 9pt;
+          font-style: italic;
+          color: #000;
+          opacity: 0.75;
+        }
+        .header-oficio-num {
+          font-size: 10.5pt;
+          font-weight: 700;
+          margin-top: 2px;
+          opacity: 0.75;
+        }
+        .header-year[contenteditable]:hover,
+        .header-year[contenteditable]:focus,
+        .header-oficio-num[contenteditable]:hover,
+        .header-oficio-num[contenteditable]:focus {
+          outline: 1px dashed #7d2447;
+          background: #f5eef2;
+        }
+        .oficio-wrapper {
+          width: 21.6cm;
+          min-height: 27.9cm;
+          margin: 0 auto;
+          background: #fff;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+          position: relative;
+          overflow: hidden;
+          font-family: 'Poppins', 'Calibri', sans-serif;
+        }
+        .oficio-wrapper::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: rgba(255,255,255,0.18);
+          z-index: 0;
+          pointer-events: none;
+        }
+        .oficio-content {
+          position: relative;
+          z-index: 1;
+          padding: 1.5cm 3.0cm 6.5cm;
+        }
+        .destinatario-line {
+          font-size: 10.5pt;
+          margin-bottom: 2px;
+          line-height: 1.3;
+        }
+        .destinatario-line[contenteditable]:hover,
+        .destinatario-line[contenteditable]:focus {
+          outline: 1px dashed #7d2447;
+          background: #f5eef2;
+        }
+        .cargo-line { font-weight: 700; margin-bottom: 2px; }
+        .presente-line { font-weight: 700; margin-bottom: 18px; }
+        .texto-cuerpo {
+          font-size: 10.5pt;
+          text-align: justify;
+          line-height: 1.45;
+        }
+        .texto-cuerpo p {
+          margin-bottom: 10px;
+          text-indent: 0.5in;
+        }
+        .texto-cuerpo p[contenteditable]:hover,
+        .texto-cuerpo p[contenteditable]:focus {
+          outline: 1px dashed #7d2447;
+          background: #f5eef2;
+        }
+        .tabla-oficio {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 14px 0;
+          font-size: 9pt;
+        }
+        .tabla-oficio th {
+          background: #E7E6E6;
+          border: 1px solid #000;
+          padding: 6px 8px;
+          text-align: center;
+          font-weight: 700;
+          font-size: 9pt;
+          position: relative;
+        }
+        .tabla-oficio td {
+          border: 1px solid #000;
+          padding: 4px 8px;
+          text-align: center;
+          font-size: 9pt;
+        }
+        .tabla-oficio td[contenteditable]:hover,
+        .tabla-oficio td[contenteditable]:focus {
+          outline: 1px dashed #7d2447;
+          background: #f5eef2;
+        }
+        .resize-handle {
+          position: absolute;
+          top: 0;
+          right: -3px;
+          width: 6px;
+          height: 100%;
+          cursor: col-resize;
+          z-index: 5;
+          background: transparent;
+        }
+        .resize-handle:hover { background: rgba(0,0,0,0.15); }
+        .tabla-contactos {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 2.54cm 0 14px;
+        }
+        .tabla-contactos th {
+          background: #E7E6E6;
+          border: 1px solid #000;
+          padding: 6px 8px;
+          text-align: center;
+          font-weight: 700;
+          font-size: 10pt;
+        }
+        .tabla-contactos td {
+          border: 1px solid #000;
+          padding: 4px 8px;
+          text-align: center;
+          font-size: 10pt;
+        }
+        .oficio-firma { text-align: center; margin-top: 30px; }
+        .firma-atentamente { font-size: 11pt; font-weight: 700; }
+        .firma-ciudad { font-size: 11pt; font-weight: 700; margin-top: 2px; }
+        .firma-lema { font-size: 11pt; font-weight: 700; font-style: italic; margin-top: 2px; }
+        .firma-nombre { font-size: 11pt; font-weight: 700; margin-top: 28px; }
+        .firma-cargo { font-size: 11pt; font-weight: 700; }
+        .firma-atentamente[contenteditable]:hover,
+        .firma-atentamente[contenteditable]:focus,
+        .firma-ciudad[contenteditable]:hover,
+        .firma-ciudad[contenteditable]:focus,
+        .firma-lema[contenteditable]:hover,
+        .firma-lema[contenteditable]:focus,
+        .firma-nombre[contenteditable]:hover,
+        .firma-nombre[contenteditable]:focus,
+        .firma-cargo[contenteditable]:hover,
+        .firma-cargo[contenteditable]:focus {
+          outline: 1px dashed #7d2447;
+          background: #f5eef2;
+        }
+        .oficio-ccp {
+          font-size: 7pt;
+          margin-top: 24px;
+          line-height: 1.4;
+        }
+        .oficio-ccp div[contenteditable]:hover,
+        .oficio-ccp div[contenteditable]:focus {
+          outline: 1px dashed #7d2447;
+          background: #f5eef2;
+        }
+        .oficio-footer {
+          position: absolute;
+          top: 22cm;
+          left: 0;
+          width: 100%;
+          text-align: left;
+          z-index: 1;
+          padding: 2.75cm 0 0 12.99cm;
+          pointer-events: none;
+          opacity: 0.75;
+        }
+        .footer-text {
+          font-family: 'Poppins', 'Calibri', sans-serif;
+          font-size: 8.5pt;
+          font-weight: 700;
+          color: #ADA37E;
+          line-height: 1.5;
+        }
+        .block-item {
+          position: relative;
+        }
+        .drag-handle {
+          position: absolute;
+          left: -24px;
+          top: 50%;
+          transform: translateY(-50%);
+          cursor: grab;
+          font-size: 18px;
+          color: #ccc;
+          user-select: none;
+          opacity: 0;
+          transition: opacity 0.15s;
+          padding: 4px;
+        }
+        .block-item:hover .drag-handle { opacity: 1; }
+        .drag-handle:hover { color: #7d2447; }
+        .dragging { opacity: 0.4; }
+        .drag-over { border-top: 2px solid #7d2447 !important; }
+        .drag-before { border-bottom: 2px solid #7d2447 !important; }
+        .oficio-page-container {
+          max-width: 21.6cm;
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          gap: 32px;
+          padding: 20px 0;
+        }
+        @media print {
+          body { background: #fff; }
+          .oficio-wrapper { box-shadow: none; break-inside: avoid; }
+        }
+      `}</style>
+    </div>
+  )
+}

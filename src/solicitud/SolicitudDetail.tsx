@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle, Globe, Map, Pencil } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES, CATALOGO_TIPOS_OBRA } from '../core/constants'
@@ -11,10 +11,10 @@ import Card from '../shared/Card'
 import Button from '../shared/Button'
 import { cargarCapas, detectarPunto } from './detectar-ubicacion'
 import type { DeteccionPunto, CapasGeoJSON } from './detectar-ubicacion'
-import { generarOficioPDF } from '../lib/generarOficio'
-import { generarFichaPDF } from '../lib/generarFicha'
 import { consultarSIGED } from '../lib/consultarSIGED'
 import type { SigedEscuela } from '../lib/consultarSIGED'
+import VistaOficioEditable from './VistaOficioEditable'
+import VistaFichaEditable from './VistaFichaEditable'
 
 interface SolicitudDetailProps {
   solicitud: Solicitud
@@ -75,15 +75,10 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
   return null
 }
 
-type DocTab = 'oficio' | 'ficha' | 'enviar'
-
 export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, onNavigate, userRole }: SolicitudDetailProps) {
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
-  const [generando, setGenerando] = useState(false)
-  const [docUrls, setDocUrls] = useState<{ oficio?: string; ficha?: string } | null>(null)
-  const [activeTab, setActiveTab] = useState<DocTab>('oficio')
   const [tramoFullscreen, setTramoFullscreen] = useState(false)
   const [ubicacionFullscreen, setUbicacionFullscreen] = useState(false)
   const [satelliteUbicacion, setSatelliteUbicacion] = useState(false)
@@ -99,11 +94,11 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const [sigedData, setSigedData] = useState<SigedEscuela | null>(null)
   const [sigedLoading, setSigedLoading] = useState(false)
   const [sigedError, setSigedError] = useState<string | null>(null)
-  const [enviandoEmail, setEnviandoEmail] = useState(false)
-  const [emailEnviado, setEmailEnviado] = useState(false)
-  const [emailError, setEmailError] = useState<string | null>(null)
   const [vecinos, setVecinos] = useState<{ id_solicitud: number; folio_unico: string; distancia_m: number }[]>([])
   const [vecinosLoading, setVecinosLoading] = useState(false)
+  const [showOficioEditor, setShowOficioEditor] = useState(false)
+  const [showFichaEditor, setShowFichaEditor] = useState(false)
+  const [fichaMapUrl, setFichaMapUrl] = useState<string | null>(null)
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -149,69 +144,39 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
       })
   }, [s.id_solicitud, s.peso_ranking])
 
-  const handleGenerarDocumentos = async () => {
-    setGenerando(true)
+  const captureMap = async (): Promise<string | null> => {
+    const mapContainer = document.querySelector('.leaflet-container') as HTMLElement | null
+    if (!mapContainer) return null
     try {
-      const solicitudEnriched = {
-        ...s,
-        calle: calleInfo?.calle || '',
-        entre_calles: calleInfo?.entreCalles || '',
+      const tiles = mapContainer.querySelectorAll('.leaflet-tile-pane img')
+      if (tiles.length === 0) return null
+      const canvas = document.createElement('canvas')
+      const rect = mapContainer.getBoundingClientRect()
+      canvas.width = rect.width
+      canvas.height = rect.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      for (const tile of Array.from(tiles)) {
+        const img = tile as HTMLImageElement
+        const style = window.getComputedStyle(img)
+        const transform = style.transform || (style as any).webkitTransform
+        const match = transform?.match(/translate3d\(([^,]+)px,\s*([^,]+)px/)
+        if (match) {
+          ctx.drawImage(img, parseFloat(match[1]), parseFloat(match[2]))
+        }
       }
-      const [oficioUrl, fichaUrl] = await Promise.all([
-        generarOficioPDF(solicitudEnriched),
-        generarFichaPDF(solicitudEnriched),
-      ])
-      setDocUrls({ oficio: oficioUrl, ficha: fichaUrl })
-      setActiveTab('oficio')
-    } catch (err) {
-      console.error('Error al generar documentos:', err)
+      return canvas.toDataURL('image/jpeg', 0.85)
+    } catch {
+      return null
     }
-    setGenerando(false)
   }
 
-  const blobUrlToBase64 = async (url: string): Promise<string> => {
-    const res = await fetch(url)
-    const blob = await res.blob()
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const result = reader.result as string
-        resolve(result.split(',')[1])
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  }
+  const handleOpenOficioEditor = () => setShowOficioEditor(true)
 
-  const handleEnviarDocumentacion = async () => {
-    if (!docUrls?.oficio || !docUrls?.ficha) return
-    setEnviandoEmail(true)
-    setEmailError(null)
-    setEmailEnviado(false)
-    try {
-      const [oficioBase64, fichaBase64] = await Promise.all([
-        blobUrlToBase64(docUrls.oficio),
-        blobUrlToBase64(docUrls.ficha),
-      ])
-      const res = await fetch('/api/enviar-documentacion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          correo: s.correo,
-          folio: s.folio_unico,
-          oficioPdf: oficioBase64,
-          fichaPdf: fichaBase64,
-          oficioNombre: `Oficio_${s.folio_unico}.pdf`,
-          fichaNombre: `Ficha_${s.folio_unico}.pdf`,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al enviar')
-      setEmailEnviado(true)
-    } catch (err: any) {
-      setEmailError(err?.message || 'Error al enviar documentación')
-    }
-    setEnviandoEmail(false)
+  const handleOpenFichaEditor = async () => {
+    const url = await captureMap()
+    setFichaMapUrl(url)
+    setShowFichaEditor(true)
   }
 
   const showGenerateButtons = userRole && esCargoPublico(userRole)
@@ -859,23 +824,35 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
           {showGenerateButtons && (
           <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4">
-            <p className="text-xs font-medium text-gray-institutional/50">Generar documentos</p>
-            <Button
-              onClick={handleGenerarDocumentos}
-              disabled={generando}
-              className="flex items-center gap-2"
-            >
-              {generando ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
+            <p className="text-xs font-medium text-gray-institutional/50">Documentos</p>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleOpenOficioEditor} className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-              )}
-              {generando ? 'Generando documentos...' : 'Generar oficio y ficha técnica'}
-            </Button>
+                Editar oficio
+              </Button>
+              <Button onClick={handleOpenFichaEditor} className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Editar ficha técnica
+              </Button>
+            </div>
           </div>
         )}
         </div>
       </div>
+
+      {showOficioEditor && (
+        <VistaOficioEditable
+          solicitud={s}
+          onClose={() => setShowOficioEditor(false)}
+        />
+      )}
+      {showFichaEditor && fichaMapUrl && (
+        <VistaFichaEditable
+          solicitud={s}
+          mapDataUrl={fichaMapUrl}
+          onClose={() => setShowFichaEditor(false)}
+        />
+      )}
 
       {editGeoOpen && (
         <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/40 p-4">
@@ -979,164 +956,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
         </div>
       )}
 
-      {/* Document Viewer Modal — Tabbed */}
-      {docUrls && (
-        <div className="fixed inset-0 z-[10000] flex flex-col bg-black/60">
-          {/* Header */}
-          <div className="flex items-center justify-between bg-guinda px-4 py-3 text-white">
-            <div className="flex items-center gap-4">
-              {/* Tabs */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('oficio')}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeTab === 'oficio' ? 'bg-white text-guinda' : 'text-white/80 hover:bg-white/10'
-                }`}
-              >
-                <FileText className="mr-1.5 inline h-4 w-4" />
-                Oficio PDF
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('ficha')}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeTab === 'ficha' ? 'bg-white text-guinda' : 'text-white/80 hover:bg-white/10'
-                }`}
-              >
-                <FileText className="mr-1.5 inline h-4 w-4" />
-                Ficha técnica
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('enviar')}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeTab === 'enviar' ? 'bg-white text-guinda' : 'text-white/80 hover:bg-white/10'
-                }`}
-              >
-                <Send className="mr-1.5 inline h-4 w-4" />
-                Enviar documentación
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              {activeTab === 'oficio' && docUrls.oficio && (
-                <a
-                  href={docUrls.oficio}
-                  download={`oficio_${s.folio_unico}.pdf`}
-                  className="flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
-                >
-                  <Download className="h-4 w-4" />
-                  Descargar
-                </a>
-              )}
-              {activeTab === 'ficha' && docUrls.ficha && (
-                <a
-                  href={docUrls.ficha}
-                  download={`ficha_tecnica_${s.folio_unico}.pdf`}
-                  className="flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-sm transition-colors hover:bg-white/30"
-                >
-                  <Download className="h-4 w-4" />
-                  Descargar
-                </a>
-              )}
-              <button
-                type="button"
-                onClick={() => { if (docUrls.oficio) URL.revokeObjectURL(docUrls.oficio); if (docUrls.ficha) URL.revokeObjectURL(docUrls.ficha); setDocUrls(null) }}
-                className="rounded-lg p-1.5 transition-colors hover:bg-white/20"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
 
-          {/* Content */}
-          {activeTab === 'oficio' && docUrls.oficio && (
-            <iframe
-              src={docUrls.oficio}
-              className="flex-1 border-0"
-              title="Vista previa del oficio"
-            />
-          )}
-          {activeTab === 'ficha' && docUrls.ficha && (
-            <iframe
-              src={docUrls.ficha}
-              className="flex-1 border-0"
-              title="Vista previa de la ficha técnica"
-            />
-          )}
-          {activeTab === 'enviar' && (
-            <div className="flex flex-1 flex-col items-center justify-center bg-gray-50 p-8">
-              <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-100">
-                <div className="mb-6 text-center">
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-guinda/10">
-                    <Send className="h-6 w-6 text-guinda" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900">Enviar documentación</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Se enviarán ambos documentos por correo electrónico al solicitante.
-                  </p>
-                </div>
-
-                <div className="space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Folio</span>
-                    <span className="font-mono font-medium text-gray-900">{s.folio_unico}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Solicitante</span>
-                    <span className="font-medium text-gray-900">{s.nombre_solicitante}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Correo</span>
-                    <span className="flex items-center gap-1.5 font-medium text-gray-900">
-                      <Mail className="h-3.5 w-3.5 text-gray-400" />
-                      {s.correo || 'Sin correo'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Documentos</span>
-                    <span className="text-gray-900">Oficio + Ficha técnica (PDF)</span>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  {emailEnviado ? (
-                    <div className="flex items-center justify-center gap-2 rounded-xl bg-green-50 p-4 text-sm text-green-700">
-                      <CheckCircle className="h-5 w-5" />
-                      Documentación enviada correctamente
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={handleEnviarDocumentacion}
-                      disabled={enviandoEmail || !s.correo}
-                      className="flex w-full items-center justify-center gap-2"
-                    >
-                      {enviandoEmail ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Enviando...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-4 w-4" />
-                          Enviar documentación
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {emailError && (
-                    <p className="mt-2 text-center text-sm text-red-500">{emailError}</p>
-                  )}
-                  {!s.correo && (
-                    <p className="mt-2 text-center text-sm text-amber-600">
-                      No hay correo registrado para este solicitante
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
