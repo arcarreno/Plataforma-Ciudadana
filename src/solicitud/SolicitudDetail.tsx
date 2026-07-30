@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle, Globe, Map } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Download, Navigation, Maximize2, Minimize2, Send, CheckCircle, Globe, Map, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
-import { ESTATUS_OPCIONES } from '../core/constants'
+import { ESTATUS_OPCIONES, CATALOGO_TIPOS_OBRA } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
 import { esCargoPublico } from '../types/auth'
 import Card from '../shared/Card'
@@ -220,6 +220,42 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const esConcentracion = s.peso_ranking === 12
   const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
 
+  const [editGeoOpen, setEditGeoOpen] = useState(false)
+  const [editObraOpen, setEditObraOpen] = useState(false)
+  const [editForm, setEditForm] = useState({ calle: s.calle || '', entre_calles: s.entre_calles || '', tipo_solicitud: s.tipo_solicitud, colonia: s.colonia, junta_auxiliar: s.junta_auxiliar })
+  const [editSaving, setEditSaving] = useState(false)
+
+  const handleSaveGeo = async () => {
+    setEditSaving(true)
+    const { error } = await supabase
+      .from('solicitudes')
+      .update({ calle: editForm.calle, entre_calles: editForm.entre_calles })
+      .eq('id_solicitud', s.id_solicitud)
+    if (!error) {
+      s.calle = editForm.calle
+      s.entre_calles = editForm.entre_calles
+    }
+    setEditSaving(false)
+    setEditGeoOpen(false)
+  }
+
+  const handleSaveObra = async () => {
+    setEditSaving(true)
+    const { error } = await supabase
+      .from('solicitudes')
+      .update({ tipo_solicitud: editForm.tipo_solicitud, colonia: editForm.colonia, junta_auxiliar: editForm.junta_auxiliar })
+      .eq('id_solicitud', s.id_solicitud)
+    if (!error) {
+      s.tipo_solicitud = editForm.tipo_solicitud
+      s.colonia = editForm.colonia
+      s.junta_auxiliar = editForm.junta_auxiliar
+    }
+    setEditSaving(false)
+    setEditObraOpen(false)
+  }
+
+  const puedeEditar = userRole && esCargoPublico(userRole)
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/40 py-6">
       <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-2xl shadow-xl">
@@ -289,7 +325,17 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
               </div>
             </Card>
 
-            <Card title="Datos de la obra">
+            <Card title="Datos de la obra" className="relative">
+              {puedeEditar && (
+                <button
+                  type="button"
+                  onClick={() => { setEditForm(prev => ({ ...prev, tipo_solicitud: s.tipo_solicitud, colonia: s.colonia, junta_auxiliar: s.junta_auxiliar })); setEditObraOpen(true) }}
+                  className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
+                  aria-label="Editar datos de la obra"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
               <div className="flex flex-col gap-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-institutional/60">Tipo</span>
@@ -667,7 +713,17 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
               )
             })()}
 
-            <Card title="Información Geográfica">
+            <Card title="Información Geográfica" className="relative">
+              {puedeEditar && (
+                <button
+                  type="button"
+                  onClick={() => { setEditForm(prev => ({ ...prev, calle: s.calle || '', entre_calles: s.entre_calles || '' })); setEditGeoOpen(true) }}
+                  className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
+                  aria-label="Editar información geográfica"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
               <div className="flex flex-col gap-2 text-xs">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-3.5 w-3.5 text-guinda" />
@@ -820,6 +876,108 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
         )}
         </div>
       </div>
+
+      {editGeoOpen && (
+        <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-guinda">Editar información geográfica</h3>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Calle</label>
+                <input
+                  type="text"
+                  value={editForm.calle}
+                  onChange={e => setEditForm(prev => ({ ...prev, calle: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Entre calles</label>
+                <input
+                  type="text"
+                  value={editForm.entre_calles}
+                  onChange={e => setEditForm(prev => ({ ...prev, entre_calles: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditGeoOpen(false)}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-institutional transition-colors hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveGeo}
+                disabled={editSaving}
+                className="flex-1 rounded-xl bg-guinda px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
+              >
+                {editSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editObraOpen && (
+        <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-guinda">Editar datos de la obra</h3>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Tipo de obra</label>
+                <select
+                  value={editForm.tipo_solicitud}
+                  onChange={e => setEditForm(prev => ({ ...prev, tipo_solicitud: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                >
+                  {CATALOGO_TIPOS_OBRA.map(t => (
+                    <option key={t.nombre} value={t.nombre}>{t.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Colonia</label>
+                <input
+                  type="text"
+                  value={editForm.colonia}
+                  onChange={e => setEditForm(prev => ({ ...prev, colonia: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Junta auxiliar</label>
+                <input
+                  type="text"
+                  value={editForm.junta_auxiliar}
+                  onChange={e => setEditForm(prev => ({ ...prev, junta_auxiliar: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditObraOpen(false)}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-institutional transition-colors hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveObra}
+                disabled={editSaving}
+                className="flex-1 rounded-xl bg-guinda px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
+              >
+                {editSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Document Viewer Modal — Tabbed */}
       {docUrls && (
