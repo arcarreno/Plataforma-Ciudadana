@@ -340,46 +340,43 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     return () => ro.disconnect()
   }, [])
 
-  if (resultado?.folio) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
-        <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl">
-          <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
-          <div className="flex flex-col items-center gap-4 px-6 pb-6 pt-0">
-            <div className="-mt-9 flex justify-center">
-              <img src={logoSemovinfra} alt="Semovinfra" className="h-16 w-16 rounded-full object-cover shadow-lg" />
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-              <Check className="h-5 w-5 text-green-600" />
-            </div>
-            <p className="text-lg font-semibold text-guinda">
-              ¡Solicitud registrada con éxito!
-            </p>
-            <p className="text-gray-institutional/70">
-              Tu número de folio es:
-            </p>
-            <p className="rounded-xl bg-guinda/5 px-6 py-3 text-2xl font-bold tracking-wider text-guinda">
-              {resultado.folio}
-            </p>
-            <p className="text-xs text-gray-institutional/50">
-              Pronto recibirás tu acuse en tu correo electrónico.
-            </p>
-            {resultado.advertencia && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-                {resultado.advertencia}
-              </div>
-            )}
-            <Button onClick={() => { setResultado(null); setSubmittedOnce(false) }}>
-              Nueva solicitud
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <>
+      {resultado?.folio && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+          <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl">
+            <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
+            <div className="flex flex-col items-center gap-4 px-6 pb-6 pt-0">
+              <div className="-mt-9 flex justify-center">
+                <img src={logoSemovinfra} alt="Semovinfra" className="h-16 w-16 rounded-full object-cover shadow-lg" />
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                <Check className="h-5 w-5 text-green-600" />
+              </div>
+              <p className="text-lg font-semibold text-guinda">
+                ¡Solicitud registrada con éxito!
+              </p>
+              <p className="text-gray-institutional/70">
+                Tu número de folio es:
+              </p>
+              <p className="rounded-xl bg-guinda/5 px-6 py-3 text-2xl font-bold tracking-wider text-guinda">
+                {resultado.folio}
+              </p>
+              <p className="text-xs text-gray-institutional/50">
+                Pronto recibirás tu acuse en tu correo electrónico.
+              </p>
+              {resultado.advertencia && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                  {resultado.advertencia}
+                </div>
+              )}
+              <Button onClick={() => { setResultado(null); setSubmittedOnce(false) }}>
+                Nueva solicitud
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {showLottie && (
         <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-8 bg-white px-6">
           <div ref={lottieRef} className="w-72 sm:w-96" />
@@ -706,7 +703,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
                 Al ubicar el punto en el mapa, los datos de colonia y junta auxiliar
                 se extraen automáticamente de nuestra base de datos. Pueden haber
                 variaciones en la delimitación, pero al tener las coordenadas
-                exactas podremos llegar a tu calle lo más pronto posible.
+                exactas podremos llegar al lugar de la petición lo más pronto posible.
               </p>
               <Button type="button" size="sm" onClick={() => setShowInfoModal(false)}>
                 Entendido <ChevronRight className="ml-1 h-4 w-4" />
