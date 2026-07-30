@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { useSpring } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { ClipboardList, MapPin, FileText, Shield } from 'lucide-react'
 import Button from '../shared/Button'
@@ -17,12 +18,12 @@ const features = [
   {
     icon: MapPin,
     title: 'Ubicación en mapa',
-    desc: 'Señala exactamente el lugar usando el mapa interactivo, sin escribir coordenadas.',
+    desc: 'Señala exactamente el lugar usando el mapa interactivo.',
   },
   {
     icon: FileText,
-    title: 'Acuse con QR',
-    desc: 'Recibe tu comprobante con código QR por correo y descárgalo al instante.',
+    title: 'Acuse y Ficha',
+    desc: 'Recibe tus comprobante por correo y descárgalo al instante.',
   },
   {
     icon: Shield,
@@ -54,6 +55,19 @@ export default function Inicio() {
   const esCargo = user && esCargoPublico(user.rol)
 
   const [activePos, setActivePos] = useState(-1)
+  const [rippleActive, setRippleActive] = useState(false)
+  const dispRef = useRef<SVGFEDisplacementMapElement>(null)
+  const rippleScale = useSpring(3, { stiffness: 180, damping: 15 })
+
+  useEffect(() => {
+    return rippleScale.on('change', (v) => {
+      dispRef.current?.setAttribute('scale', String(v))
+    })
+  }, [rippleScale])
+
+  useEffect(() => {
+    rippleScale.set(rippleActive ? 28 : 3)
+  }, [rippleActive, rippleScale])
 
   useEffect(() => {
     let pos = 0
@@ -111,6 +125,16 @@ export default function Inicio() {
       </section>
 
       <section className="relative -mx-4 py-8 md:-mx-8">
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+          <defs>
+            <filter id="mosaico-ripple" x="-20%" y="-20%" width="140%" height="140%">
+              <feTurbulence id="mosaico-noise" type="fractalNoise" baseFrequency="0.008" numOctaves="2" result="wave">
+                <animate attributeName="baseFrequency" values="0.006;0.010;0.006" dur="8s" repeatCount="indefinite" />
+              </feTurbulence>
+              <feDisplacementMap ref={dispRef} in="SourceGraphic" in2="wave" scale="3" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </defs>
+        </svg>
         <div
           className="contrast-mosaico-bg pointer-events-none absolute inset-0"
           style={{
@@ -119,9 +143,14 @@ export default function Inicio() {
             backgroundPosition: 'calc(50% - 0.6mm) center',
             WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
             maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
+            filter: 'url(#mosaico-ripple)',
           }}
         />
-        <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div
+          className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+          onMouseEnter={() => setRippleActive(true)}
+          onMouseLeave={() => setRippleActive(false)}
+        >
         {features.map((f) => (
           <Card key={f.title} hover>
             <div className="flex flex-col items-center text-center">
