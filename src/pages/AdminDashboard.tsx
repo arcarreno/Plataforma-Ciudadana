@@ -137,31 +137,31 @@ export default function AdminDashboard() {
         />
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-guinda">Panel de administración</h1>
           <p className="text-sm text-gray-institutional/60">
             Página {page} de {totalPages} ({totalCount} solicitudes)
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 focus-within:ring-2 focus-within:ring-guinda/40 focus-within:border-transparent">
-            <Search className="h-4 w-4 text-gray-institutional/40" />
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="flex flex-1 items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 focus-within:ring-2 focus-within:ring-guinda/40 focus-within:border-transparent sm:flex-none">
+            <Search className="h-4 w-4 shrink-0 text-gray-institutional/40" />
             <input
               type="text"
               value={searchInput}
               onChange={e => handleSearch(e.target.value)}
               placeholder="Buscar..."
-              className="w-36 bg-transparent text-sm text-gray-institutional [outline:0] placeholder:text-gray-institutional/30 md:w-48"
+              className="min-w-0 flex-1 bg-transparent text-sm text-gray-institutional [outline:0] placeholder:text-gray-institutional/30 sm:w-48"
             />
           </div>
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-none">
             <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 focus-within:ring-2 focus-within:ring-guinda/40 focus-within:border-transparent">
-              <Filter className="h-4 w-4 text-gray-institutional/40" />
+              <Filter className="h-4 w-4 shrink-0 text-gray-institutional/40" />
               <select
                 value={filtroEstatus}
                 onChange={e => handleEstatusFilter(e.target.value)}
-                className="max-w-[140px] truncate bg-transparent text-sm text-gray-institutional [outline:0]"
+                className="min-w-0 flex-1 truncate bg-transparent text-sm text-gray-institutional [outline:0] sm:max-w-[180px]"
               >
                 <option value="">Todos los estatus</option>
                 <option value="Planeacion - Evaluacion">Planeación - Evaluación</option>
@@ -171,13 +171,13 @@ export default function AdminDashboard() {
               </select>
             </div>
           </div>
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-none">
             <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 focus-within:ring-2 focus-within:ring-guinda/40 focus-within:border-transparent">
-              <Filter className="h-4 w-4 text-gray-institutional/40" />
+              <Filter className="h-4 w-4 shrink-0 text-gray-institutional/40" />
               <select
                 value={filtroPrioridad}
                 onChange={e => handlePrioridadFilter(e.target.value)}
-                className="bg-transparent text-sm text-gray-institutional [outline:0]"
+                className="min-w-0 flex-1 bg-transparent text-sm text-gray-institutional [outline:0]"
               >
                 <option value="">Todas las prioridades</option>
                 <option value="alta">Prioridad alta</option>

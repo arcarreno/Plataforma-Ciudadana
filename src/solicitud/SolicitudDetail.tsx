@@ -355,7 +355,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                     <select
                       value={s.estatus_fase || ''}
                       onChange={e => onEstatusChange(e.target.value as EstatusFase)}
-                      className="max-w-[140px] truncate rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
+                      className="max-w-[200px] truncate rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
                     >
                       {ESTATUS_OPCIONES.map(e => (
                         <option key={e} value={e} className="truncate">{e}</option>
