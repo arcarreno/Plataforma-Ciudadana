@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import Layout from './shared/Layout'
@@ -6,7 +7,8 @@ import NuevaSolicitud from './pages/NuevaSolicitud'
 import ConsultarFolio from './pages/ConsultarFolio'
 import AdminDashboard from './pages/AdminDashboard'
 import GestionUsuarios from './pages/GestionUsuarios'
-import MapasEstadisticas from './pages/MapasEstadisticas'
+
+const MapasEstadisticas = lazy(() => import('./pages/MapasEstadisticas'))
 
 export default function App() {
   return (
@@ -19,7 +21,15 @@ export default function App() {
             <Route path="/consultar-folio" element={<ConsultarFolio />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/usuarios" element={<GestionUsuarios />} />
-            <Route path="/admin/mapas" element={<MapasEstadisticas />} />
+            <Route path="/admin/mapas" element={
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-24">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-guinda border-t-transparent" />
+                </div>
+              }>
+                <MapasEstadisticas />
+              </Suspense>
+            } />
           </Route>
         </Routes>
       </AuthProvider>

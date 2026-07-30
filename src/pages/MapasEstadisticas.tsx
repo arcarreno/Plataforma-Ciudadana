@@ -109,7 +109,7 @@ export default function MapasEstadisticas() {
   }, [user])
 
   useEffect(() => {
-    cargarCapas().then(setCapas)
+    cargarCapas(['colonias', 'juntas', 'zonasZap']).then(setCapas)
   }, [])
 
   async function cargarSolicitudes() {

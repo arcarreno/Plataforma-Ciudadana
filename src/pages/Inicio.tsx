@@ -45,7 +45,7 @@ const steps = [
   {
     number: '03',
     title: 'Acuse',
-    desc: 'Recibe tu comprobante con folio y código QR por correo y descárgalo.',
+    desc: 'Recibe tu comprobante con folio y ficha técnica por correo y descárgalo.',
   },
 ]
 

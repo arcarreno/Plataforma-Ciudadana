@@ -1,23 +1,13 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, Accessibility, LogOut } from 'lucide-react'
-import type { FontSize, Contrast, VoiceType } from '../core/theme'
+import { Menu, LogOut } from 'lucide-react'
 import logoPuebla from '../assets/Puebla.png'
 import mosaico from '../assets/mosaico.svg'
-import AccessibilityPanel from './AccessibilityPanel'
 import NavigationPanel from './NavigationPanel'
 import LoginModal from './LoginModal'
 import { useAuth } from '../contexts/AuthContext'
 
 interface HeaderProps {
-  fontSize: FontSize
-  onFontSizeChange: (size: FontSize) => void
-  contrast: Contrast
-  onContrastChange: (c: Contrast) => void
-  voiceType: VoiceType
-  onVoiceTypeChange: (v: VoiceType) => void
-  talkBackEnabled: boolean
-  onTalkBackToggle: () => void
   navOpen: boolean
   onNavToggle: () => void
 }
@@ -29,23 +19,33 @@ const navLinks = [
 ]
 
 export default function Header({
-  fontSize,
-  onFontSizeChange,
-  contrast,
-  onContrastChange,
-  voiceType,
-  onVoiceTypeChange,
-  talkBackEnabled,
-  onTalkBackToggle,
   navOpen,
   onNavToggle,
 }: HeaderProps) {
   const { user, cerrarSesion } = useAuth()
-  const [panelOpen, setPanelOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const compactNav = fontSize === 'xlarge'
+  const navRef = useRef<HTMLElement>(null)
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
+
+  const compactNav = typeof document !== 'undefined'
+    ? document.documentElement.getAttribute('data-font-size') === 'xlarge'
+    : false
+
+  function isActive(path: string) {
+    if (path === '/admin') return location.pathname.startsWith('/admin') && location.pathname !== '/admin/mapas'
+    return location.pathname === path
+  }
+
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const active = nav.querySelector<HTMLElement>('[data-active="true"]')
+    if (active) {
+      setIndicator({ left: active.offsetLeft, width: active.offsetWidth })
+    }
+  }, [location.pathname, user])
 
   return (
     <>
@@ -66,13 +66,21 @@ export default function Header({
           </button>
 
           <div className="flex items-center gap-2">
-            <nav className={`${compactNav ? 'hidden' : 'hidden md:flex'} items-center gap-1`}>
+            <nav
+              ref={navRef}
+              className={`${compactNav ? 'hidden' : 'hidden md:flex'} relative items-center gap-1`}
+            >
+              <div
+                className="absolute bottom-1 top-1 rounded-xl bg-guinda shadow-button transition-all duration-300 ease-in-out"
+                style={{ left: indicator.left, width: indicator.width }}
+              />
               {user && (
                 <Link
                   to="/admin"
-                  className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                    location.pathname.startsWith('/admin') && location.pathname !== '/admin/mapas'
-                      ? 'bg-guinda text-white shadow-button'
+                  data-active={isActive('/admin')}
+                  className={`relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                    isActive('/admin')
+                      ? 'text-white'
                       : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
                   }`}
                 >
@@ -82,9 +90,10 @@ export default function Header({
               {user && (
                 <Link
                   to="/admin/mapas"
-                  className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                    location.pathname === '/admin/mapas'
-                      ? 'bg-guinda text-white shadow-button'
+                  data-active={isActive('/admin/mapas')}
+                  className={`relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                    isActive('/admin/mapas')
+                      ? 'text-white'
                       : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
                   }`}
                 >
@@ -92,14 +101,15 @@ export default function Header({
                 </Link>
               )}
               {navLinks.map((link) => {
-                const isActive = location.pathname === link.to
+                const active = isActive(link.to)
                 return (
                   <Link
                     key={link.to}
                     to={link.to}
-                    className={`rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                      isActive
-                        ? 'bg-guinda text-white shadow-button'
+                    data-active={active}
+                    className={`relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                      active
+                        ? 'text-white'
                         : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
                     }`}
                   >
@@ -141,18 +151,7 @@ export default function Header({
             >
               <Menu size={22} />
             </button>
-            <button
-              onClick={() => setPanelOpen(!panelOpen)}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 ${
-                panelOpen
-                  ? 'rotate-90 bg-guinda text-white shadow-button'
-                  : 'text-guinda hover:bg-guinda/10'
-              }`}
-              aria-label="Abrir panel de accesibilidad"
-              aria-expanded={panelOpen}
-            >
-              <Accessibility size={22} />
-            </button>
+
           </div>
         </div>
       </header>
@@ -162,18 +161,7 @@ export default function Header({
         onClose={() => onNavToggle()}
       />
 
-      <AccessibilityPanel
-        open={panelOpen}
-        onClose={() => setPanelOpen(false)}
-        fontSize={fontSize}
-        onFontSizeChange={onFontSizeChange}
-        contrast={contrast}
-        onContrastChange={onContrastChange}
-        voiceType={voiceType}
-        onVoiceTypeChange={onVoiceTypeChange}
-        talkBackEnabled={talkBackEnabled}
-        onTalkBackToggle={onTalkBackToggle}
-      />
+
     </>
   )
 }

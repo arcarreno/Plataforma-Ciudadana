@@ -72,29 +72,49 @@ function detectarPIP(
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
-async function fetchJSON(url: string) {
-  try {
-    const r = await fetch(url)
-    if (!r.ok) return EMPTY_FC
-    return await r.json()
-  } catch (_e) {
-    return EMPTY_FC
-  }
+const capaCache = new Map<string, Promise<GeoJSON.FeatureCollection>>()
+
+async function fetchJSON(url: string): Promise<GeoJSON.FeatureCollection> {
+  const cached = capaCache.get(url)
+  if (cached) return cached
+  const promise = (async () => {
+    try {
+      const r = await fetch(url)
+      if (!r.ok) return EMPTY_FC
+      return await r.json()
+    } catch (_e) {
+      return EMPTY_FC
+    }
+  })()
+  capaCache.set(url, promise)
+  return promise
 }
 
-export function cargarCapas(): Promise<CapasGeoJSON> {
-  return Promise.all([
-    fetchJSON('/data/COLONIAS PUEBLA.geojson'),
-    fetchJSON('/data/JUNTAS AUXILIARES.geojson'),
-    fetchJSON('/data/zonas zap2024.geojson'),
-    fetchJSON('/data/Escuelas.geojson'),
-    fetchJSON('/data/Iglesias.geojson'),
-    fetchJSON('/data/STV.geojson'),
-    fetchJSON('/data/COBERTURA_AGUAS DE PUEBLA.geojson'),
-    fetchJSON('/data/CALLES_PUEBLA.geojson'),
-  ]).then(([colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua, calles]) => ({
-    colonias, juntas, zonasZap, escuelas, iglesias, stv, coberturaAgua, calles,
-  }))
+const ALL_CAPAS = [
+  { key: 'colonias' as const, url: '/data/COLONIAS PUEBLA.geojson' },
+  { key: 'juntas' as const, url: '/data/JUNTAS AUXILIARES.geojson' },
+  { key: 'zonasZap' as const, url: '/data/zonas zap2024.geojson' },
+  { key: 'escuelas' as const, url: '/data/Escuelas.geojson' },
+  { key: 'iglesias' as const, url: '/data/Iglesias.geojson' },
+  { key: 'stv' as const, url: '/data/STV.geojson' },
+  { key: 'coberturaAgua' as const, url: '/data/COBERTURA_AGUAS DE PUEBLA.geojson' },
+  { key: 'calles' as const, url: '/data/CALLES_PUEBLA.geojson' },
+]
+
+export function cargarCapas(include?: (keyof CapasGeoJSON)[]): Promise<CapasGeoJSON> {
+  const selected = include ? ALL_CAPAS.filter(l => include.includes(l.key)) : ALL_CAPAS
+  return Promise.all(
+    selected.map(l => fetchJSON(l.url).then(d => ({ key: l.key, data: d })))
+  ).then(results => {
+    const obj = {} as CapasGeoJSON
+    for (const r of results) (obj as any)[r.key] = r.data
+    if (include) {
+      for (const l of ALL_CAPAS) {
+        if (!include.includes(l.key)) (obj as any)[l.key] = EMPTY_FC
+      }
+    }
+    return obj
+  })
 }
 
 export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): DeteccionPunto {
