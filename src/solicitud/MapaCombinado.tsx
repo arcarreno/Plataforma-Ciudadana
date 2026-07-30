@@ -338,11 +338,6 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     }
   }
 
-  const handleSkipTramo = () => {
-    if (!pinDataRef.current) return
-    onConfirm({ pin: pinDataRef.current })
-  }
-
   const d = detection
   const isOutside = d?.fuera_alcance
   const td = tramoDetection
@@ -698,11 +693,6 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                   </div>
                 )}
 
-                {!tramoDone && tramoPoints.length === 0 && (
-                  <Button type="button" size="sm" variant="secondary" className="mt-1 w-full" onClick={handleSkipTramo}>
-                    Saltar tramo
-                  </Button>
-                )}
               </>
             )}
           </div>
