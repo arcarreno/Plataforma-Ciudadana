@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle } from 'lucide-react'
@@ -153,18 +153,28 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     setDocumentTab(tab)
   }
 
+  const oficioRef = useRef<{ exportarPdf: () => Promise<string> }>(null)
+  const fichaRef = useRef<{ exportarPdf: () => Promise<string> }>(null)
+
   const handleEnviarDocumentacion = async () => {
     setEnviandoEmail(true)
     setEmailError(null)
     try {
+      if (!oficioRef.current || !fichaRef.current) {
+        throw new Error('Documentos no disponibles')
+      }
+      const [oficioPdf, fichaPdf] = await Promise.all([
+        oficioRef.current.exportarPdf(),
+        fichaRef.current.exportarPdf(),
+      ])
       const res = await fetch('/api/enviar-documentacion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           correo: s.correo,
           folio: s.folio_unico,
-          oficioPdf: null,
-          fichaPdf: null,
+          oficioPdf,
+          fichaPdf,
           oficioNombre: `Oficio_${s.folio_unico}.pdf`,
           fichaNombre: `Ficha_tecnica_${s.folio_unico}.pdf`,
         }),
@@ -261,9 +271,13 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
           {/* Content */}
           <div className="relative flex-1 overflow-hidden">
-            {documentTab === 'oficio' && <VistaOficioEditable solicitud={s} />}
-            {documentTab === 'ficha' && <VistaFichaEditable solicitud={s} sigedData={sigedData} />}
-            {documentTab === 'enviar' && (
+            <div className={`absolute inset-0 ${documentTab === 'oficio' ? 'z-30' : 'z-0'}`}>
+              <VistaOficioEditable ref={oficioRef} solicitud={s} />
+            </div>
+            <div className={`absolute inset-0 ${documentTab === 'ficha' ? 'z-20' : 'z-10'}`}>
+              <VistaFichaEditable ref={fichaRef} solicitud={s} sigedData={sigedData} />
+            </div>
+            <div className={`absolute inset-0 ${documentTab === 'enviar' ? 'z-30' : 'z-10'}`}>
               <div className="flex h-full flex-col items-center justify-center bg-gray-50 p-8">
                 <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-100">
                   <div className="mb-6 text-center">
@@ -334,7 +348,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                   </div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       ) : (

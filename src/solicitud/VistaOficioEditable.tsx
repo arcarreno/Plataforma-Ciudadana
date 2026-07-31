@@ -1,8 +1,8 @@
-import { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect } from 'react'
+import { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect, useImperativeHandle } from 'react'
 import DOMPurify from 'dompurify'
 import letterhead from '../assets/letterhead.jpg'
 import type { Solicitud } from '../types/solicitud'
-import { exportToPdf } from '../lib/exportPdf'
+import { exportToPdf, exportToPdfBase64 } from '../lib/exportPdf'
 
 const PX_PER_CM = 37.8
 const FOOTER_TEXT_CM = 24
@@ -37,9 +37,10 @@ function escapeHtml(text: string): string {
 
 interface Props {
   solicitud: Solicitud
+  ref?: React.Ref<{ exportarPdf: () => Promise<string> }>
 }
 
-export default function VistaOficioEditable({ solicitud }: Props) {
+export default function VistaOficioEditable({ solicitud, ref }: Props) {
   const s = solicitud
   const fecha = s.fecha_creacion ? new Date(s.fecha_creacion).toLocaleDateString('es-MX') : '—'
 
@@ -243,6 +244,19 @@ export default function VistaOficioEditable({ solicitud }: Props) {
     }
     setExporting(false)
   }
+
+  const exportarPdf = async (): Promise<string> => {
+    setExporting(true)
+    try {
+      const elements = pageRefs.current.filter(Boolean)
+      if (elements.length === 0) throw new Error('Oficio sin páginas para exportar')
+      return await exportToPdfBase64(elements, 'portrait', 2)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  useImperativeHandle(ref, () => ({ exportarPdf }))
 
   useEffect(() => {
     pageRefs.current = pageRefs.current.slice(0, measuredPages ? measuredPages.length : 0)

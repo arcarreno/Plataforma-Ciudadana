@@ -1,5 +1,4 @@
-import { useState, useRef } from 'react'
-import DOMPurify from 'dompurify'
+import { useState, useRef, useImperativeHandle } from 'react'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { MapContainer, TileLayer, Polyline, Marker } from 'react-leaflet'
@@ -10,12 +9,8 @@ import type { SigedEscuela } from '../lib/consultarSIGED'
 import bannerImg from '../assets/ficha-banner.png'
 import footerImg from '../assets/ficha-footer.png'
 
-function esc(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
-function brAt58(text: string): string {
-  return text.length > 58 ? text.slice(0, 58) + '<br>' + text.slice(58) : text
+function cleanText(el: HTMLElement): string {
+  return (el.innerText || '').replace(/\u00A0/g, ' ').trim()
 }
 
 function shortRoute(r: string): string {
@@ -27,15 +22,16 @@ function shortRoute(r: string): string {
 interface Props {
   solicitud: Solicitud
   sigedData?: SigedEscuela | null
+  ref?: React.Ref<{ exportarPdf: () => Promise<string> }>
 }
 
-export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
+export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Props) {
   const [largo, setLargo] = useState(s.distancia_tramo_m ?? 0)
   const [ancho, setAncho] = useState(s.ancho_calle_m ?? 0)
   const [tipoObra, setTipoObra] = useState(s.tipo_solicitud)
   const [calle, setCalle] = useState(s.calle || '')
   const [entreCalles, setEntreCalles] = useState(s.entre_calles || '')
-  const [colonia, setColonia] = useState(s.colonia || '')
+  const [colonia] = useState(s.colonia || '')
   const [juntaAux] = useState(s.junta_auxiliar || '')
   const iglesiasStr = (s.iglesias_cercanas || []).join(', ')
   const transportesStr = (s.transportes_cercanos || []).join(', ')
@@ -64,6 +60,19 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
   const tipoObraUpper = tipoObra.toUpperCase()
   const googleMapsUrl = `https://maps.google.com/?q=${s.latitud},${s.longitud}`
 
+  const ubicacionInicial = (() => {
+    const partes: string[] = []
+    if (coloniaUpper) partes.push(`EN LA COLONIA ${coloniaUpper}`)
+    if (juntaUpper) {
+      const juntaLabel = juntaUpper === 'ZONA METROPOLITANA'
+        ? 'EN LA ZONA METROPOLITANA'
+        : `EN LA JUNTA AUXILIAR ${juntaUpper}`
+      partes.push(coloniaUpper ? `, ${juntaLabel}` : juntaLabel)
+    }
+    return partes.join('')
+  })()
+  const [ubicacionTexto, setUbicacionTexto] = useState(ubicacionInicial)
+
   const tramoPuntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
     ? s.tramo_puntos
     : (s.tramo_lat_ini != null && s.tramo_lng_ini != null && s.tramo_lat_fin != null && s.tramo_lng_fin != null
@@ -74,11 +83,21 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
     ? [tramoPuntos!.reduce((s, p) => s + p.lat, 0) / tramoPuntos!.length, tramoPuntos!.reduce((s, p) => s + p.lng, 0) / tramoPuntos!.length] as [number, number]
     : [s.latitud, s.longitud] as [number, number]
 
+  const tramoBounds: [[number, number], [number, number]] | null = hasTramo && tramoPuntos!.length >= 2
+    ? [
+        [Math.min(...tramoPuntos!.map(p => p.lat)), Math.min(...tramoPuntos!.map(p => p.lng))],
+        [Math.max(...tramoPuntos!.map(p => p.lat)), Math.max(...tramoPuntos!.map(p => p.lng))],
+      ]
+    : null
+  const boundsFit = tramoBounds && (tramoBounds[0][0] !== tramoBounds[1][0] || tramoBounds[0][1] !== tramoBounds[1][1])
+    ? tramoBounds
+    : null
+
   const markerIcon1 = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">1</div>', iconSize: [20, 20], iconAnchor: [10, 10] })
   const markerIcon2 = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">2</div>', iconSize: [20, 20], iconAnchor: [10, 10] })
 
-  const handleExportPdf = async () => {
-    if (!fichaRef.current) return
+  const generarPdf = async (): Promise<string> => {
+    if (!fichaRef.current) throw new Error('Ficha no disponible')
     setExporting(true)
     try {
       const canvas = await html2canvas(fichaRef.current, {
@@ -98,12 +117,30 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
         hotfixes: ['px_scaling'],
       })
       pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH)
-      pdf.save(`Ficha_tecnica_${s.folio_unico}.pdf`)
+      return pdf.output('datauristring').split(',')[1] ?? ''
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleExportPdf = async () => {
+    try {
+      const base64 = await generarPdf()
+      if (!base64) return
+      const bytes = new Uint8Array(atob(base64).split('').map(c => c.charCodeAt(0)))
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Ficha_tecnica_${s.folio_unico}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Error al exportar Ficha PDF:', err)
     }
-    setExporting(false)
   }
+
+  useImperativeHandle(ref, () => ({ exportarPdf: generarPdf }))
 
   return (
     <div className="flex h-full flex-col bg-[#eaeaea]">
@@ -124,33 +161,39 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
 
           {/* Tipo de obra */}
           <div className="ficha-tipo-obra" contentEditable suppressContentEditableWarning
-            onBlur={e => setTipoObra(DOMPurify.sanitize(e.currentTarget?.innerHTML ?? ''))}
-            dangerouslySetInnerHTML={{ __html: esc(tipoObraUpper) }} />
+            onBlur={e => setTipoObra(cleanText(e.currentTarget))}>
+            {tipoObraUpper}
+          </div>
 
-          {/* Street */}
-          <div className="ficha-street-text" contentEditable suppressContentEditableWarning
-            onBlur={e => setCalle(DOMPurify.sanitize(e.currentTarget?.innerHTML ?? ''))}
-            dangerouslySetInnerHTML={{ __html: esc(calle) }} />
+          {/* Banner texts in flow */}
+          <div className="ficha-banner-texts">
+            {/* Street */}
+            <div className="ficha-street-text" contentEditable suppressContentEditableWarning
+              onBlur={e => setCalle(cleanText(e.currentTarget))}>
+              {calle}
+            </div>
 
-          {/* Colonia + Junta */}
-          <div className="ficha-location-text" contentEditable suppressContentEditableWarning
-            onBlur={e => {
-              const html = DOMPurify.sanitize(e.currentTarget?.innerHTML ?? '')
-              setColonia(html)
-            }}
-            dangerouslySetInnerHTML={{ __html: brAt58(juntaUpper === 'ZONA METROPOLITANA' ? `${coloniaUpper ? `EN LA COLONIA ${esc(coloniaUpper)}, ` : ''}EN LA ZONA METROPOLITANA` : coloniaUpper ? `EN LA COLONIA ${esc(coloniaUpper)}${juntaUpper ? `, EN LA JUNTA AUXILIAR ${esc(juntaUpper)}` : ''}` : juntaUpper ? `EN LA JUNTA AUXILIAR ${esc(juntaUpper)}` : '') }} />
+            {/* Entre calles */}
+            {entreCalles && (
+              <div className="ficha-entre-calles" contentEditable suppressContentEditableWarning
+                onBlur={e => setEntreCalles(cleanText(e.currentTarget))}>
+                {entreCalles}
+              </div>
+            )}
 
-          {/* Entre calles */}
-          {entreCalles && (
-            <div className="ficha-entre-calles" contentEditable suppressContentEditableWarning
-              onBlur={e => setEntreCalles(DOMPurify.sanitize(e.currentTarget?.innerHTML ?? ''))}
-              dangerouslySetInnerHTML={{ __html: brAt58(esc(entreCalles)) }} />
-          )}
+            {/* Colonia + Junta (todo editable, una sola pieza) */}
+            {ubicacionTexto && (
+              <div className="ficha-location-text ficha-editable" contentEditable suppressContentEditableWarning
+                onBlur={e => setUbicacionTexto(cleanText(e.currentTarget))}>
+                {ubicacionTexto}
+              </div>
+            )}
+          </div>
 
           {/* Map */}
           <div className="ficha-map-area">
-            <div className="ficha-map-pill">{esc(tipoObraUpper)}</div>
-            <MapContainer center={mapCenter} zoom={17} className="ficha-map-inner" zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} touchZoom={false} keyboard={false}>
+            <div className="ficha-map-pill">{tipoObraUpper}</div>
+            <MapContainer center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} touchZoom={false} keyboard={false} preferCanvas>
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {hasTramo && <Polyline positions={tramoPuntos!.map(p => [p.lat, p.lng])} pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }} />}
               {hasTramo && (
@@ -168,7 +211,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
             <span>Ubicación</span>
             <a href={googleMapsUrl} target="_blank" className="ficha-link" rel="noreferrer">{googleMapsUrl}</a>
           </div>
-          <div className="ficha-st-text">ST: {esc(s.folio_unico || '—')}</div>
+          <div className="ficha-st-text">ST: {s.folio_unico || '—'}</div>
 
           {/* Right Panel: Datos Técnicos */}
           <div className="ficha-panel">
@@ -176,8 +219,10 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
             <div className="ficha-row">
               <div className="ficha-item">
                 <div className="ficha-label">Longitud (m)</div>
-                <input type="number" value={largo} onChange={e => setLargo(Number(e.target.value) || 0)}
-                  className="ficha-input" min={0} step={1} />
+                <div className="ficha-input" contentEditable suppressContentEditableWarning
+                  onBlur={e => setLargo(parseInt(cleanText(e.currentTarget), 10) || 0)}>
+                  {largo > 0 ? String(largo) : ''}
+                </div>
               </div>
               <div className="ficha-item">
                 <div className="ficha-label">Intervención</div>
@@ -187,8 +232,10 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
             <div className="ficha-row">
               <div className="ficha-item">
                 <div className="ficha-label">Ancho (m)</div>
-                <input type="number" value={ancho} onChange={e => setAncho(Number(e.target.value) || 0)}
-                  className="ficha-input" min={0} step={0.1} />
+                <div className="ficha-input" contentEditable suppressContentEditableWarning
+                  onBlur={e => setAncho(parseFloat(cleanText(e.currentTarget)) || 0)}>
+                  {ancho > 0 ? String(ancho) : ''}
+                </div>
               </div>
             </div>
 
@@ -209,8 +256,8 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
                           const match = sigedData && sigedData.cct.toUpperCase() === cct ? sigedData : null
                           return (
                             <tr key={i} className="ficha-esc-row">
-                              <td><span contentEditable suppressContentEditableWarning>{esc(cct)}</span></td>
-                              <td><span contentEditable suppressContentEditableWarning>{match ? esc(match.nivel) : '—'}</span></td>
+                              <td><span contentEditable suppressContentEditableWarning>{cct}</span></td>
+                              <td><span contentEditable suppressContentEditableWarning>{match ? match.nivel : '—'}</span></td>
                               <td className="ficha-alumnos-cell">
                                 <span contentEditable suppressContentEditableWarning>{match ? (match.alumnosHombres + match.alumnosMujeres) : '—'}</span>
                                 {!exporting && <button className="ficha-row-del-btn" onClick={() => removeEscuelaRow(cct)}>✕</button>}
@@ -225,13 +272,13 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
               </div>
               <div className="ficha-item">
                 <div className="ficha-label"><Church className="ficha-icon" /> Iglesia(s)</div>
-                <div className="ficha-val">{iglesiasList.length > 0 ? iglesiasList.map((t, i) => <div key={i} className="ficha-transporte-line">{esc(t)}</div>) : 'No'}</div>
+                <div className="ficha-val">{iglesiasList.length > 0 ? iglesiasList.map((t, i) => <div key={i} className="ficha-transporte-line">{t}</div>) : 'No'}</div>
               </div>
             </div>
             <div className="ficha-row">
               <div className="ficha-item">
                 <div className="ficha-label"><Bus className="ficha-icon" /> Transporte</div>
-                <div className="ficha-val">{transportesList.length > 0 ? transportesList.map((t, i) => <div key={i} className="ficha-transporte-line">{esc(shortRoute(t))}</div>) : 'No'}</div>
+                <div className="ficha-val">{transportesList.length > 0 ? transportesList.map((t, i) => <div key={i} className="ficha-transporte-line">{shortRoute(t)}</div>) : 'No'}</div>
               </div>
             </div>
 
@@ -253,7 +300,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
             <div className="ficha-row">
               <div className="ficha-item full">
                 <div className="ficha-label">Junta Auxiliar</div>
-                <div className="ficha-val junta">{esc(juntaUpper)}</div>
+                <div className="ficha-val junta">{juntaUpper}</div>
               </div>
             </div>
 
@@ -301,26 +348,30 @@ export default function VistaFichaEditable({ solicitud: s, sigedData }: Props) {
           background: rgba(255,255,255,0.1);
         }
         .ficha-street-text {
-          position: absolute; top: 56px; left: 50px;
           font-size: 30px; font-weight: 800; color: #FFFFFF;
-          max-width: 530px; line-height: 1.1;
+          line-height: 1.1;
         }
         .ficha-street-text[contenteditable]:hover,
         .ficha-street-text[contenteditable]:focus {
           outline: 1px dashed rgba(255,255,255,0.6);
           background: rgba(255,255,255,0.1);
         }
+        .ficha-banner-texts {
+          position: absolute; top: 56px; left: 50px;
+          display: flex; flex-direction: column; gap: 2px;
+          max-width: 560px;
+          overflow-wrap: normal; word-break: normal;
+        }
         .ficha-location-text {
-          position: absolute; top: 110px; left: 50px;
           font-size: 18px; color: #FFFFFF; opacity: 0.9;
         }
-        .ficha-location-text[contenteditable]:hover,
-        .ficha-location-text[contenteditable]:focus {
+        .ficha-editable { outline: none; border-radius: 2px; }
+        .ficha-editable:hover,
+        .ficha-editable:focus {
           outline: 1px dashed rgba(255,255,255,0.6);
           background: rgba(255,255,255,0.1);
         }
         .ficha-entre-calles {
-          position: absolute; top: 91px; left: 50px;
           font-size: 18px; font-weight: 600; color: #DBC8B6; letter-spacing: 0.3px;
         }
         .ficha-entre-calles[contenteditable]:hover,

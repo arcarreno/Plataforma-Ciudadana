@@ -36,6 +36,7 @@ export interface DeteccionTramo {
 }
 
 const RADIO_TRAMO_KM = 0.003
+const RADIO_CERCANIA_KM = 0.01
 
 function getProps(f: GeoJSON.Feature): { name: string } {
   return f.properties as { name: string } || { name: '' }
@@ -68,6 +69,35 @@ function detectarPIP(
     } catch (_e) { /* skip */ }
   }
   return ''
+}
+
+function detectarEnCapa(
+  pt: GeoJSON.Feature<GeoJSON.Point>,
+  capa: GeoJSON.FeatureCollection
+): GeoJSON.Feature | null {
+  for (const f of capa.features) {
+    if (!f.geometry) continue
+    const gt = f.geometry.type
+    if (gt === 'GeometryCollection') {
+      const gc = f.geometry as GeoJSON.GeometryCollection
+      for (const g of gc.geometries) {
+        if (g.type !== 'Polygon' && g.type !== 'MultiPolygon') continue
+        try {
+          if (booleanPointInPolygon(pt, { type: 'Feature', geometry: g, properties: {} } as any)) {
+            return f
+          }
+        } catch (_e) { /* skip */ }
+      }
+    } else if (gt === 'Polygon' || gt === 'MultiPolygon') {
+      if (!f.geometry.coordinates) continue
+      try {
+        if (booleanPointInPolygon(pt, f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)) {
+          return f
+        }
+      } catch (_e) { /* skip */ }
+    }
+  }
+  return null
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
@@ -122,8 +152,11 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
 
   const rawColonia = detectarPIP(pt, capas.colonias)
   const rawJunta = detectarPIP(pt, capas.juntas)
-  const tieneZonaZap = detectarPIP(pt, capas.zonasZap) !== ''
-  const tieneCoberturaAgua = detectarPIP(pt, capas.coberturaAgua) !== ''
+  const tieneZonaZap = detectarEnCapa(pt, capas.zonasZap) !== null
+
+  const featCoberturaAgua = detectarEnCapa(pt, capas.coberturaAgua)
+  const servicioAgua = ((featCoberturaAgua?.properties as Record<string, unknown> | null)?.servicio ?? '') as string
+  const tieneCoberturaAgua = featCoberturaAgua !== null && !servicioAgua.toUpperCase().startsWith('NO FACTURA')
 
   let colonia = rawColonia ? cleanColoniaName(rawColonia) : ''
   let junta_auxiliar = rawJunta ? matchJunta(rawJunta) : ''
@@ -161,6 +194,7 @@ export function detectarTramo(
   const line = lineString(coords)
 
   const lineBuffer = buffer(line, RADIO_TRAMO_KM, { units: 'kilometers' })
+  const lineBufferCercania = buffer(line, RADIO_CERCANIA_KM, { units: 'kilometers' })
 
   let distancia_m = 0
   for (let i = 1; i < puntos.length; i++) {
@@ -189,15 +223,16 @@ export function detectarTramo(
   }
 
   const buf = lineBuffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>
+  const bufCercania = (lineBufferCercania ?? lineBuffer) as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>
 
-  function pointInBuffer(fc: GeoJSON.FeatureCollection): string[] {
+  function pointInBuffer(fc: GeoJSON.FeatureCollection, bufferGeom: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>): string[] {
     const names: string[] = []
     for (const f of fc.features) {
       if (!f.geometry) continue
       if (f.geometry.type !== 'Point') continue
       if (!f.geometry.coordinates) continue
       try {
-        if (booleanPointInPolygon(f as GeoJSON.Feature<GeoJSON.Point>, buf)) {
+        if (booleanPointInPolygon(f as GeoJSON.Feature<GeoJSON.Point>, bufferGeom)) {
           names.push(getProps(f).name || '')
         }
       } catch (_e) { /* skip */ }
@@ -221,8 +256,8 @@ export function detectarTramo(
     return names
   }
 
-  const escuelas_cercanas = pointInBuffer(capas.escuelas)
-  const iglesias_cercanas = pointInBuffer(capas.iglesias)
+  const escuelas_cercanas = pointInBuffer(capas.escuelas, bufCercania)
+  const iglesias_cercanas = pointInBuffer(capas.iglesias, bufCercania)
   const transportes_cercanos = lineIntersects(capas.stv)
 
   return {

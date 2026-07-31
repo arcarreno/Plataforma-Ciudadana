@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
+import 'leaflet-rotate'
+import MapRotation from './MapRotation'
 import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check, ChevronRight } from 'lucide-react'
 import Button from '../shared/Button'
 import { cargarCapas, detectarPunto, detectarTramo } from './detectar-ubicacion'
@@ -53,6 +55,7 @@ interface MapaCombinadoProps {
   initialLat?: string
   initialLng?: string
   inline?: boolean
+  onPaso2?: () => void
 }
 
 function TramoMarker({ position, label }: { position: L.LatLngExpression; label: number }) {
@@ -180,12 +183,16 @@ function ClickHandler({
   return null
 }
 
-export default function MapaCombinado({ onConfirm, onClose, initialLat, initialLng, inline }: MapaCombinadoProps) {
+export default function MapaCombinado({ onConfirm, onClose, initialLat, initialLng, inline, onPaso2 }: MapaCombinadoProps) {
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState<Step>(initialLat && initialLng ? 'tramo' : 'punto')
   const stepRef = useRef<Step>(step)
   stepRef.current = step
+
+  useEffect(() => {
+    if (step === 'tramo' && onPaso2) onPaso2()
+  }, [step, onPaso2])
 
   const [showLayers, setShowLayers] = useState(false)
   const [satellite, setSatellite] = useState(false)
@@ -381,6 +388,10 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           zoom={DEFAULT_ZOOM}
           className="h-full w-full"
           zoomControl={true}
+          rotate={true}
+          rotateControl={false}
+          shiftKeyRotate={false}
+          touchRotate={true}
         >
           {satellite ? (
             <TileLayer
@@ -396,6 +407,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
           <LocateOnMount />
           <ResizeHandler inline={inline} />
+          <MapRotation />
 
           <ClickHandler
             stepRef={stepRef}
