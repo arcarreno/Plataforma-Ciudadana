@@ -152,7 +152,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   useImperativeHandle(ref, () => ({ exportarPdf: generarPdf }))
 
   return (
-    <div className={`flex h-full flex-col bg-[#eaeaea]${exporting ? ' pdf-export' : ''}`}>
+    <div className={`${exporting ? 'pdf-export ' : ''}flex h-full flex-col bg-[#eaeaea]`}>
       {/* Floating toolbar pill */}
       <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
         <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">

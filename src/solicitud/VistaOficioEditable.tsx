@@ -526,7 +526,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
   )
 
   return (
-    <div className={`flex h-full flex-col bg-[#eaeaea]${exporting ? ' pdf-export' : ''}`}>
+    <div className={`${exporting ? 'pdf-export ' : ''}flex h-full flex-col bg-[#eaeaea]`}>
       {/* Measurement container — hidden, continuous flow */}
       <div ref={measureRef} className="oficio-wrapper" style={{ ...pageStyle, visibility: 'hidden', position: 'fixed', top: 0, left: '-9999px', zIndex: -1 }}>
         <div data-segment="header" className="oficio-header-abs">{renderHeaderContent()}</div>
