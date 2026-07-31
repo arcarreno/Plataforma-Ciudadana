@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { Upload, MapPin, Check, Navigation, ChevronRight } from 'lucide-react'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
-import guiaPaso1 from '../assets/guia-paso-1.mp4'
-import guiaPaso2 from '../assets/guia-paso-2.mp4'
 import { sileo } from 'sileo'
 import lottie from 'lottie-web'
 import loadingAnimation from '../assets/lottie/celu.json'
@@ -14,15 +12,11 @@ import { TIPOS_OBRA_NOMBRES, RANKING_PUNTOS_CARGO_PUBLICO } from '../core/consta
 import { crearSolicitud } from '../lib/solicitud'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
 import MapaCombinado from './MapaCombinado'
+import { correrTour } from './guiaTour'
 import AvisoPrivacidad from '../shared/AvisoPrivacidad'
 
 function validarCURP(curp: string): boolean {
   return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[0-9A-Z]\d$/.test(curp)
-}
-
-const GUIDE_STORAGE_KEYS: Record<'paso1' | 'paso2', string> = {
-  paso1: 'semovinfra_guia_paso1_visto',
-  paso2: 'semovinfra_guia_paso2_visto',
 }
 
 function validarForm(data: SolicitudFormData, omitirCurp?: boolean): SolicitudErrors {
@@ -86,8 +80,6 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const [showLottie, setShowLottie] = useState(false)
   const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
   const [showMapaCombinado, setShowMapaCombinado] = useState(false)
-  const [guiaModal, setGuiaModal] = useState<'paso1' | 'paso2' | null>(null)
-  const [guiaGrande, setGuiaGrande] = useState(false)
   const [isClosingAnimating, setIsClosingAnimating] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [showAviso, setShowAviso] = useState(false)
@@ -314,18 +306,6 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setTimeout(() => setIsClosingAnimating(false), 1000)
   }
 
-  const mostrarGuia = (paso: 'paso1' | 'paso2') => {
-    const key = GUIDE_STORAGE_KEYS[paso]
-    try {
-      if (localStorage.getItem(key)) return
-      localStorage.setItem(key, '1')
-    } catch {
-      // almacenamiento no disponible: se muestra igual esta vez
-    }
-    setGuiaGrande(false)
-    setGuiaModal(paso)
-  }
-
   useLayoutEffect(() => {
     if (!initialOffsetRef.current) return
     initialOffsetRef.current = false
@@ -515,7 +495,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
                         className="ml-auto shrink-0"
                         aria-label="Abrir mapa"
                         disabled={isClosingAnimating}
-                        onClick={() => { mostrarGuia('paso1'); clearMapData(); setMapKey(k => k + 1); setShowMapaCombinado(true) }}
+                        onClick={() => { clearMapData(); setMapKey(k => k + 1); setShowMapaCombinado(true) }}
                       >
                         <MapPin className="mr-1 h-4 w-4" />
                         {form.tramo_lat_ini ? 'Editar' : 'Mapa'}
@@ -615,7 +595,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
                   onClose={closeMap}
                   initialLat={form.latitud}
                   initialLng={form.longitud}
-                  onPaso2={() => mostrarGuia('paso2')}
+                  onPaso1={correrTour}
                 />
               )}
             </div>
@@ -710,59 +690,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             onClose={closeMap}
             initialLat={form.latitud}
             initialLng={form.longitud}
-            onPaso2={() => mostrarGuia('paso2')}
+            onPaso1={correrTour}
           />
-        </div>
-      )}
-      {guiaModal && (
-        <div
-          className="fixed inset-0 z-[10000] flex items-start justify-center overflow-y-auto bg-black/60 p-4"
-          onClick={() => setGuiaModal(null)}
-        >
-          <div
-            className={`relative m-auto w-full overflow-hidden rounded-2xl bg-white shadow-xl ${
-              guiaGrande ? 'max-w-lg sm:max-w-2xl' : 'max-w-xs sm:max-w-sm'
-            }`}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 bg-guinda px-4 pb-4 pt-4">
-              <img src={logoSemovinfra} alt="Semovinfra" className="h-10 w-10 rounded-full object-cover ring-2 ring-white/30" />
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-white">Guía de uso</p>
-                <p className="truncate text-[11px] text-white/70">
-                  {guiaModal === 'paso1' ? 'Paso 1: Marca tu ubicación en el mapa' : 'Paso 2: Confirma el tramo'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setGuiaGrande(g => !g)}
-                className="ml-auto shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/25"
-                aria-label={guiaGrande ? 'Reducir tamaño' : 'Aumentar tamaño'}
-                title={guiaGrande ? 'Reducir tamaño' : 'Aumentar tamaño'}
-              >
-                {guiaGrande ? 'A−' : 'A+'}
-              </button>
-            </div>
-            <div className="p-4">
-              <video
-                key={guiaModal}
-                src={guiaModal === 'paso1' ? guiaPaso1 : guiaPaso2}
-                autoPlay
-                muted
-                loop
-                playsInline
-                className="block h-auto w-full rounded-xl bg-black"
-              />
-              <button
-                type="button"
-                onClick={() => setGuiaModal(null)}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-guinda py-2.5 text-sm font-semibold text-white transition-colors hover:bg-guinda/90"
-              >
-                <Check className="h-4 w-4" />
-                Entendido
-              </button>
-            </div>
-          </div>
         </div>
       )}
       {showInfoModal && (

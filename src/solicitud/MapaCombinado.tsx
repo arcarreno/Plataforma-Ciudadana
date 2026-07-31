@@ -3,8 +3,9 @@ import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents
 import L from 'leaflet'
 import 'leaflet-rotate'
 import MapRotation from './MapRotation'
-import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check, ChevronRight } from 'lucide-react'
+import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check, ChevronRight, HelpCircle } from 'lucide-react'
 import Button from '../shared/Button'
+import { correrTour, detenerTour } from './guiaTour'
 import { cargarCapas, detectarPunto, detectarTramo } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionPunto, DeteccionTramo } from './detectar-ubicacion'
 import { geolocalizarCalle, setCallesData } from '../lib/geolocalizarCalle'
@@ -55,7 +56,7 @@ interface MapaCombinadoProps {
   initialLat?: string
   initialLng?: string
   inline?: boolean
-  onPaso2?: () => void
+  onPaso1?: () => void
 }
 
 function TramoMarker({ position, label }: { position: L.LatLngExpression; label: number }) {
@@ -183,16 +184,21 @@ function ClickHandler({
   return null
 }
 
-export default function MapaCombinado({ onConfirm, onClose, initialLat, initialLng, inline, onPaso2 }: MapaCombinadoProps) {
+export default function MapaCombinado({ onConfirm, onClose, initialLat, initialLng, inline, onPaso1 }: MapaCombinadoProps) {
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState<Step>(initialLat && initialLng ? 'tramo' : 'punto')
   const stepRef = useRef<Step>(step)
   stepRef.current = step
+  const paso1TourFired = useRef(false)
 
   useEffect(() => {
-    if (step === 'tramo' && onPaso2) onPaso2()
-  }, [step, onPaso2])
+    if (loading || paso1TourFired.current) return
+    paso1TourFired.current = true
+    if (onPaso1) onPaso1()
+  }, [loading, onPaso1])
+
+  useEffect(() => () => detenerTour(), [])
 
   const [showLayers, setShowLayers] = useState(false)
   const [satellite, setSatellite] = useState(false)
@@ -350,7 +356,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const td = tramoDetection
 
   return (
-    <div className={inline ? 'flex h-full w-full flex-col bg-white' : 'fixed inset-0 z-50 flex flex-col bg-black/60'}>
+    <div data-tour="mapa-completo" className={inline ? 'flex h-full w-full flex-col bg-white' : 'fixed inset-0 z-50 flex flex-col bg-black/60'}>
       <div className="flex items-center justify-between bg-white px-4 py-3 shadow-md">
         <button
           type="button"
@@ -364,7 +370,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         <h2 className="text-sm font-semibold text-guinda">
           {step === 'punto' ? 'Seleccionar ubicación' : 'Dibujar tramo'}
         </h2>
-        <div className="flex items-center gap-1.5 text-xs text-gray-institutional/60">
+        <div className="flex items-center gap-1.5 text-xs text-gray-institutional/60" data-tour="pasos">
           <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 'punto' ? 'bg-guinda text-white' : 'bg-green-100 text-green-700'}`}>
             {step === 'tramo' ? <Check className="h-3 w-3" /> : '1'}
           </span>
@@ -373,6 +379,15 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
             2
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => correrTour(false)}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-guinda/5 text-guinda transition-colors hover:bg-guinda hover:text-white"
+          aria-label="Ver guía de uso"
+          title="Ver guía de uso"
+        >
+          <HelpCircle className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="relative flex-1">
@@ -468,7 +483,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         </div>
 
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[999] bg-gradient-to-t from-black/60 to-transparent p-4 pt-8">
-          <div className="pointer-events-auto mx-auto max-w-md space-y-2 rounded-2xl bg-white p-4 shadow-card">
+          <div className="pointer-events-auto mx-auto max-w-md space-y-2 rounded-2xl bg-white p-4 shadow-card" data-tour="panel">
             {step === 'punto' ? (
               <>
                 {!marker && (
@@ -486,7 +501,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                         {marker.lat.toFixed(6)}, {marker.lng.toFixed(6)}
                       </span>
                     </div>
-                    <Button type="button" size="sm" onClick={handlePicar} disabled={!capas}>
+                    <Button type="button" size="sm" onClick={handlePicar} disabled={!capas} data-tour="picar-ubicacion">
                       <Crosshair className="mr-1.5 h-4 w-4" />
                       Picar ubicación
                     </Button>
@@ -639,7 +654,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                         <Button type="button" size="sm" variant="secondary" onClick={handleResetTramo}>
                           Reiniciar
                         </Button>
-                        <Button type="button" size="sm" className="flex-1" onClick={() => setTramoDone(true)}>
+                        <Button type="button" size="sm" className="flex-1" onClick={() => setTramoDone(true)} data-tour="terminar-tramo">
                           <Ruler className="mr-1.5 h-4 w-4" />
                           Terminar tramo
                         </Button>
@@ -686,7 +701,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
                     <div>
                       {tramoConfirmed ? (
-                          <Button type="button" size="sm" className="w-full !bg-[#636569] !text-white !shadow-none" onClick={() => setShowTramoInfoCard(true)}>
+                          <Button type="button" size="sm" className="w-full !bg-[#636569] !text-white !shadow-none" onClick={() => setShowTramoInfoCard(true)} data-tour="ver-resumen">
                             <Check className="mr-1.5 h-4 w-4" />
                             Realizado
                           </Button>
@@ -695,7 +710,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                           <Button type="button" size="sm" variant="secondary" className="flex-1" onClick={handleResetTramo}>
                             Borrar
                           </Button>
-                          <Button type="button" size="sm" className="flex-1" onClick={handleConfirmarTramo}>
+                          <Button type="button" size="sm" className="flex-1" onClick={handleConfirmarTramo} data-tour="confirmar-tramo">
                             <Check className="mr-1.5 h-4 w-4" />
                             Confirmar tramo
                           </Button>
@@ -713,7 +728,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
       {showTramoInfoCard && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowTramoInfoCard(false)}>
-          <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+          <div data-tour="resumen-obra" className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
             <div className="flex flex-col gap-4 px-6 pb-6 pt-0">
               <div className="-mt-9 flex justify-center">
