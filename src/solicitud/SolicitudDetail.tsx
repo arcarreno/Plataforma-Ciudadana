@@ -540,12 +540,12 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                           {s.iglesias_cercanas?.length ? s.iglesias_cercanas.join(', ') : 'Ninguna encontrada'}
                         </span>
                       </div>
-                      {s.transportes_cercanos && s.transportes_cercanos.length > 0 && (
-                        <div className="flex items-start gap-2 text-xs">
-                          <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
-                          <span className="text-gray-institutional">{s.transportes_cercanos.join(', ')}</span>
-                        </div>
-                      )}
+                      <div className="flex items-start gap-2 text-xs">
+                        <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
+                        <span className="text-gray-institutional">
+                          {s.transportes_cercanos && s.transportes_cercanos.length > 0 ? s.transportes_cercanos.join(', ') : 'Rutas no encontradas'}
+                        </span>
+                      </div>
                     </div>
                   </Card>
                 )}
@@ -864,13 +864,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                         <span className="text-gray-institutional/60">
                           {s.tramo_lat_ini!.toFixed(6)}, {s.tramo_lng_ini!.toFixed(6)} → {s.tramo_lat_fin!.toFixed(6)}, {s.tramo_lng_fin!.toFixed(6)}
                         </span>
-                      </div>
-                    )}
-
-                    {s.iglesias_cercanas && s.iglesias_cercanas.length > 0 && (
-                      <div className="flex items-start gap-2 text-purple-600">
-                        <Church className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span className="line-clamp-2">{s.iglesias_cercanas.join(', ')}</span>
                       </div>
                     )}
 
