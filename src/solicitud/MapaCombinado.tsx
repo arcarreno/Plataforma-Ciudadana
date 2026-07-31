@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import 'leaflet-rotate'
-import MapRotation from './MapRotation'
 import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check, ChevronRight, HelpCircle } from 'lucide-react'
 import Button from '../shared/Button'
 import { correrTour, detenerTour } from './guiaTour'
@@ -403,10 +401,6 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           zoom={DEFAULT_ZOOM}
           className="h-full w-full"
           zoomControl={true}
-          rotate={true}
-          rotateControl={false}
-          shiftKeyRotate={false}
-          touchRotate={true}
         >
           {satellite ? (
             <TileLayer
@@ -422,7 +416,6 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
           <LocateOnMount />
           <ResizeHandler inline={inline} />
-          <MapRotation />
 
           <ClickHandler
             stepRef={stepRef}

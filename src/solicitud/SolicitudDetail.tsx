@@ -163,25 +163,39 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
       if (!oficioRef.current || !fichaRef.current) {
         throw new Error('Documentos no disponibles')
       }
+      // Si el usuario terminó de editar un campo sin salir de él, forzar el blur
+      // para que el onBlur commitee el estado y el DOM capturado refleje la edición.
+      const activo = document.activeElement as HTMLElement | null
+      if (activo?.isContentEditable) activo.blur()
+      await new Promise(res => setTimeout(res, 80))
       const [oficioPdf, fichaPdf] = await Promise.all([
         oficioRef.current.exportarPdf(),
         fichaRef.current.exportarPdf(),
       ])
+      const body = JSON.stringify({
+        correo: s.correo,
+        folio: s.folio_unico,
+        oficioPdf,
+        fichaPdf,
+        oficioNombre: `Oficio_${s.folio_unico}.pdf`,
+        fichaNombre: `Ficha_tecnica_${s.folio_unico}.pdf`,
+      })
+      if (body.length > 3_800_000) {
+        throw new Error('La documentación es demasiado grande para enviarse por correo. Intenta reducir el contenido de los documentos.')
+      }
       const res = await fetch('/api/enviar-documentacion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          correo: s.correo,
-          folio: s.folio_unico,
-          oficioPdf,
-          fichaPdf,
-          oficioNombre: `Oficio_${s.folio_unico}.pdf`,
-          fichaNombre: `Ficha_tecnica_${s.folio_unico}.pdf`,
-        }),
+        body,
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Error al enviar')
+        const text = await res.text()
+        let data: { error?: string } | null = null
+        try { data = JSON.parse(text) } catch { /* respuesta no JSON */ }
+        if (res.status === 413) {
+          throw new Error('La documentación excede el tamaño máximo permitido por el servidor. Reduce el contenido de los documentos e inténtalo de nuevo.')
+        }
+        throw new Error(data?.error || `Error al enviar (${res.status})`)
       }
       setEmailEnviado(true)
     } catch (err: any) {

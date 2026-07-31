@@ -204,7 +204,7 @@ export function correrTour(marcar = true): boolean {
     paso(
       '.leaflet-container',
       'Mapa de Puebla',
-      'Haz clic o toca el lugar donde necesitas la obra para colocar el marcador. Acércate con los botones de zoom, arrastra el mapa para moverte y gíralo con Ctrl + rueda (o Ctrl + dos dedos en el trackpad).',
+      'Haz clic o toca el lugar donde necesitas la obra para colocar el marcador. Acércate con los botones de zoom y arrastra el mapa para moverte a tu gusto.',
       'left',
       hayMarcador,
     ),

@@ -27,7 +27,9 @@ export default function Header({
   const location = useLocation()
   const navigate = useNavigate()
   const navRef = useRef<HTMLElement>(null)
-  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null)
+  const indicatorRef = useRef(indicator)
+  indicatorRef.current = indicator
 
   const compactNav = typeof document !== 'undefined'
     ? document.documentElement.getAttribute('data-font-size') === 'xlarge'
@@ -38,12 +40,35 @@ export default function Header({
     return location.pathname === path
   }
 
-  useEffect(() => {
+  function medirIndicador() {
     const nav = navRef.current
     if (!nav) return
     const active = nav.querySelector<HTMLElement>('[data-active="true"]')
-    if (active) {
-      setIndicator({ left: active.offsetLeft, width: active.offsetWidth })
+    if (!active) return
+    const activeRect = active.getBoundingClientRect()
+    if (activeRect.width === 0 || activeRect.height === 0) return
+    const navRect = nav.getBoundingClientRect()
+    const siguiente = { left: activeRect.left - navRect.left, width: activeRect.width }
+    const actual = indicatorRef.current
+    if (!actual || Math.abs(actual.left - siguiente.left) > 1 || Math.abs(actual.width - siguiente.width) > 1) {
+      setIndicator(siguiente)
+    }
+  }
+
+  useEffect(() => {
+    medirIndicador()
+    const t = setTimeout(medirIndicador, 400)
+    const alCambiarLayout = () => medirIndicador()
+    document.fonts?.ready.then(alCambiarLayout).catch(() => {})
+    document.fonts?.addEventListener('loadingdone', alCambiarLayout)
+    window.addEventListener('resize', alCambiarLayout)
+    const obs = new MutationObserver(alCambiarLayout)
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-font-size', 'data-contrast'] })
+    return () => {
+      clearTimeout(t)
+      document.fonts?.removeEventListener('loadingdone', alCambiarLayout)
+      window.removeEventListener('resize', alCambiarLayout)
+      obs.disconnect()
     }
   }, [location.pathname, user])
 
@@ -70,10 +95,12 @@ export default function Header({
               ref={navRef}
               className={`${compactNav ? 'hidden' : 'hidden md:flex'} relative items-center gap-1`}
             >
-              <div
-                className="absolute bottom-1 top-1 rounded-xl bg-guinda shadow-button transition-all duration-300 ease-in-out"
-                style={{ left: indicator.left, width: indicator.width }}
-              />
+              {indicator && (
+                <div
+                  className="absolute bottom-1 top-1 rounded-xl bg-guinda shadow-button transition-all duration-300 ease-in-out"
+                  style={{ left: indicator.left, width: indicator.width }}
+                />
+              )}
               {user && (
                 <Link
                   to="/admin"

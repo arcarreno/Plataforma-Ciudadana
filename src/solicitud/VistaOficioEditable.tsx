@@ -1,10 +1,15 @@
 import { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect, useImperativeHandle } from 'react'
+import { flushSync } from 'react-dom'
 import DOMPurify from 'dompurify'
 import letterhead from '../assets/letterhead.jpg'
 import type { Solicitud } from '../types/solicitud'
 import { exportToPdf, exportToPdfBase64 } from '../lib/exportPdf'
 
+import { useFitScale } from '../lib/useFitScale'
+
 const PX_PER_CM = 37.8
+const OFICIO_W = 21.6 * PX_PER_CM
+const OFICIO_H = 27.9 * PX_PER_CM
 const FOOTER_TEXT_CM = 24
 const TOP_PAD_P1 = 5.5
 const TOP_PAD_CONT = 5.5
@@ -68,6 +73,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
   }
 
   const [exporting, setExporting] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const scale = useFitScale(scrollRef, OFICIO_W)
   const [colWidths, setColWidths] = useState<Record<number, number>>({})
   const [measuredPages, setMeasuredPages] = useState<any[] | null>(null)
   const pageRefs = useRef<HTMLElement[]>([])
@@ -172,8 +179,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
   }
 
   const onDragCcpMove = (e: MouseEvent) => {
-    const dx = e.clientX - ccpDragStart.current.mouseX
-    const dy = e.clientY - ccpDragStart.current.mouseY
+    const dx = (e.clientX - ccpDragStart.current.mouseX) / scale
+    const dy = (e.clientY - ccpDragStart.current.mouseY) / scale
     setCcpPosition({ x: ccpDragStart.current.elemX + dx, y: ccpDragStart.current.elemY + dy })
   }
 
@@ -195,7 +202,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
       rafId = requestAnimationFrame(() => {
         rafId = null
         setColWidths(prev => {
-          const rawWidth = startWidth + (me.clientX - startX)
+          const rawWidth = startWidth + (me.clientX - startX) / scale
           const newWidth = Math.max(60, rawWidth)
           const totalOther = Object.entries(prev).filter(([k]) => Number(k) !== colIdx).reduce((s, [, v]) => s + v, 0)
           return { ...prev, [colIdx]: Math.min(newWidth, Math.max(60, 590 - totalOther)) }
@@ -235,10 +242,12 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
 
 
   const handleExportPdf = async () => {
-    setExporting(true)
+    // Forzar flush síncrono: html2canvas clona el DOM al instante y debe ver
+    // la clase .pdf-export (sin transform/overflow) para capturar a tamaño natural.
+    flushSync(() => setExporting(true))
     try {
       const elements = pageRefs.current.filter(Boolean)
-      if (elements.length > 0) await exportToPdf(elements, `Oficio_${s.folio_unico}`, 'portrait', 2)
+      if (elements.length > 0) await exportToPdf(elements, `Oficio_${s.folio_unico}`, 'portrait', 1.5)
     } catch (err) {
       console.error('Error al exportar PDF:', err)
     }
@@ -246,11 +255,11 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
   }
 
   const exportarPdf = async (): Promise<string> => {
-    setExporting(true)
+    flushSync(() => setExporting(true))
     try {
       const elements = pageRefs.current.filter(Boolean)
       if (elements.length === 0) throw new Error('Oficio sin páginas para exportar')
-      return await exportToPdfBase64(elements, 'portrait', 2)
+      return await exportToPdfBase64(elements, 'portrait', 1.5)
     } finally {
       setExporting(false)
     }
@@ -517,7 +526,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
   )
 
   return (
-    <div className="flex h-full flex-col bg-[#eaeaea]">
+    <div className={`flex h-full flex-col bg-[#eaeaea]${exporting ? ' pdf-export' : ''}`}>
       {/* Measurement container — hidden, continuous flow */}
       <div ref={measureRef} className="oficio-wrapper" style={{ ...pageStyle, visibility: 'hidden', position: 'fixed', top: 0, left: '-9999px', zIndex: -1 }}>
         <div data-segment="header" className="oficio-header-abs">{renderHeaderContent()}</div>
@@ -540,14 +549,16 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
       </div>
 
       {/* Visible pages */}
-      <div className="flex-1 overflow-y-auto pt-16 pb-8">
+      <div ref={scrollRef} className="oficio-scroll flex-1 overflow-y-auto pt-16 pb-8">
         {measuredPages && measuredPages.length > 0 ? (
           <div className="oficio-page-container">
             {measuredPages.map((page, i) => {
               const topPad = page.isFirst ? TOP_PAD_P1 : TOP_PAD_CONT
               return (
-                <div key={`page-${i}`} className={`oficio-wrapper${!page.isFirst ? ' page-continuation' : ''}`}
-                  ref={el => { if (el) pageRefs.current[i] = el }} style={pageStyle}>
+                <div key={`page-${i}`} className="fit-wrap" style={{ width: OFICIO_W * scale, height: OFICIO_H * scale }}>
+                  <div className={`oficio-wrapper fit-inner${!page.isFirst ? ' page-continuation' : ''}`}
+                    ref={el => { if (el) pageRefs.current[i] = el }}
+                    style={{ ...pageStyle, transform: scale < 1 ? `scale(${scale})` : undefined, transformOrigin: 'top left' }}>
                   <div className="oficio-header-abs">{renderHeaderContent(i + 1, measuredPages.length)}</div>
                   <div className="oficio-content" style={{ paddingTop: `${topPad}cm`, paddingBottom: `${page.paddingBottom}cm` }}>
                     {page.isFirst && <div data-segment="destinatario-block">{renderDestinatarioContent()}</div>}
@@ -566,6 +577,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
                       PROL. REFORMA #3308, COL. AMOR, C.P. 72140<br />
                       PUEBLA, PUE., MÉXICO
                     </div>
+                  </div>
                   </div>
                 </div>
               )
@@ -624,6 +636,11 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
         .drag-over { border-top:2px solid #7d2447 !important; }
         .drag-before { border-bottom:2px solid #7d2447 !important; }
         .oficio-page-container { max-width:21.6cm; margin:0 auto; display:flex; flex-direction:column; gap:32px; padding:20px 0; }
+        .fit-wrap { overflow:hidden; margin:0 auto; }
+        .fit-wrap .oficio-wrapper { margin:0; }
+        .pdf-export .fit-wrap { overflow:visible !important; }
+        .pdf-export .fit-inner { transform:none !important; }
+        .pdf-export .oficio-scroll { overflow:visible !important; }
         .ccp-draggable-oficio:hover { border-color:rgba(125,36,71,0.3) !important; }
         .ccp-draggable-oficio .oficio-ccp { white-space:nowrap; min-width:16.6cm; }
         @media print { body { background:#fff; } .oficio-wrapper { box-shadow:none; break-inside:avoid; } }

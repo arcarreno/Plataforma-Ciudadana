@@ -1,4 +1,5 @@
 import { useState, useRef, useImperativeHandle } from 'react'
+import { flushSync } from 'react-dom'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { MapContainer, TileLayer, Polyline, Marker } from 'react-leaflet'
@@ -8,6 +9,9 @@ import type { Solicitud } from '../types/solicitud'
 import type { SigedEscuela } from '../lib/consultarSIGED'
 import bannerImg from '../assets/ficha-banner.png'
 import footerImg from '../assets/ficha-footer.png'
+import { useFitScale, useElementHeight } from '../lib/useFitScale'
+
+const FICHA_W = 960
 
 function cleanText(el: HTMLElement): string {
   return (el.innerText || '').replace(/\u00A0/g, ' ').trim()
@@ -40,6 +44,9 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
 
   const [exporting, setExporting] = useState(false)
   const fichaRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const sFicha = useFitScale(scrollRef, FICHA_W)
+  const docH = useElementHeight(fichaRef) ?? 720
   const [escuelasCct, setEscuelasCct] = useState<string[]>(() => {
     const raw = (s.escuelas_cercanas || []).map(c => c.trim().toUpperCase()).filter(Boolean).slice(0, 3)
     return [...new Set(raw)]
@@ -98,16 +105,18 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
 
   const generarPdf = async (): Promise<string> => {
     if (!fichaRef.current) throw new Error('Ficha no disponible')
-    setExporting(true)
+    // Forzar flush síncrono: html2canvas clona el DOM al instante y debe ver
+    // la clase .pdf-export (sin transform/overflow) para capturar a tamaño natural.
+    flushSync(() => setExporting(true))
     try {
       const canvas = await html2canvas(fichaRef.current, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#F5F0EB',
         logging: false,
       })
-      const imgData = canvas.toDataURL('image/jpeg', 0.85)
+      const imgData = canvas.toDataURL('image/jpeg', 0.8)
       const pdfW = canvas.width / 2
       const pdfH = canvas.height / 2
       const pdf = new jsPDF({
@@ -116,7 +125,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
         format: [pdfW, pdfH],
         hotfixes: ['px_scaling'],
       })
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH)
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH)
       return pdf.output('datauristring').split(',')[1] ?? ''
     } finally {
       setExporting(false)
@@ -143,7 +152,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   useImperativeHandle(ref, () => ({ exportarPdf: generarPdf }))
 
   return (
-    <div className="flex h-full flex-col bg-[#eaeaea]">
+    <div className={`flex h-full flex-col bg-[#eaeaea]${exporting ? ' pdf-export' : ''}`}>
       {/* Floating toolbar pill */}
       <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
         <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
@@ -154,8 +163,10 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
       </div>
 
       {/* Ficha container */}
-      <div className="flex flex-1 items-start justify-center overflow-y-auto pt-16 pb-8">
-        <div ref={fichaRef} className="ficha-gen">
+      <div ref={scrollRef} className="ficha-scroll flex flex-1 items-start justify-center overflow-y-auto pt-16 pb-8">
+        <div className="fit-wrap" style={{ width: FICHA_W * sFicha, height: docH * sFicha }}>
+          <div ref={fichaRef} className="ficha-gen fit-inner"
+            style={{ transform: sFicha < 1 ? `scale(${sFicha})` : undefined, transformOrigin: 'top left' }}>
           {/* Banner */}
           <div className="ficha-banner" />
 
@@ -311,6 +322,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
           {/* Footer */}
           <div className="ficha-footer-img" />
           <div className="ficha-footer-txt">SEMOVINFRA - Atención Ciudadana | Gobierno de la Ciudad 2024-2027</div>
+          </div>
         </div>
       </div>
 
@@ -332,6 +344,10 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
           line-height: 1.3;
           box-shadow: 0 4px 20px rgba(0,0,0,0.12);
         }
+        .fit-wrap { overflow:hidden; margin:0 auto; }
+        .pdf-export .fit-wrap { overflow:visible !important; }
+        .pdf-export .fit-inner { transform:none !important; }
+        .pdf-export .ficha-scroll { overflow:visible !important; }
         .ficha-banner {
           position: absolute; top: 0; left: 0;
           width: 960px; height: 186px;

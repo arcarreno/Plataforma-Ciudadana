@@ -4,8 +4,9 @@ import jsPDF from 'jspdf'
 export async function exportToPdfBase64(
   elements: HTMLElement[],
   orientation: 'portrait' | 'landscape' = 'portrait',
-  scale = 2,
-  backgroundColor = '#ffffff'
+  scale = 1.5,
+  backgroundColor = '#ffffff',
+  quality = 0.8,
 ): Promise<string> {
   if (!elements || elements.length === 0) throw new Error('Sin elementos para exportar')
 
@@ -30,11 +31,11 @@ export async function exportToPdfBase64(
   })
 
   canvases.forEach((canvas, i) => {
-    const imgData = canvas.toDataURL('image/png')
+    const imgData = canvas.toDataURL('image/jpeg', quality)
     const w = canvas.width / 2
     const h = canvas.height / 2
     if (i > 0) pdf.addPage([w, h])
-    pdf.addImage(imgData, 'PNG', 0, 0, w, h)
+    pdf.addImage(imgData, 'JPEG', 0, 0, w, h)
   })
 
   return pdf.output('datauristring').split(',')[1] ?? ''
@@ -44,7 +45,7 @@ export async function exportToPdf(
   elements: HTMLElement[],
   filename: string,
   orientation: 'portrait' | 'landscape' = 'portrait',
-  scale = 2
+  scale = 1.5
 ): Promise<void> {
   if (!elements || elements.length === 0) return
   const base64 = await exportToPdfBase64(elements, orientation, scale)
