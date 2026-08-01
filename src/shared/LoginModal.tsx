@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, LogIn, Lock, User } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
@@ -47,7 +48,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
       <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
         <button
@@ -109,6 +110,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

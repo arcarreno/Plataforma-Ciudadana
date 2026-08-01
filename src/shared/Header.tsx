@@ -4,7 +4,6 @@ import { Menu, LogOut } from 'lucide-react'
 import logoPuebla from '../assets/Puebla.png'
 import mosaico from '../assets/mosaico.svg'
 import NavigationPanel from './NavigationPanel'
-import LoginModal from './LoginModal'
 import { useAuth } from '../contexts/AuthContext'
 
 interface HeaderProps {
@@ -23,7 +22,6 @@ export default function Header({
   onNavToggle,
 }: HeaderProps) {
   const { user, cerrarSesion } = useAuth()
-  const [loginOpen, setLoginOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const navRef = useRef<HTMLElement>(null)
@@ -74,18 +72,14 @@ export default function Header({
 
   return (
     <>
-      <LoginModal key={String(loginOpen)} open={loginOpen} onClose={() => setLoginOpen(false)} />
       <header className="sticky top-0 z-30 bg-white/80 shadow-header backdrop-blur-lg">
         <div className="relative mx-auto flex max-w-[1400px] items-center justify-between px-4 py-[11px] md:px-8 lg:px-12">
           <img src={mosaico} alt="" className="contrast-mosaico pointer-events-none absolute -bottom-[15px] left-0 w-full h-[31px]" />
           <button
             type="button"
-            onClick={() => {
-              if (user) { navigate('/admin'); return }
-              setLoginOpen(true)
-            }}
+            onClick={() => navigate('/')}
             className="flex shrink-0 transition-opacity hover:opacity-80"
-            title={user ? `Admin: ${user.username}` : 'Iniciar sesión'}
+            title="Ir al inicio"
           >
             <img src={logoPuebla} alt="Puebla" className="h-8 w-auto" />
           </button>
