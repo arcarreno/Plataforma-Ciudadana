@@ -10,6 +10,18 @@ const AVANCE_RAPIDO = 900
 const AVANCE_DIFERIDO = 2000
 const DURACION_TWEEN = 400
 
+const TEXTO_BOTON_REALIZADO = {
+  titulo: 'Revisa tus datos',
+  descripcion:
+    'Presiona «Realizado» para ver la tarjeta con los datos de tu obra ya rellenados: coordenadas del punto y del tramo, colonia, calle y entre calles.',
+}
+
+const TEXTO_TARJETA_OBRA = {
+  titulo: 'Datos de obra',
+  descripcion:
+    'Así quedaron rellenados tus campos de forma automática: coordenadas del punto y del tramo, colonia, junta auxiliar, calle y entre calles. Solo te falta explicar la razón de tu problema, subir evidencias si las tienes y enviar la solicitud.',
+}
+
 let driverActivo: Driver | null = null
 let intervaloRefresco: ReturnType<typeof setInterval> | null = null
 let ultimaActivacion = 0
@@ -42,12 +54,13 @@ function paso(
   side: 'top' | 'right' | 'bottom' | 'left',
   autoAvanzar?: () => boolean,
   verMapa = false,
+  mostrarResumen = false,
 ): DriveStep {
   return {
     element: selector,
     skipMissingElement: true,
     popover: { title: titulo, description: descripcion, side, align: 'start' },
-    data: { autoAvanzar, verMapa },
+    data: { autoAvanzar, verMapa, mostrarResumen },
   }
 }
 
@@ -104,6 +117,29 @@ function crearTour(steps: DriveStep[]): Driver {
     paradas.splice(0).forEach(p => p())
   }
 
+  let resumenVigilado = false
+  const vigilarResumen = (opts: HookOpts) => {
+    if (resumenVigilado) return
+    resumenVigilado = true
+    paradas.push(
+      vigilar(
+        () => !!document.querySelector('[data-tour="resumen-obra"]'),
+        () => {
+          opts.driver.highlight({
+            element: '[data-tour="resumen-obra"]',
+            popover: { side: 'bottom', align: 'center' },
+          })
+          paradas.push(
+            vigilar(
+              () => !document.querySelector('[data-tour="resumen-obra"]'),
+              () => desvanecer(opts.driver),
+            ),
+          )
+        },
+      ),
+    )
+  }
+
   const programarAvance = (d: Driver, indice: number, auto: () => boolean) => {
     const yaCumplida = auto()
     const ultimo = indice === steps.length - 1
@@ -138,6 +174,14 @@ function crearTour(steps: DriveStep[]): Driver {
   const onPopoverRender = (popover: PopoverDOM, opts: HookOpts) => {
     prepararPopover(popover)
     const pasoActual = opts.index !== undefined ? steps[opts.index] : undefined
+    if (pasoActual?.data?.mostrarResumen) {
+      const conTarjeta = !!document.querySelector('[data-tour="resumen-obra"]')
+      const texto = conTarjeta ? TEXTO_TARJETA_OBRA : TEXTO_BOTON_REALIZADO
+      popover.title.textContent = texto.titulo
+      popover.title.style.display = 'block'
+      popover.description.textContent = texto.descripcion
+      popover.description.style.display = 'block'
+    }
     if (pasoActual?.data?.verMapa && !popover.wrapper.querySelector('.driver-ver-mapa')) {
       const btn = document.createElement('button')
       btn.type = 'button'
@@ -159,6 +203,10 @@ function crearTour(steps: DriveStep[]): Driver {
     onHighlightStarted: (_el, step, opts) => {
       ultimaActivacion = Date.now()
       elementoActual = _el ?? null
+      if (step.data?.mostrarResumen) {
+        vigilarResumen(opts)
+        return
+      }
       const auto = step.data?.autoAvanzar
       if (typeof auto !== 'function') return
       programarAvance(opts.driver, opts.index ?? 0, auto)
@@ -239,17 +287,12 @@ export function correrTour(marcar = true): boolean {
     ),
     paso(
       '[data-tour="ver-resumen"]',
-      'Revisa tu resumen',
-      'Presiona «Realizado» para ver la tarjeta con los datos de tu obra y cómo se rellenaron automáticamente.',
+      TEXTO_BOTON_REALIZADO.titulo,
+      TEXTO_BOTON_REALIZADO.descripcion,
       'top',
-      () => !!document.querySelector('[data-tour="resumen-obra"]'),
-    ),
-    paso(
-      '[data-tour="resumen-obra"]',
-      'Datos de obra',
-      'Así quedaron rellenados tus campos de forma automática: ubicación, colonia, junta auxiliar, calle y los datos del tramo (distancia, ancho y puntos de referencia). Solo te falta explicar la razón de tu problema, subir evidencias si las tienes y enviar la solicitud.',
-      'top',
-      () => !document.querySelector('[data-tour="resumen-obra"]'),
+      undefined,
+      false,
+      true,
     ),
   ])
   driverActivo = d

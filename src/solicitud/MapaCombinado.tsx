@@ -210,6 +210,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const [manualJunta, setManualJunta] = useState('')
   const [calleInfo, setCalleInfo] = useState<CalleInfo | null>(null)
   const [buscandoCalle, setBuscandoCalle] = useState(false)
+  const [manualCalle, setManualCalle] = useState('')
   const [manualEntreCalles, setManualEntreCalles] = useState('')
   const lastClick = useRef<{ lat: number; lng: number } | null>(null)
   const pinDataRef = useRef<PinData | null>(null)
@@ -289,7 +290,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         const manual = manualEntreCalles.trim().toUpperCase()
         return manual ? `${calleInfo.entreCalles} Y ${manual}` : calleInfo.entreCalles
       }
-      if (calleInfo?.entreCallesDetected === 0) {
+      if (calleInfo?.entreCallesDetected === 0 || !calleInfo) {
         return manualEntreCalles.trim().toUpperCase() || ''
       }
       return calleInfo?.entreCalles || ''
@@ -300,7 +301,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
       lng: detection.coordenadas.lng,
       colonia: isOutside ? manualColonia.trim() : detection.colonia,
       junta_auxiliar: isOutside ? manualJunta.trim() : detection.junta_auxiliar,
-      calle: calleInfo?.calle || '',
+      calle: calleInfo?.calle || manualCalle.trim().toUpperCase() || '',
       entre_calles: entreCalles,
       zona_zap: detection.zona_zap,
       cobertura_agua: detection.cobertura_agua,
@@ -373,8 +374,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
             {step === 'tramo' ? <Check className="h-3 w-3" /> : '1'}
           </span>
           <span className="text-gray-institutional/30">—</span>
-          <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 'tramo' ? 'bg-guinda text-white' : 'bg-gray-100 text-gray-institutional/40'}`}>
-            2
+          <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${tramoConfirmed ? 'bg-green-100 text-green-700' : step === 'tramo' ? 'bg-guinda text-white' : 'bg-gray-100 text-gray-institutional/40'}`}>
+            {tramoConfirmed ? <Check className="h-3 w-3" /> : '2'}
           </span>
         </div>
         <button
@@ -550,23 +551,32 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                         {buscandoCalle ? (
                           <div className="flex items-center gap-2 text-xs text-gray-institutional/60">
                             <div className="h-3 w-3 animate-spin rounded-full border-2 border-guinda/20 border-t-guinda" />
-                            Buscando dirección...
+                            Buscando dirección
                           </div>
-                        ) : calleInfo ? (
+                        ) : (
                           <>
-                            {calleInfo.calle && (
+                            {calleInfo?.calle && (
                               <div className="flex items-center gap-2 text-xs">
                                 <Navigation className="h-3.5 w-3.5 shrink-0 text-guinda" />
                                 <span className="font-medium text-gray-institutional">{calleInfo.calle}</span>
                               </div>
                             )}
-                            {calleInfo.entreCallesDetected >= 2 ? (
+                            {!calleInfo?.calle && (
+                              <input
+                                type="text"
+                                value={manualCalle}
+                                onChange={e => setManualCalle(e.target.value)}
+                                placeholder="Nombre de la calle (no detectada)..."
+                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                              />
+                            )}
+                            {calleInfo && calleInfo.entreCallesDetected >= 2 ? (
                               <div className="flex items-center gap-2 pl-5 text-xs text-gray-institutional/60">
                                 {calleInfo.entreCalles}
                               </div>
                             ) : (
-                              <div className="flex flex-col gap-1.5 pl-5">
-                                {calleInfo.entreCallesDetected === 1 && (
+                              <div className={`flex flex-col gap-1.5 ${calleInfo?.calle ? 'pl-5' : ''}`}>
+                                {calleInfo?.entreCallesDetected === 1 && (
                                   <div className="flex items-center gap-2 text-xs text-gray-institutional/60">
                                     <span>{calleInfo.entreCalles}</span>
                                   </div>
@@ -576,7 +586,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                                   value={manualEntreCalles}
                                   onChange={e => setManualEntreCalles(e.target.value)}
                                   placeholder={
-                                    calleInfo.entreCallesDetected === 1
+                                    calleInfo?.entreCallesDetected === 1
                                       ? 'Entre calle faltante...'
                                       : 'Entre qué calles se encuentra? (ej: Reforma y 5 de Mayo)'
                                   }
@@ -585,7 +595,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                               </div>
                             )}
                           </>
-                        ) : null}
+                        )}
                       </>
                     )}
 
@@ -719,9 +729,9 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         </div>
       </div>
 
-      {showTramoInfoCard && (
+      {showTramoInfoCard && pinDataRef.current && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowTramoInfoCard(false)}>
-          <div data-tour="resumen-obra" className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+          <div data-tour="resumen-obra" className="relative mx-auto max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
             <div className="flex flex-col gap-4 px-6 pb-6 pt-0">
               <div className="-mt-9 flex justify-center">
@@ -732,6 +742,44 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                 Solo necesita explicarnos la razón de su problema, subir evidencias si es que
                 las tiene y enviarnos su solicitud con el botón del final.
               </p>
+              <div className="flex flex-col gap-1.5 rounded-xl border border-guinda/10 bg-guinda/5 px-3 py-3 text-xs text-gray-institutional">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-guinda" />
+                  <span className="font-medium">Punto:</span>
+                  <span className="font-mono">{pinDataRef.current.lat.toFixed(6)}, {pinDataRef.current.lng.toFixed(6)}</span>
+                </div>
+                {td && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <Ruler className="h-3.5 w-3.5 shrink-0 text-guinda" />
+                    <span className="font-medium">Tramo:</span>
+                    <span className="font-mono">{td.coordenadas.lat_ini.toFixed(6)}, {td.coordenadas.lng_ini.toFixed(6)} → {td.coordenadas.lat_fin.toFixed(6)}, {td.coordenadas.lng_fin.toFixed(6)}</span>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <Navigation className="h-3.5 w-3.5 shrink-0 text-green-700" />
+                  <span className="font-medium">Colonia:</span>
+                  <span>{pinDataRef.current.colonia}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <Navigation className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                  <span className="font-medium">Junta auxiliar:</span>
+                  <span>{pinDataRef.current.junta_auxiliar}</span>
+                </div>
+                {pinDataRef.current.calle && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <Navigation className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <span className="font-medium">Calle:</span>
+                    <span>{pinDataRef.current.calle}</span>
+                  </div>
+                )}
+                {pinDataRef.current.entre_calles && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <Navigation className="h-3.5 w-3.5 shrink-0 text-purple-600" />
+                    <span className="font-medium">Entre calles:</span>
+                    <span>{pinDataRef.current.entre_calles}</span>
+                  </div>
+                )}
+              </div>
               <Button type="button" size="sm" onClick={() => setShowTramoInfoCard(false)}>
                 Entendido <ChevronRight className="ml-1 h-4 w-4" />
               </Button>

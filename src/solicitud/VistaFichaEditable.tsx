@@ -18,7 +18,7 @@ function cleanText(el: HTMLElement): string {
 }
 
 function shortRoute(r: string): string {
-  const idx = r.indexOf('-')
+  const idx = r.search(/\s+-\s+/)
   return idx > 0 ? r.slice(0, idx).trim() : r.trim()
 }
 

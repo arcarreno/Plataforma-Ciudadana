@@ -67,4 +67,8 @@ export interface SolicitudFormData {
   archivos: File[]
 }
 
-export type SolicitudErrors = Partial<Record<keyof SolicitudFormData, string>>
+export type SolicitudErrors = Partial<Record<keyof SolicitudFormData, string>> & {
+  apellido_paterno?: string
+  apellido_materno?: string
+  nombres?: string
+}

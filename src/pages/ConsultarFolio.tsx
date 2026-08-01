@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import Button from '../shared/Button'
 import Card from '../shared/Card'
@@ -13,17 +14,28 @@ export default function ConsultarFolio() {
     data?: Solicitud
     error?: string
   } | null>(null)
+  const [searchParams] = useSearchParams()
+  const folioParam = searchParams.get('folio')
+
+  const consultar = async (f: string) => {
+    setLoading(true)
+    setResultado(null)
+    const res = await consultarSolicitud(f)
+    setResultado(res)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (!folioParam) return
+    setFolio(folioParam)
+    consultar(folioParam)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folioParam])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!folio.trim()) return
-
-    setLoading(true)
-    setResultado(null)
-
-    const res = await consultarSolicitud(folio.trim())
-    setResultado(res)
-    setLoading(false)
+    consultar(folio.trim())
   }
 
   return (

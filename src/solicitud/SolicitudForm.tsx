@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
-import { Upload, MapPin, Check, Navigation, ChevronRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Upload, MapPin, Check, Navigation, ChevronRight, Eye } from 'lucide-react'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 import { sileo } from 'sileo'
 import lottie from 'lottie-web'
@@ -10,24 +11,45 @@ import { Input, Textarea } from '../shared/Input'
 import Select from '../shared/Select'
 import { TIPOS_OBRA_NOMBRES, RANKING_PUNTOS_CARGO_PUBLICO } from '../core/constants'
 import { crearSolicitud } from '../lib/solicitud'
+import { validarFormatoCURP, validarDigitoVerificador, inicialesCoinciden } from '../lib/curp'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
 import MapaCombinado from './MapaCombinado'
 import { correrTour } from './guiaTour'
 import AvisoPrivacidad from '../shared/AvisoPrivacidad'
 
-function validarCURP(curp: string): boolean {
-  return /^[A-Z]{4}\d{6}[HM][A-Z]{5}[0-9A-Z]\d$/.test(curp)
+interface NombrePiezas {
+  apellidoPaterno: string
+  apellidoMaterno: string
+  nombres: string
 }
 
-function validarForm(data: SolicitudFormData, omitirCurp?: boolean): SolicitudErrors {
+function validarForm(data: SolicitudFormData, omitirCurp?: boolean, nombrePiezas?: NombrePiezas): SolicitudErrors {
   const errors: SolicitudErrors = {}
 
   if (!data.nombre_solicitante.trim())
     errors.nombre_solicitante = 'El nombre es obligatorio'
+  if (!omitirCurp && nombrePiezas) {
+    if (!nombrePiezas.apellidoPaterno.trim())
+      errors.apellido_paterno = 'El apellido paterno es obligatorio'
+    if (!nombrePiezas.nombres.trim())
+      errors.nombres = 'Los nombres son obligatorios'
+  }
   if (!omitirCurp) {
     if (!data.curp.trim()) errors.curp = 'El CURP es obligatorio'
-    else if (!validarCURP(data.curp.toUpperCase()))
+    else if (!validarFormatoCURP(data.curp))
       errors.curp = 'CURP inválido. Debe tener 18 caracteres.'
+    else if (!validarDigitoVerificador(data.curp))
+      errors.curp = 'El CURP no es válido. Revisa que esté bien escrito.'
+    else if (
+      nombrePiezas &&
+      !inicialesCoinciden(data.curp, {
+        paterno: nombrePiezas.apellidoPaterno,
+        materno: nombrePiezas.apellidoMaterno,
+        nombres: nombrePiezas.nombres,
+      })
+    )
+      errors.curp =
+        'El CURP no coincide con el nombre capturado. Verifica que apellidos y nombres sean los mismos de tu CURP.'
   }
   if (!data.telefono.trim()) errors.telefono = 'El teléfono es obligatorio'
   else if (!/^\d{10}$/.test(data.telefono))
@@ -52,6 +74,7 @@ interface SolicitudFormProps {
 }
 
 export default function SolicitudForm({ omitirCurp, nombrePrefilled }: SolicitudFormProps = {}) {
+  const navigate = useNavigate()
   const [form, setForm] = useState<SolicitudFormData>({
     nombre_solicitante: nombrePrefilled ?? '',
     curp: '',
@@ -76,6 +99,9 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   })
 
   const [errors, setErrors] = useState<SolicitudErrors>({})
+  const [apellidoPaterno, setApellidoPaterno] = useState('')
+  const [apellidoMaterno, setApellidoMaterno] = useState('')
+  const [nombres, setNombres] = useState('')
   const [submittedOnce, setSubmittedOnce] = useState(false)
   const [showLottie, setShowLottie] = useState(false)
   const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
@@ -168,11 +194,24 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const errs = validarForm(form, omitirCurp)
+    const nombreCompleto = omitirCurp
+      ? form.nombre_solicitante.trim()
+      : [apellidoPaterno, apellidoMaterno, nombres]
+          .filter(p => p.trim())
+          .join(' ')
+          .trim()
+    const errs = validarForm(
+      { ...form, nombre_solicitante: nombreCompleto },
+      omitirCurp,
+      { apellidoPaterno, apellidoMaterno, nombres }
+    )
     if (Object.keys(errs).length > 0) {
       setErrors(errs)
       const FIELD_LABELS: Record<string, string> = {
         nombre_solicitante: 'Nombre',
+        apellido_paterno: 'Apellido paterno',
+        apellido_materno: 'Apellido materno',
+        nombres: 'Nombre(s)',
         curp: 'CURP',
         telefono: 'Teléfono',
         correo: 'Correo electrónico',
@@ -221,8 +260,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
       res = await crearSolicitud(
         {
           ...form,
+          nombre_solicitante: nombreCompleto,
           curp: omitirCurp ? 'SIN CURP' : form.curp.toUpperCase(),
-          nombre_solicitante: form.nombre_solicitante.trim(),
         },
         omitirCurp ? RANKING_PUNTOS_CARGO_PUBLICO : undefined,
         tramoData ?? undefined
@@ -255,6 +294,9 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
       })
       setResultado({ folio: res.data?.folio_unico, advertencia: res.advertencia })
       setTramoData(null)
+      setApellidoPaterno('')
+      setApellidoMaterno('')
+      setNombres('')
       setForm({
         nombre_solicitante: '',
         curp: '',
@@ -371,9 +413,27 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
                   {resultado.advertencia}
                 </div>
               )}
-              <Button onClick={() => { setResultado(null); setSubmittedOnce(false) }}>
-                Nueva solicitud
-              </Button>
+              <div className="flex w-full flex-col gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    navigate(`/consultar-folio?folio=${encodeURIComponent(resultado.folio!)}`)
+                  }
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Ver petición y estatus
+                </Button>
+                <Button
+                  onClick={() => {
+                    setResultado(null)
+                    setSubmittedOnce(false)
+                    clearMapData()
+                    setMapKey(k => k + 1)
+                  }}
+                >
+                  Nueva solicitud
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -397,16 +457,42 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         <div className="mx-auto w-full max-w-2xl">
           <Card title="Datos del solicitante">
             <div className="flex flex-col gap-4">
-              <Input
-                label="Nombre completo"
-                value={form.nombre_solicitante}
-                onChange={(e) => set('nombre_solicitante', e.target.value)}
-                error={errors.nombre_solicitante}
-                placeholder="Juan Pérez García"
-                readOnly={!!nombrePrefilled}
-                tabIndex={nombrePrefilled ? -1 : undefined}
-                className={nombrePrefilled ? 'cursor-default opacity-80' : undefined}
-              />
+              {!omitirCurp ? (
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Input
+                    label="Apellido paterno"
+                    value={apellidoPaterno}
+                    onChange={(e) => setApellidoPaterno(e.target.value)}
+                    error={errors.apellido_paterno}
+                    placeholder="García"
+                  />
+                  <Input
+                    label="Apellido materno"
+                    value={apellidoMaterno}
+                    onChange={(e) => setApellidoMaterno(e.target.value)}
+                    error={errors.apellido_materno}
+                    placeholder="Opcional"
+                  />
+                  <Input
+                    label="Nombre(s)"
+                    value={nombres}
+                    onChange={(e) => setNombres(e.target.value)}
+                    error={errors.nombres}
+                    placeholder="Juan Carlos"
+                  />
+                </div>
+              ) : (
+                <Input
+                  label="Nombre completo"
+                  value={form.nombre_solicitante}
+                  onChange={(e) => set('nombre_solicitante', e.target.value)}
+                  error={errors.nombre_solicitante}
+                  placeholder="Juan Pérez García"
+                  readOnly={!!nombrePrefilled}
+                  tabIndex={nombrePrefilled ? -1 : undefined}
+                  className={nombrePrefilled ? 'cursor-default opacity-80' : undefined}
+                />
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 {!omitirCurp && (
                   <Input
