@@ -241,6 +241,8 @@ function detenerRefresco() {
 }
 
 export function correrTour(marcar = true): boolean {
+  if (typeof window === 'undefined') return false
+  if (!window.matchMedia('(min-width: 768px)').matches) return false
   if (marcar && yaVisto(TOUR_KEY)) return false
   if (marcar) marcarVisto(TOUR_KEY)
   if (driverActivo) {

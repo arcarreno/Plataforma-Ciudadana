@@ -41,6 +41,14 @@ export function estimarAnchoCalle(
 ): number {
   const tramo = lineString([[lng_ini, lat_ini], [lng_fin, lat_fin]])
 
+  const BUFFER_DEG = 0.0005
+  const [lx1, ly1] = [lng_ini, lat_ini]
+  const [lx2, ly2] = [lng_fin, lat_fin]
+  const minX = Math.min(lx1, lx2) - BUFFER_DEG
+  const maxX = Math.max(lx1, lx2) + BUFFER_DEG
+  const minY = Math.min(ly1, ly2) - BUFFER_DEG
+  const maxY = Math.max(ly1, ly2) + BUFFER_DEG
+
   const edges: Edge[] = []
 
   for (const f of stv.features) {
@@ -53,6 +61,19 @@ export function estimarAnchoCalle(
     } else {
       continue
     }
+
+    let fMinX = Infinity
+    let fMaxX = -Infinity
+    let fMinY = Infinity
+    let fMaxY = -Infinity
+    for (const c of coords) {
+      if (c[0] < fMinX) fMinX = c[0]
+      if (c[0] > fMaxX) fMaxX = c[0]
+      if (c[1] < fMinY) fMinY = c[1]
+      if (c[1] > fMaxY) fMaxY = c[1]
+    }
+    if (fMaxX < minX || fMinX > maxX || fMaxY < minY || fMinY > maxY) continue
+
     for (let i = 0; i < coords.length - 1; i++) {
       edges.push({
         a: coords[i],
@@ -62,10 +83,7 @@ export function estimarAnchoCalle(
     }
   }
 
-  const BUFFER_DEG = 0.0005
   const nearby: Edge[] = []
-  const [lx1, ly1] = [lng_ini, lat_ini]
-  const [lx2, ly2] = [lng_fin, lat_fin]
 
   for (const e of edges) {
     const ex = (e.a[0] + e.b[0]) / 2

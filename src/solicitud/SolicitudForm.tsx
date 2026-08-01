@@ -123,6 +123,14 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const [ready, setReady] = useState(false)
   const initialOffsetRef = useRef(true)
   const [fileErrors, setFileErrors] = useState<string[]>([])
+  const [esDesktop, setEsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = () => setEsDesktop(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   useEffect(() => {
     if (!showLottie || !lottieRef.current) return
@@ -338,7 +346,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     setFileErrors(errors)
   }
 
-  const inlineMap = showMapaCombinado
+  const inlineMap = showMapaCombinado && esDesktop
   inlineMapRef.current = inlineMap
 
   const closeMap = () => {

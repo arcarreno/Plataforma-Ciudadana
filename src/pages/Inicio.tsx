@@ -50,26 +50,39 @@ const steps = [
   },
 ]
 
+const MQ_DESKTOP = '(min-width: 768px)'
+
 export default function Inicio() {
   const { user } = useAuth()
   const esCargo = user && esCargoPublico(user.rol)
 
   const [activePos, setActivePos] = useState(-1)
   const [rippleActive, setRippleActive] = useState(false)
+  const [esMovil, setEsMovil] = useState(() => !window.matchMedia(MQ_DESKTOP).matches)
   const dispRef = useRef<SVGFEDisplacementMapElement>(null)
   const rippleScale = useSpring(3, { stiffness: 180, damping: 15 })
 
   useEffect(() => {
+    const mq = window.matchMedia(MQ_DESKTOP)
+    const onChange = () => setEsMovil(!mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
+    if (esMovil) return
     return rippleScale.on('change', (v) => {
       dispRef.current?.setAttribute('scale', String(v))
     })
-  }, [rippleScale])
+  }, [rippleScale, esMovil])
 
   useEffect(() => {
+    if (esMovil) return
     rippleScale.set(rippleActive ? 28 : 3)
-  }, [rippleActive, rippleScale])
+  }, [rippleActive, rippleScale, esMovil])
 
   useEffect(() => {
+    if (esMovil) return
     let pos = 0
     let timer: number
 
@@ -82,7 +95,7 @@ export default function Inicio() {
 
     timer = window.setTimeout(tick, 800)
     return () => clearTimeout(timer)
-  }, [])
+  }, [esMovil])
 
   return (
     <div className="flex flex-col gap-12 py-4 md:py-8">
@@ -125,16 +138,18 @@ export default function Inicio() {
       </section>
 
       <section className="relative -mx-4 py-8 md:-mx-8">
-        <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-          <defs>
-            <filter id="mosaico-ripple" x="-20%" y="-20%" width="140%" height="140%">
-              <feTurbulence id="mosaico-noise" type="fractalNoise" baseFrequency="0.008" numOctaves="2" result="wave">
-                <animate attributeName="baseFrequency" values="0.006;0.010;0.006" dur="8s" repeatCount="indefinite" />
-              </feTurbulence>
-              <feDisplacementMap ref={dispRef} in="SourceGraphic" in2="wave" scale="3" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-          </defs>
-        </svg>
+        {!esMovil && (
+          <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+            <defs>
+              <filter id="mosaico-ripple" x="-20%" y="-20%" width="140%" height="140%">
+                <feTurbulence id="mosaico-noise" type="fractalNoise" baseFrequency="0.008" numOctaves="2" result="wave">
+                  <animate attributeName="baseFrequency" values="0.006;0.010;0.006" dur="8s" repeatCount="indefinite" />
+                </feTurbulence>
+                <feDisplacementMap ref={dispRef} in="SourceGraphic" in2="wave" scale="3" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+            </defs>
+          </svg>
+        )}
         <div
           className="contrast-mosaico-bg pointer-events-none absolute inset-0"
           style={{
@@ -143,7 +158,7 @@ export default function Inicio() {
             backgroundPosition: 'calc(50% - 0.6mm) center',
             WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
             maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.5) 50%, transparent 75%)',
-            filter: 'url(#mosaico-ripple)',
+            ...(esMovil ? {} : { filter: 'url(#mosaico-ripple)' }),
           }}
         />
         <div

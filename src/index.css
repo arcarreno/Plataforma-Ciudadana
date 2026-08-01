@@ -380,3 +380,10 @@ html[data-contrast="dark"] .contrast-mosaico-bg { filter: invert(1); }
 .driver-desvanecer {
   opacity: 0 !important;
 }
+
+/* Evita el zoom automático del teclado en iOS/Android al enfocar campos */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

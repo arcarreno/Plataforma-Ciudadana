@@ -42,6 +42,36 @@ function getProps(f: GeoJSON.Feature): { name: string } {
   return f.properties as { name: string } || { name: '' }
 }
 
+function bboxDe(f: GeoJSON.Feature): [number, number, number, number] {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  const visit = (coords: number[][]) => {
+    for (const c of coords) {
+      if (c[0] < minX) minX = c[0]
+      if (c[0] > maxX) maxX = c[0]
+      if (c[1] < minY) minY = c[1]
+      if (c[1] > maxY) maxY = c[1]
+    }
+  }
+  const g = f.geometry as GeoJSON.Geometry | null
+  if (!g) return [0, 0, 0, 0]
+  if (g.type === 'Polygon') visit((g.coordinates as number[][][]).flat())
+  else if (g.type === 'MultiPolygon') visit((g.coordinates as number[][][][]).flat(2))
+  else if (g.type === 'LineString') visit(g.coordinates as number[][])
+  else if (g.type === 'MultiLineString') visit((g.coordinates as number[][][]).flat())
+  return [minX, minY, maxX, maxY]
+}
+
+function seCruzaBBox(
+  f: GeoJSON.Feature,
+  [bminX, bminY, bmaxX, bmaxY]: [number, number, number, number]
+): boolean {
+  const [fminX, fminY, fmaxX, fmaxY] = bboxDe(f)
+  return fmaxX >= bminX && fminX <= bmaxX && fmaxY >= bminY && fminY <= bmaxY
+}
+
 function detectarPIP(
   pt: GeoJSON.Feature<GeoJSON.Point>,
   capa: GeoJSON.FeatureCollection
@@ -242,11 +272,13 @@ export function detectarTramo(
 
   function lineIntersects(fc: GeoJSON.FeatureCollection): string[] {
     const names: string[] = []
+    const bufBBox = bboxDe(buf)
     for (const f of fc.features) {
       if (!f.geometry) continue
       if (f.geometry.type !== 'LineString' && f.geometry.type !== 'MultiLineString') continue
       if (!f.geometry.coordinates) continue
       try {
+        if (!seCruzaBBox(f, bufBBox)) continue
         const inter = lineIntersect(line, f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>)
         if (inter.features.length > 0 || booleanIntersects(f as GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString>, buf)) {
           names.push(getProps(f).name || '')

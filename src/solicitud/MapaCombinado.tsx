@@ -221,6 +221,25 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const [tramoError, setTramoError] = useState<string | null>(null)
   const [tramoConfirmed, setTramoConfirmed] = useState(false)
   const [showTramoInfoCard, setShowTramoInfoCard] = useState(false)
+  const tramoCalcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (tramoCalcTimer.current) clearTimeout(tramoCalcTimer.current)
+    }
+  }, [])
+
+  const programarDeteccionTramo = (puntos: { lat: number; lng: number }[]) => {
+    if (tramoCalcTimer.current) clearTimeout(tramoCalcTimer.current)
+    if (puntos.length < 2 || !capas) {
+      setTramoDetection(null)
+      return
+    }
+    tramoCalcTimer.current = setTimeout(() => {
+      setTramoDetection(detectarTramo(puntos, capas))
+      tramoCalcTimer.current = null
+    }, 150)
+  }
 
   useEffect(() => {
     cargarCapas().then(c => {
@@ -260,11 +279,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
     const next = [...tramoPoints, latlng]
     setTramoPoints(next)
-    if (next.length >= 2 && capas) {
-      setTramoDetection(detectarTramo(next, capas))
-    } else {
-      setTramoDetection(null)
-    }
+    programarDeteccionTramo(next)
   }, [tramoPoints, tramoDone, capas, marker])
 
   const handlePicar = () => {
@@ -313,14 +328,11 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     if (tramoPoints.length === 0) return
     const next = tramoPoints.slice(0, -1)
     setTramoPoints(next)
-    if (next.length >= 2 && capas) {
-      setTramoDetection(detectarTramo(next, capas))
-    } else {
-      setTramoDetection(null)
-    }
+    programarDeteccionTramo(next)
   }
 
   const handleResetTramo = () => {
+    if (tramoCalcTimer.current) clearTimeout(tramoCalcTimer.current)
     setTramoPoints([])
     setTramoDetection(null)
     setTramoDone(false)
@@ -381,7 +393,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         <button
           type="button"
           onClick={() => correrTour(false)}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-guinda/5 text-guinda transition-colors hover:bg-guinda hover:text-white"
+          className="hidden h-7 w-7 items-center justify-center rounded-full bg-guinda/5 text-guinda transition-colors hover:bg-guinda hover:text-white md:flex"
           aria-label="Ver guía de uso"
           title="Ver guía de uso"
         >

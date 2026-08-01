@@ -14,8 +14,64 @@ export interface CalleInfo {
 
 let callesCache: FeatureCollection<LineString> | null = null
 
+const CELL_DEG = 0.003
+let callesIndex = new Map<string, number[]>()
+let callesFeatures: Feature<LineString>[] = []
+
 export function setCallesData(data: FeatureCollection<LineString>) {
   callesCache = data
+  callesFeatures = data.features
+  callesIndex = new Map()
+  for (let i = 0; i < callesFeatures.length; i++) {
+    const f = callesFeatures[i]
+    const g = f.geometry
+    if (!g || g.type !== 'LineString' || g.coordinates.length < 2) continue
+    let minLat = Infinity
+    let maxLat = -Infinity
+    let minLng = Infinity
+    let maxLng = -Infinity
+    for (const c of g.coordinates) {
+      const [lng, lat] = c
+      if (lat < minLat) minLat = lat
+      if (lat > maxLat) maxLat = lat
+      if (lng < minLng) minLng = lng
+      if (lng > maxLng) maxLng = lng
+    }
+    const i0 = Math.floor(minLat / CELL_DEG)
+    const i1 = Math.floor(maxLat / CELL_DEG)
+    const j0 = Math.floor(minLng / CELL_DEG)
+    const j1 = Math.floor(maxLng / CELL_DEG)
+    for (let i = i0; i <= i1; i++) {
+      for (let j = j0; j <= j1; j++) {
+        const key = `${i}:${j}`
+        const arr = callesIndex.get(key)
+        if (arr) arr.push(i)
+        else callesIndex.set(key, [i])
+      }
+    }
+  }
+}
+
+function indicesCerca(lat: number, lon: number, radioDeg: number): number[] {
+  const vistos = new Set<number>()
+  const indices: number[] = []
+  const i0 = Math.floor((lat - radioDeg) / CELL_DEG)
+  const i1 = Math.floor((lat + radioDeg) / CELL_DEG)
+  const j0 = Math.floor((lon - radioDeg) / CELL_DEG)
+  const j1 = Math.floor((lon + radioDeg) / CELL_DEG)
+  for (let i = i0; i <= i1; i++) {
+    for (let j = j0; j <= j1; j++) {
+      const arr = callesIndex.get(`${i}:${j}`)
+      if (!arr) continue
+      for (const idx of arr) {
+        if (!vistos.has(idx)) {
+          vistos.add(idx)
+          indices.push(idx)
+        }
+      }
+    }
+  }
+  return indices
 }
 
 const MAX_DIST_M = 30
@@ -37,11 +93,13 @@ export async function geolocalizarCalle(lat: number, lon: number): Promise<Calle
 
   const pt = point([lon, lat])
 
+  const candidatas = indicesCerca(lat, lon, 0.006).map(i => callesFeatures[i]).filter(f => !!f)
+
   let bestDist = Infinity
   let bestName = ''
   let bestFeature: Feature<LineString> | null = null
 
-  for (const f of data.features) {
+  for (const f of candidatas) {
     if (!f.geometry || f.geometry.type !== 'LineString') continue
     const coords = f.geometry.coordinates
     if (coords.length < 2) continue
@@ -75,7 +133,7 @@ export async function geolocalizarCalle(lat: number, lon: number): Promise<Calle
 
   const crossNames: string[] = []
 
-  for (const f of data.features) {
+  for (const f of candidatas) {
     if (!f.geometry || f.geometry.type !== 'LineString') continue
     const name = f.properties?.name
     if (!name) continue
