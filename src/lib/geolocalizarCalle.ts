@@ -25,6 +25,7 @@ export function tieneCalles(): boolean {
 
 export function cargarCalles(): Promise<void> {
   if (callesPromesa) return callesPromesa
+  if (tieneCalles()) return Promise.resolve()
   callesPromesa = (async () => {
     try {
       const r = await fetch('/data/CALLES_PUEBLA.geojson')

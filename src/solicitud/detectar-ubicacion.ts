@@ -5,6 +5,7 @@ import { point, lineString } from '@turf/helpers'
 import buffer from '@turf/buffer'
 import { matchJunta, cleanColoniaName } from '../core/geo'
 import { estimarAnchoCalle, haversineDistancia } from './calle'
+import { setCallesData } from '../lib/geolocalizarCalle'
 
 export interface CapasGeoJSON {
   colonias: GeoJSON.FeatureCollection
@@ -175,6 +176,65 @@ export function cargarCapas(include?: (keyof CapasGeoJSON)[]): Promise<CapasGeoJ
     }
     return obj
   })
+}
+
+function concatChunks(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((s, c) => s + c.length, 0)
+  const out = new Uint8Array(total)
+  let off = 0
+  for (const c of chunks) {
+    out.set(c, off)
+    off += c.length
+  }
+  return out
+}
+
+export async function precargarCapasConProgreso(
+  onProgress: (bytesDescargados: number, bytesTotal: number) => void
+): Promise<void> {
+  const urls = ALL_CAPAS.map(l => l.url)
+
+  let respuestas: { url: string; r: Response }[] = []
+  try {
+    respuestas = await Promise.all(urls.map(async url => ({ url, r: await fetch(url) })))
+  } catch {
+    respuestas = []
+  }
+
+  const total = respuestas.reduce(
+    (s, { r }) => s + (Number(r.headers.get('content-length')) || 0),
+    0
+  )
+
+  let descargado = 0
+
+  await Promise.all(
+    respuestas.map(async ({ url, r }) => {
+      let fc: GeoJSON.FeatureCollection = EMPTY_FC
+      if (r.ok && r.body) {
+        try {
+          const reader = r.body.getReader()
+          const chunks: Uint8Array[] = []
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            chunks.push(value)
+            descargado += value.length
+            onProgress(descargado, total)
+          }
+          fc = JSON.parse(new TextDecoder().decode(concatChunks(chunks))) as GeoJSON.FeatureCollection
+        } catch {
+          fc = EMPTY_FC
+        }
+      }
+      capaCache.set(url, Promise.resolve(fc))
+      if (url === '/data/CALLES_PUEBLA.geojson') {
+        setCallesData(fc as unknown as GeoJSON.FeatureCollection<GeoJSON.LineString>)
+      }
+    })
+  )
+
+  onProgress(total, total)
 }
 
 export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): DeteccionPunto {

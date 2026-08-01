@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import Layout from './shared/Layout'
+import ModalPrecarga from './shared/ModalPrecarga'
 import Inicio from './pages/Inicio'
 import NuevaSolicitud from './pages/NuevaSolicitud'
 import ConsultarFolio from './pages/ConsultarFolio'
@@ -32,6 +33,7 @@ export default function App() {
             } />
           </Route>
         </Routes>
+        <ModalPrecarga />
       </AuthProvider>
     </BrowserRouter>
   )
