@@ -681,7 +681,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
             }}
           >
             <div className="h-full w-full overflow-hidden rounded-xl">
-              {showMapaCombinado && (
+              {showMapaCombinado && esDesktop && (
                 <MapaCombinado
                   key={mapKey}
                   inline
@@ -776,7 +776,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
         </div>
       </form>
 
-      {showMapaCombinado && (
+      {showMapaCombinado && !esDesktop && (
         <div className="md:hidden">
           <MapaCombinado
             key={mapKey}

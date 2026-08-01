@@ -17,6 +17,25 @@ let callesCache: FeatureCollection<LineString> | null = null
 const CELL_DEG = 0.003
 let callesIndex = new Map<string, number[]>()
 let callesFeatures: Feature<LineString>[] = []
+let callesPromesa: Promise<void> | null = null
+
+export function tieneCalles(): boolean {
+  return !!callesCache && callesCache.features.length > 0
+}
+
+export function cargarCalles(): Promise<void> {
+  if (callesPromesa) return callesPromesa
+  callesPromesa = (async () => {
+    try {
+      const r = await fetch('/data/CALLES_PUEBLA.geojson')
+      if (!r.ok) return
+      setCallesData((await r.json()) as FeatureCollection<LineString>)
+    } catch {
+      // sin calles: geolocalizarCalle devuelve vacio
+    }
+  })()
+  return callesPromesa
+}
 
 export function setCallesData(data: FeatureCollection<LineString>) {
   callesCache = data

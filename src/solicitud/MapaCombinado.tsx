@@ -6,7 +6,7 @@ import Button from '../shared/Button'
 import { correrTour, detenerTour } from './guiaTour'
 import { cargarCapas, detectarPunto, detectarTramo } from './detectar-ubicacion'
 import type { CapasGeoJSON, DeteccionPunto, DeteccionTramo } from './detectar-ubicacion'
-import { geolocalizarCalle, setCallesData } from '../lib/geolocalizarCalle'
+import { geolocalizarCalle, cargarCalles } from '../lib/geolocalizarCalle'
 import type { CalleInfo } from '../lib/geolocalizarCalle'
 import logoSrc from '../assets/Logo_Semovinfra.jpg'
 
@@ -242,9 +242,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   }
 
   useEffect(() => {
-    cargarCapas().then(c => {
+    cargarCapas(['colonias', 'juntas', 'zonasZap', 'escuelas', 'iglesias', 'stv', 'coberturaAgua']).then(c => {
       setCapas(c)
-      setCallesData(c.calles as any)
       if (inline) {
         setTimeout(() => setLoading(false), 1500)
       } else {
@@ -282,13 +281,14 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     programarDeteccionTramo(next)
   }, [tramoPoints, tramoDone, capas, marker])
 
-  const handlePicar = () => {
+  const handlePicar = async () => {
     if (!lastClick.current || !capas) return
+    setBuscandoCalle(true)
+    await cargarCalles()
     const { lat, lng } = lastClick.current
     const d = detectarPunto(lat, lng, capas)
     setDetection(d)
     setHasPicado(true)
-    setBuscandoCalle(true)
     geolocalizarCalle(lat, lng).then(info => {
       setCalleInfo(info)
       setBuscandoCalle(false)
