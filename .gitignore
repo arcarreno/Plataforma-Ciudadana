@@ -12,9 +12,6 @@ dist
 dist-ssr
 *.local
 
-# GeoJSON data (extracted from OSM, ~10MB)
-/public/data/CALLES_PUEBLA.geojson
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
