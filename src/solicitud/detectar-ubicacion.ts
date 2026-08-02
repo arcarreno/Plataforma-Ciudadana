@@ -206,9 +206,10 @@ async function fetchConReintento(url: string, intentos = 3): Promise<Response> {
 
 async function leerBytes(
   r: Response,
+  url: string,
   onBytes: (n: number) => void
 ): Promise<Uint8Array | null> {
-  if (r.body) {
+  if (r.body && !r.bodyUsed) {
     try {
       const reader = r.body.getReader()
       const chunks: Uint8Array[] = []
@@ -220,15 +221,16 @@ async function leerBytes(
       }
       return concatChunks(chunks)
     } catch (e) {
-      console.warn('[precarga] streaming no disponible, usando descarga directa', e)
+      console.warn('[precarga] streaming falló para', url, e, '- reintentando descarga directa')
     }
   }
   try {
-    const buf = await r.arrayBuffer()
+    const r2 = r.bodyUsed ? await fetchConReintento(url) : r
+    const buf = await r2.arrayBuffer()
     onBytes(buf.byteLength)
     return new Uint8Array(buf)
   } catch (e) {
-    console.error('[precarga] error en descarga directa', e)
+    console.error('[precarga] error en descarga directa', url, e)
     return null
   }
 }
@@ -266,7 +268,7 @@ export async function precargarCapasConProgreso(
         return
       }
       try {
-        const bytes = await leerBytes(r.value, sumar)
+        const bytes = await leerBytes(r.value, l.url, sumar)
         if (!bytes) {
           fallos.push(l.url)
           return

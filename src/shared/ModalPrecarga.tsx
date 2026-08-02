@@ -33,10 +33,11 @@ export default function ModalPrecarga() {
       if (!ok) {
         iniciado.current = false
         setDescargando(false)
+        const que = fallos?.length
+          ? ` (${fallos.map(f => f.split('/').pop()).join(', ')})`
+          : ''
         setError(
-          fallos?.length
-            ? `No se pudieron descargar ${fallos.length} de ${ALL_CAPAS.length} capa(s). Revisa tu conexión e inténtalo de nuevo.`
-            : 'No se pudieron descargar los datos. Revisa tu conexión e inténtalo de nuevo.'
+          `No se pudieron descargar ${fallos?.length ?? 0} de ${ALL_CAPAS.length} capas${que}. Revisa tu conexión e inténtalo de nuevo.`
         )
         return
       }
