@@ -66,6 +66,15 @@ const ZONA_ZAP_STYLE = {
   fillOpacity: 0.06,
 }
 
+function parseList(items?: string[]): string[] {
+  return (items || []).join(', ').split(',').map(s => s.trim()).filter(Boolean)
+}
+
+function shortRoute(r: string): string {
+  const idx = r.search(/\s+-\s+/)
+  return idx > 0 ? r.slice(0, idx).trim() : r.trim()
+}
+
 function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: L.DivIcon }) {
   const map = useMap()
   useEffect(() => {
@@ -212,7 +221,21 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
   const [editGeoOpen, setEditGeoOpen] = useState(false)
   const [editObraOpen, setEditObraOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ calle: s.calle || '', entre_calles: s.entre_calles || '', tipo_solicitud: s.tipo_solicitud, colonia: s.colonia, junta_auxiliar: s.junta_auxiliar })
+  const [editTramoOpen, setEditTramoOpen] = useState(false)
+  const [editForm, setEditForm] = useState({
+    calle: s.calle || '',
+    entre_calles: s.entre_calles || '',
+    tipo_solicitud: s.tipo_solicitud,
+    colonia: s.colonia,
+    junta_auxiliar: s.junta_auxiliar,
+    distancia_tramo_m: s.distancia_tramo_m != null ? String(s.distancia_tramo_m) : '',
+    ancho_calle_m: s.ancho_calle_m != null ? String(s.ancho_calle_m) : '',
+    zona_zap: s.zona_zap ?? false,
+    cobertura_agua: s.cobertura_agua ?? false,
+    escuelas_cercanas: (s.escuelas_cercanas || []).join(', '),
+    iglesias_cercanas: (s.iglesias_cercanas || []).join(', '),
+    transportes_cercanos: (s.transportes_cercanos || []).join(', '),
+  })
   const [editSaving, setEditSaving] = useState(false)
 
   const handleSaveGeo = async () => {
@@ -242,6 +265,36 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     }
     setEditSaving(false)
     setEditObraOpen(false)
+  }
+
+  const handleSaveTramo = async () => {
+    setEditSaving(true)
+    const toList = (v: string) => v.split(',').map(x => x.trim()).filter(Boolean)
+    const distancia = editForm.distancia_tramo_m.trim() === '' ? null : Number(editForm.distancia_tramo_m)
+    const ancho = editForm.ancho_calle_m.trim() === '' ? null : Number(editForm.ancho_calle_m)
+    const { error } = await supabase
+      .from('solicitudes')
+      .update({
+        distancia_tramo_m: distancia != null && Number.isFinite(distancia) ? distancia : null,
+        ancho_calle_m: ancho != null && Number.isFinite(ancho) ? ancho : null,
+        zona_zap: editForm.zona_zap,
+        cobertura_agua: editForm.cobertura_agua,
+        escuelas_cercanas: toList(editForm.escuelas_cercanas),
+        iglesias_cercanas: toList(editForm.iglesias_cercanas),
+        transportes_cercanos: toList(editForm.transportes_cercanos),
+      })
+      .eq('id_solicitud', s.id_solicitud)
+    if (!error) {
+      s.distancia_tramo_m = distancia != null && Number.isFinite(distancia) ? distancia : undefined
+      s.ancho_calle_m = ancho != null && Number.isFinite(ancho) ? ancho : undefined
+      s.zona_zap = editForm.zona_zap
+      s.cobertura_agua = editForm.cobertura_agua
+      s.escuelas_cercanas = toList(editForm.escuelas_cercanas)
+      s.iglesias_cercanas = toList(editForm.iglesias_cercanas)
+      s.transportes_cercanos = toList(editForm.transportes_cercanos)
+    }
+    setEditSaving(false)
+    setEditTramoOpen(false)
   }
 
   const puedeEditar = userRole && esCargoPublico(userRole)
@@ -497,8 +550,30 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                   </div>
                 </Card>
 
-                {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
-                  <Card title="Información del tramo">
+                {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.escuelas_cercanas && s.escuelas_cercanas.length > 0) || (s.iglesias_cercanas && s.iglesias_cercanas.length > 0) || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
+                  <Card title="Información del tramo" className="relative">
+                    {puedeEditar && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditForm(prev => ({
+                            ...prev,
+                            distancia_tramo_m: s.distancia_tramo_m != null ? String(s.distancia_tramo_m) : '',
+                            ancho_calle_m: s.ancho_calle_m != null ? String(s.ancho_calle_m) : '',
+                            zona_zap: s.zona_zap ?? false,
+                            cobertura_agua: s.cobertura_agua ?? false,
+                            escuelas_cercanas: (s.escuelas_cercanas || []).join(', '),
+                            iglesias_cercanas: (s.iglesias_cercanas || []).join(', '),
+                            transportes_cercanos: (s.transportes_cercanos || []).join(', '),
+                          }))
+                          setEditTramoOpen(true)
+                        }}
+                        className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
+                        aria-label="Editar información del tramo"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
                     <div className="flex flex-col gap-2 text-sm">
                       {s.distancia_tramo_m != null && (
                         <div className="flex justify-between">
@@ -528,24 +603,68 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                           </span>
                         </div>
                       )}
-                      <div className="flex items-start gap-2 text-xs">
-                        <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
-                        <span className="text-gray-institutional">
-                          {s.escuelas_cercanas?.length ? s.escuelas_cercanas.join(', ') : 'Ninguna encontrada'}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-2 text-xs">
-                        <Church className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
-                        <span className="text-gray-institutional">
-                          {s.iglesias_cercanas?.length ? s.iglesias_cercanas.join(', ') : 'Ninguna encontrada'}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-2 text-xs">
-                        <Bus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" />
-                        <span className="text-gray-institutional">
-                          {s.transportes_cercanos && s.transportes_cercanos.length > 0 ? s.transportes_cercanos.join(', ') : 'Rutas no encontradas'}
-                        </span>
-                      </div>
+                      {(() => {
+                        const escuelas = parseList(s.escuelas_cercanas).map(c => c.toUpperCase())
+                        const iglesias = parseList(s.iglesias_cercanas)
+                        const rutas = parseList(s.transportes_cercanos).map(shortRoute)
+                        if (escuelas.length === 0 && iglesias.length === 0 && rutas.length === 0) return null
+                        return (
+                          <div className="mt-1 overflow-hidden rounded-xl border border-gray-100">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-gray-50">
+                                  {escuelas.length > 0 && (
+                                    <th className="px-3 py-2 text-left font-semibold text-blue-700">
+                                      <School className="mr-1 inline h-3.5 w-3.5" /> Escuelas
+                                    </th>
+                                  )}
+                                  {iglesias.length > 0 && (
+                                    <th className="px-3 py-2 text-left font-semibold text-purple-700">
+                                      <Church className="mr-1 inline h-3.5 w-3.5" /> Iglesias
+                                    </th>
+                                  )}
+                                  {rutas.length > 0 && (
+                                    <th className="px-3 py-2 text-left font-semibold text-orange-600">
+                                      <Bus className="mr-1 inline h-3.5 w-3.5" /> Rutas
+                                    </th>
+                                  )}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  {escuelas.length > 0 && (
+                                    <td className="align-top">
+                                      <div className="flex flex-col divide-y divide-gray-100">
+                                        {escuelas.map((e, i) => (
+                                          <div key={i} className="px-3 py-1.5 font-mono text-gray-institutional">{e}</div>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  )}
+                                  {iglesias.length > 0 && (
+                                    <td className="align-top">
+                                      <div className="flex flex-col divide-y divide-gray-100">
+                                        {iglesias.map((e, i) => (
+                                          <div key={i} className="px-3 py-1.5 text-gray-institutional">{e}</div>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  )}
+                                  {rutas.length > 0 && (
+                                    <td className="align-top">
+                                      <div className="flex flex-col divide-y divide-gray-100">
+                                        {rutas.map((e, i) => (
+                                          <div key={i} className="px-3 py-1.5 text-gray-institutional">{e}</div>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  )}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </Card>
                 )}
@@ -1067,6 +1186,113 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
               <button
                 type="button"
                 onClick={handleSaveObra}
+                disabled={editSaving}
+                className="flex-1 rounded-xl bg-guinda px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
+              >
+                {editSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editTramoOpen && (
+        <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-guinda">Editar información del tramo</h3>
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Distancia (m)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.distancia_tramo_m}
+                    onChange={e => setEditForm(prev => ({ ...prev, distancia_tramo_m: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Ancho de calle (m)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={editForm.ancho_calle_m}
+                    onChange={e => setEditForm(prev => ({ ...prev, ancho_calle_m: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Zona ZAP</label>
+                  <select
+                    value={editForm.zona_zap ? 'si' : 'no'}
+                    onChange={e => setEditForm(prev => ({ ...prev, zona_zap: e.target.value === 'si' }))}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                  >
+                    <option value="no">No</option>
+                    <option value="si">Si</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-institutional/70">Cobertura de agua</label>
+                  <select
+                    value={editForm.cobertura_agua ? 'si' : 'no'}
+                    onChange={e => setEditForm(prev => ({ ...prev, cobertura_agua: e.target.value === 'si' }))}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                  >
+                    <option value="no">No</option>
+                    <option value="si">Si</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">
+                  Escuelas (claves CCT separadas por coma)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.escuelas_cercanas}
+                  onChange={e => setEditForm(prev => ({ ...prev, escuelas_cercanas: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">
+                  Iglesias (separadas por coma)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.iglesias_cercanas}
+                  onChange={e => setEditForm(prev => ({ ...prev, iglesias_cercanas: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">
+                  Rutas de transporte (separadas por coma)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.transportes_cercanos}
+                  onChange={e => setEditForm(prev => ({ ...prev, transportes_cercanos: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditTramoOpen(false)}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-institutional transition-colors hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveTramo}
                 disabled={editSaving}
                 className="flex-1 rounded-xl bg-guinda px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
               >
