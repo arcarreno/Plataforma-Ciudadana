@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Download, CheckCircle2 } from 'lucide-react'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
-import { precargarCapasConProgreso } from '../solicitud/detectar-ubicacion'
+import { precargarCapasConProgreso, ALL_CAPAS } from '../solicitud/detectar-ubicacion'
 
 const STORAGE_KEY = 'semovinfra_precarga_datos'
 
@@ -27,13 +27,17 @@ export default function ModalPrecarga() {
     setDescargando(true)
     setError('')
     try {
-      const ok = await precargarCapasConProgreso((done, total) => {
+      const { ok, fallos } = await precargarCapasConProgreso((done, total) => {
         setPct(total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0)
       })
       if (!ok) {
         iniciado.current = false
         setDescargando(false)
-        setError('No se pudieron descargar los datos. Revisa tu conexión e inténtalo de nuevo.')
+        setError(
+          fallos?.length
+            ? `No se pudieron descargar ${fallos.length} de ${ALL_CAPAS.length} capa(s). Revisa tu conexión e inténtalo de nuevo.`
+            : 'No se pudieron descargar los datos. Revisa tu conexión e inténtalo de nuevo.'
+        )
         return
       }
       setPct(100)

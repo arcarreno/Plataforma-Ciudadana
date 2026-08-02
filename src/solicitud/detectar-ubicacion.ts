@@ -151,7 +151,7 @@ async function fetchJSON(url: string): Promise<GeoJSON.FeatureCollection> {
   return promise
 }
 
-const ALL_CAPAS = [
+export const ALL_CAPAS = [
   { key: 'colonias' as const, url: '/data/COLONIAS PUEBLA.geojson' },
   { key: 'juntas' as const, url: '/data/JUNTAS AUXILIARES.geojson' },
   { key: 'zonasZap' as const, url: '/data/zonas zap2024.geojson' },
@@ -189,12 +189,62 @@ function concatChunks(chunks: Uint8Array[]): Uint8Array {
   return out
 }
 
+async function fetchConReintento(url: string, intentos = 3): Promise<Response> {
+  let lastErr: unknown = null
+  for (let i = 0; i < intentos; i++) {
+    try {
+      const r = await fetch(url)
+      if (r.ok) return r
+      lastErr = new Error(`HTTP ${r.status}`)
+    } catch (e) {
+      lastErr = e
+    }
+    if (i < intentos - 1) await new Promise(res => setTimeout(res, 700 * (i + 1)))
+  }
+  throw lastErr ?? new Error(`no se pudo descargar ${url}`)
+}
+
+async function leerBytes(
+  r: Response,
+  onBytes: (n: number) => void
+): Promise<Uint8Array | null> {
+  if (r.body) {
+    try {
+      const reader = r.body.getReader()
+      const chunks: Uint8Array[] = []
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+        onBytes(value.length)
+      }
+      return concatChunks(chunks)
+    } catch (e) {
+      console.warn('[precarga] streaming no disponible, usando descarga directa', e)
+    }
+  }
+  try {
+    const buf = await r.arrayBuffer()
+    onBytes(buf.byteLength)
+    return new Uint8Array(buf)
+  } catch (e) {
+    console.error('[precarga] error en descarga directa', e)
+    return null
+  }
+}
+
+export interface ResultadoPrecarga {
+  ok: boolean
+  fallos: string[]
+}
+
 export async function precargarCapasConProgreso(
   onProgress: (bytesDescargados: number, bytesTotal: number) => void
-): Promise<boolean> {
+): Promise<ResultadoPrecarga> {
   const urls = ALL_CAPAS.map(l => l.url)
+  const fallos: string[] = []
 
-  const resultados = await Promise.allSettled(urls.map(url => fetch(url)))
+  const resultados = await Promise.allSettled(urls.map(url => fetchConReintento(url)))
 
   let total = 0
   for (const r of resultados) {
@@ -202,32 +252,34 @@ export async function precargarCapasConProgreso(
   }
 
   let descargado = 0
-  let ok = true
+  const sumar = (n: number) => {
+    descargado += n
+    onProgress(descargado, total)
+  }
 
   await Promise.all(
     ALL_CAPAS.map(async (l, idx) => {
       const r = resultados[idx]
-      if (r.status !== 'fulfilled' || !r.value.ok || !r.value.body) {
+      if (r.status !== 'fulfilled') {
         console.error('[precarga] no se pudo descargar', l.url)
-        ok = false
+        fallos.push(l.url)
         return
       }
       try {
-        const reader = r.value.body.getReader()
-        const chunks: Uint8Array[] = []
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          chunks.push(value)
-          descargado += value.length
-          onProgress(descargado, total)
+        const bytes = await leerBytes(r.value, sumar)
+        if (!bytes) {
+          fallos.push(l.url)
+          return
         }
-        const bytes = concatChunks(chunks)
         if (l.key === 'calles') {
-          const listas = await cargarCalles(bytes.buffer as ArrayBuffer)
+          let listas = await cargarCalles(bytes.buffer as ArrayBuffer)
           if (!listas) {
-            console.error('[precarga] las calles no quedaron listas en el worker')
-            ok = false
+            console.error('[precarga] calles fallaron en el worker, reintentando descarga directa')
+            listas = await cargarCalles()
+          }
+          if (!listas) {
+            console.error('[precarga] las calles no quedaron listas')
+            fallos.push(l.url)
           }
         } else {
           try {
@@ -235,18 +287,18 @@ export async function precargarCapasConProgreso(
             capaCache.set(l.url, Promise.resolve(fc))
           } catch (e) {
             console.error('[precarga] error al parsear', l.url, e)
-            ok = false
+            fallos.push(l.url)
           }
         }
       } catch (e) {
-        console.error('[precarga] error al leer', l.url, e)
-        ok = false
+        console.error('[precarga] error al procesar', l.url, e)
+        fallos.push(l.url)
       }
     })
   )
 
   onProgress(total, total)
-  return ok
+  return { ok: fallos.length === 0, fallos }
 }
 
 export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): DeteccionPunto {
