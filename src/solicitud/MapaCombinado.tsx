@@ -110,6 +110,19 @@ function ResizeHandler({ inline }: { inline?: boolean }) {
   return null
 }
 
+function ZoomTracker({ onZoom }: { onZoom: (zoom: number) => void }) {
+  const map = useMap()
+  useEffect(() => {
+    const report = () => onZoom(map.getZoom())
+    report()
+    map.on('zoomend', report)
+    return () => {
+      map.off('zoomend', report)
+    }
+  }, [map, onZoom])
+  return null
+}
+
 function LocateOnMount() {
   const map = useMap()
   useEffect(() => {
@@ -200,6 +213,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
   const [showLayers, setShowLayers] = useState(false)
   const [satellite, setSatellite] = useState(false)
+  const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM)
 
   const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
     initialLat && initialLng ? { lat: parseFloat(initialLat), lng: parseFloat(initialLng) } : null
@@ -429,6 +443,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
           <LocateOnMount />
           <ResizeHandler inline={inline} />
+          <ZoomTracker onZoom={setMapZoom} />
 
           <ClickHandler
             stepRef={stepRef}
@@ -448,10 +463,10 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
           {marker && <Marker position={[marker.lat, marker.lng]} icon={icon} />}
 
-          {step === 'tramo' && marker && tramoPoints.length === 0 && (
+          {step === 'tramo' && marker && tramoPoints.length === 0 && mapZoom <= 14 && (
             <Circle center={[marker.lat, marker.lng]} radius={500} pathOptions={{ color: '#7d2447', weight: 1.5, fillOpacity: 0.04, dashArray: '5,5' }} />
           )}
-          {step === 'tramo' && marker && tramoPoints.length >= 1 && (
+          {step === 'tramo' && marker && tramoPoints.length >= 1 && mapZoom <= 14 && (
             <Circle center={[marker.lat, marker.lng]} radius={5000} pathOptions={{ color: '#7d2447', weight: 1, fillOpacity: 0.03, dashArray: '5,5' }} />
           )}
 
