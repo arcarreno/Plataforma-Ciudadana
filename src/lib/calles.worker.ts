@@ -178,12 +178,36 @@ ctx.onmessage = (e: MessageEvent) => {
   if (!msg || typeof msg !== 'object') return
   switch (msg.type) {
     case 'cargar': {
-      try {
-        const text = new TextDecoder().decode(msg.buffer)
-        buildIndex(JSON.parse(text) as FeatureCollection<LineString>)
-        ctx.postMessage({ type: 'listo', id: msg.id, ok: true, features: callesFeatures.length })
-      } catch (err) {
-        ctx.postMessage({ type: 'listo', id: msg.id, ok: false, error: err instanceof Error ? err.message : String(err) })
+      const id = msg.id
+      const responder = (ok: boolean, error?: string) => {
+        ctx.postMessage({
+          type: 'listo',
+          id,
+          ok,
+          features: ok ? callesFeatures.length : undefined,
+          error,
+        })
+      }
+      if (msg.buffer) {
+        try {
+          const text = new TextDecoder().decode(msg.buffer)
+          buildIndex(JSON.parse(text) as FeatureCollection<LineString>)
+          responder(true)
+        } catch (err) {
+          responder(false, err instanceof Error ? err.message : String(err))
+        }
+      } else {
+        ;(async () => {
+          try {
+            const r = await fetch('/data/CALLES_PUEBLA.geojson')
+            if (!r.ok) throw new Error(`HTTP ${r.status}`)
+            const data = (await r.json()) as FeatureCollection<LineString>
+            buildIndex(data)
+            responder(true)
+          } catch (err) {
+            responder(false, err instanceof Error ? err.message : String(err))
+          }
+        })()
       }
       break
     }

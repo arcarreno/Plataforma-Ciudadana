@@ -15,6 +15,8 @@ interface WorkerMsg {
   entreCallesDetected?: number
 }
 
+const TIMEOUT_CARGA_MS = 60_000
+
 let worker: Worker | null = null
 let callesListas = false
 let cargando: Promise<boolean> | null = null
@@ -22,8 +24,7 @@ let msgId = 0
 const pendientes = new Map<number, (value: CalleInfo) => void>()
 const loadResolvers: ((ok: boolean) => void)[] = []
 
-function getWorker(): Worker {
-  if (worker) return worker
+function nuevoWorker(): Worker {
   const w = new Worker(new URL('./calles.worker.ts', import.meta.url), { type: 'module' })
   w.onmessage = (e: MessageEvent<WorkerMsg>) => {
     const msg = e.data
@@ -46,12 +47,17 @@ function getWorker(): Worker {
   }
   w.onerror = (ev) => {
     callesListas = false
+    if (worker === w) worker = null
     const resolvers = loadResolvers.splice(0)
     for (const r of resolvers) r(false)
     console.error('[calles] error del worker:', ev.message)
   }
-  worker = w
   return w
+}
+
+function getWorker(): Worker {
+  if (!worker) worker = nuevoWorker()
+  return worker
 }
 
 export function tieneCalles(): boolean {
@@ -63,27 +69,36 @@ export async function cargarCalles(buffer?: ArrayBuffer): Promise<boolean> {
   if (cargando) return cargando
 
   cargando = (async () => {
-    try {
-      const w = getWorker()
-      const id = ++msgId
-      const promesa = new Promise<boolean>((resolve) => {
-        loadResolvers.push(resolve)
-      })
-      if (buffer) {
-        w.postMessage({ type: 'cargar', id, buffer }, [buffer])
-      } else {
-        const r = await fetch('/data/CALLES_PUEBLA.geojson')
-        if (!r.ok) return false
-        const buf = await r.arrayBuffer()
-        w.postMessage({ type: 'cargar', id, buffer: buf }, [buf])
-      }
-      return await promesa
-    } finally {
-      cargando = null
+    const w = getWorker()
+    const id = ++msgId
+    const promesa = new Promise<boolean>((resolve) => {
+      loadResolvers.push(resolve)
+    })
+    if (buffer) {
+      w.postMessage({ type: 'cargar', id, buffer }, [buffer])
+    } else {
+      w.postMessage({ type: 'cargar', id })
     }
+    const resultado = await Promise.race([
+      promesa,
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), TIMEOUT_CARGA_MS)),
+    ])
+    if (!resultado && !callesListas && worker === w) {
+      try {
+        w.terminate()
+      } catch {
+        /* noop */
+      }
+      worker = null
+    }
+    return resultado
   })()
 
-  return cargando
+  try {
+    return await cargando
+  } finally {
+    cargando = null
+  }
 }
 
 export async function geolocalizarCalle(lat: number, lon: number): Promise<CalleInfo> {
