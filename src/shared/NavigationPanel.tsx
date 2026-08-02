@@ -58,7 +58,7 @@ export default function NavigationPanel({ open, onClose }: NavigationPanelProps)
                   : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
               }`}
             >
-              Admin
+              Peticiones
             </Link>
           )}
           {user && (
