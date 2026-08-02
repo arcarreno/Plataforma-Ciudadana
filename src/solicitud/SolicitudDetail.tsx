@@ -222,6 +222,12 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const [editGeoOpen, setEditGeoOpen] = useState(false)
   const [editObraOpen, setEditObraOpen] = useState(false)
   const [editTramoOpen, setEditTramoOpen] = useState(false)
+  const [tramoExpandido, setTramoExpandido] = useState(false)
+  const [editListas, setEditListas] = useState({
+    escuelas: s.escuelas_cercanas || [] as string[],
+    iglesias: s.iglesias_cercanas || [] as string[],
+    rutas: s.transportes_cercanos || [] as string[],
+  })
   const [editForm, setEditForm] = useState({
     calle: s.calle || '',
     entre_calles: s.entre_calles || '',
@@ -232,9 +238,6 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     ancho_calle_m: s.ancho_calle_m != null ? String(s.ancho_calle_m) : '',
     zona_zap: s.zona_zap ?? false,
     cobertura_agua: s.cobertura_agua ?? false,
-    escuelas_cercanas: (s.escuelas_cercanas || []).join(', '),
-    iglesias_cercanas: (s.iglesias_cercanas || []).join(', '),
-    transportes_cercanos: (s.transportes_cercanos || []).join(', '),
   })
   const [editSaving, setEditSaving] = useState(false)
 
@@ -269,9 +272,12 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
   const handleSaveTramo = async () => {
     setEditSaving(true)
-    const toList = (v: string) => v.split(',').map(x => x.trim()).filter(Boolean)
+    const toList = (arr: string[]) => arr.map(x => x.trim()).filter(Boolean)
     const distancia = editForm.distancia_tramo_m.trim() === '' ? null : Number(editForm.distancia_tramo_m)
     const ancho = editForm.ancho_calle_m.trim() === '' ? null : Number(editForm.ancho_calle_m)
+    const escuelas = toList(editListas.escuelas)
+    const iglesias = toList(editListas.iglesias)
+    const rutas = toList(editListas.rutas)
     const { error } = await supabase
       .from('solicitudes')
       .update({
@@ -279,9 +285,9 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
         ancho_calle_m: ancho != null && Number.isFinite(ancho) ? ancho : null,
         zona_zap: editForm.zona_zap,
         cobertura_agua: editForm.cobertura_agua,
-        escuelas_cercanas: toList(editForm.escuelas_cercanas),
-        iglesias_cercanas: toList(editForm.iglesias_cercanas),
-        transportes_cercanos: toList(editForm.transportes_cercanos),
+        escuelas_cercanas: escuelas,
+        iglesias_cercanas: iglesias,
+        transportes_cercanos: rutas,
       })
       .eq('id_solicitud', s.id_solicitud)
     if (!error) {
@@ -289,12 +295,22 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
       s.ancho_calle_m = ancho != null && Number.isFinite(ancho) ? ancho : undefined
       s.zona_zap = editForm.zona_zap
       s.cobertura_agua = editForm.cobertura_agua
-      s.escuelas_cercanas = toList(editForm.escuelas_cercanas)
-      s.iglesias_cercanas = toList(editForm.iglesias_cercanas)
-      s.transportes_cercanos = toList(editForm.transportes_cercanos)
+      s.escuelas_cercanas = escuelas
+      s.iglesias_cercanas = iglesias
+      s.transportes_cercanos = rutas
     }
     setEditSaving(false)
     setEditTramoOpen(false)
+  }
+
+  const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: string) => {
+    setEditListas(prev => ({ ...prev, [key]: prev[key].map((v, j) => (j === i ? valor : v)) }))
+  }
+  const addLista = (key: 'escuelas' | 'iglesias' | 'rutas') => {
+    setEditListas(prev => ({ ...prev, [key]: [...prev[key], ''] }))
+  }
+  const removeLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number) => {
+    setEditListas(prev => ({ ...prev, [key]: prev[key].filter((_, j) => j !== i) }))
   }
 
   const puedeEditar = userRole && esCargoPublico(userRole)
@@ -552,28 +568,46 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
                 {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.escuelas_cercanas && s.escuelas_cercanas.length > 0) || (s.iglesias_cercanas && s.iglesias_cercanas.length > 0) || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
                   <Card title="Información del tramo" className="relative">
-                    {puedeEditar && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditForm(prev => ({
-                            ...prev,
-                            distancia_tramo_m: s.distancia_tramo_m != null ? String(s.distancia_tramo_m) : '',
-                            ancho_calle_m: s.ancho_calle_m != null ? String(s.ancho_calle_m) : '',
-                            zona_zap: s.zona_zap ?? false,
-                            cobertura_agua: s.cobertura_agua ?? false,
-                            escuelas_cercanas: (s.escuelas_cercanas || []).join(', '),
-                            iglesias_cercanas: (s.iglesias_cercanas || []).join(', '),
-                            transportes_cercanos: (s.transportes_cercanos || []).join(', '),
-                          }))
-                          setEditTramoOpen(true)
-                        }}
-                        className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
-                        aria-label="Editar información del tramo"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                    )}
+                    <div className="absolute right-2 top-2 flex items-center gap-1">
+                      {(() => {
+                        const total = parseList(s.escuelas_cercanas).length + parseList(s.iglesias_cercanas).length + parseList(s.transportes_cercanos).length
+                        if (total <= 3) return null
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setTramoExpandido(prev => !prev)}
+                            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
+                            aria-label={tramoExpandido ? 'Contraer información del tramo' : 'Expandir información del tramo'}
+                          >
+                            {tramoExpandido ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                          </button>
+                        )
+                      })()}
+                      {puedeEditar && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditForm(prev => ({
+                              ...prev,
+                              distancia_tramo_m: s.distancia_tramo_m != null ? String(s.distancia_tramo_m) : '',
+                              ancho_calle_m: s.ancho_calle_m != null ? String(s.ancho_calle_m) : '',
+                              zona_zap: s.zona_zap ?? false,
+                              cobertura_agua: s.cobertura_agua ?? false,
+                            }))
+                            setEditListas({
+                              escuelas: s.escuelas_cercanas || [],
+                              iglesias: s.iglesias_cercanas || [],
+                              rutas: s.transportes_cercanos || [],
+                            })
+                            setEditTramoOpen(true)
+                          }}
+                          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-guinda"
+                          aria-label="Editar información del tramo"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-col gap-2 text-sm">
                       {s.distancia_tramo_m != null && (
                         <div className="flex justify-between">
@@ -608,6 +642,11 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                         const iglesias = parseList(s.iglesias_cercanas)
                         const rutas = parseList(s.transportes_cercanos).map(shortRoute)
                         if (escuelas.length === 0 && iglesias.length === 0 && rutas.length === 0) return null
+                        const slice = tramoExpandido ? (arr: string[]) => arr : (arr: string[]) => arr.slice(0, 3)
+                        const escuelasV = slice(escuelas)
+                        const iglesiasV = slice(iglesias)
+                        const rutasV = slice(rutas)
+                        const sobra = escuelas.length > 3 || iglesias.length > 3 || rutas.length > 3
                         return (
                           <div className="mt-1 overflow-hidden rounded-xl border border-gray-100">
                             <table className="w-full text-xs">
@@ -635,7 +674,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                                   {escuelas.length > 0 && (
                                     <td className="align-top">
                                       <div className="flex flex-col divide-y divide-gray-100">
-                                        {escuelas.map((e, i) => (
+                                        {escuelasV.map((e, i) => (
                                           <div key={i} className="px-3 py-1.5 font-mono text-gray-institutional">{e}</div>
                                         ))}
                                       </div>
@@ -644,7 +683,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                                   {iglesias.length > 0 && (
                                     <td className="align-top">
                                       <div className="flex flex-col divide-y divide-gray-100">
-                                        {iglesias.map((e, i) => (
+                                        {iglesiasV.map((e, i) => (
                                           <div key={i} className="px-3 py-1.5 text-gray-institutional">{e}</div>
                                         ))}
                                       </div>
@@ -653,7 +692,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                                   {rutas.length > 0 && (
                                     <td className="align-top">
                                       <div className="flex flex-col divide-y divide-gray-100">
-                                        {rutas.map((e, i) => (
+                                        {rutasV.map((e, i) => (
                                           <div key={i} className="px-3 py-1.5 text-gray-institutional">{e}</div>
                                         ))}
                                       </div>
@@ -662,6 +701,15 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                                 </tr>
                               </tbody>
                             </table>
+                            {sobra && (
+                              <button
+                                type="button"
+                                onClick={() => setTramoExpandido(prev => !prev)}
+                                className="w-full border-t border-gray-100 bg-gray-50/60 px-3 py-1.5 text-[11px] font-medium text-guinda transition-colors hover:bg-gray-50"
+                              >
+                                {tramoExpandido ? 'Ver menos' : `Ver ${Math.max(escuelas.length, iglesias.length, rutas.length) - 3} más`}
+                              </button>
+                            )}
                           </div>
                         )
                       })()}
@@ -1198,7 +1246,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
       {editTramoOpen && (
         <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="mb-4 text-lg font-semibold text-guinda">Editar información del tramo</h3>
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
@@ -1250,36 +1298,119 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-institutional/70">
-                  Escuelas (claves CCT separadas por coma)
+                  Entorno social (escuelas, iglesias y rutas)
                 </label>
-                <input
-                  type="text"
-                  value={editForm.escuelas_cercanas}
-                  onChange={e => setEditForm(prev => ({ ...prev, escuelas_cercanas: e.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">
-                  Iglesias (separadas por coma)
-                </label>
-                <input
-                  type="text"
-                  value={editForm.iglesias_cercanas}
-                  onChange={e => setEditForm(prev => ({ ...prev, iglesias_cercanas: e.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-institutional/70">
-                  Rutas de transporte (separadas por coma)
-                </label>
-                <input
-                  type="text"
-                  value={editForm.transportes_cercanos}
-                  onChange={e => setEditForm(prev => ({ ...prev, transportes_cercanos: e.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-institutional outline-none focus:border-guinda focus:ring-1 focus:ring-guinda/30"
-                />
+                <div className="overflow-hidden rounded-xl border border-gray-100">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-2 py-2 text-left font-semibold text-blue-700">
+                          <School className="mr-1 inline h-3.5 w-3.5" /> Escuelas
+                        </th>
+                        <th className="px-2 py-2 text-left font-semibold text-purple-700">
+                          <Church className="mr-1 inline h-3.5 w-3.5" /> Iglesias
+                        </th>
+                        <th className="px-2 py-2 text-left font-semibold text-orange-600">
+                          <Bus className="mr-1 inline h-3.5 w-3.5" /> Rutas
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="align-top">
+                          <div className="flex flex-col divide-y divide-gray-100">
+                            {editListas.escuelas.map((v, i) => (
+                              <div key={i} className="flex items-center gap-1 px-1 py-0.5">
+                                <input
+                                  type="text"
+                                  value={v}
+                                  onChange={e => updateLista('escuelas', i, e.target.value)}
+                                  className="w-full rounded border border-transparent px-1.5 py-1 font-mono uppercase text-gray-institutional outline-none focus:border-guinda/40 focus:bg-white"
+                                  placeholder="CCT"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeLista('escuelas', i)}
+                                  className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                  aria-label="Quitar escuela"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => addLista('escuelas')}
+                              className="px-2 py-1.5 text-left text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                            >
+                              + Agregar
+                            </button>
+                          </div>
+                        </td>
+                        <td className="align-top">
+                          <div className="flex flex-col divide-y divide-gray-100">
+                            {editListas.iglesias.map((v, i) => (
+                              <div key={i} className="flex items-center gap-1 px-1 py-0.5">
+                                <input
+                                  type="text"
+                                  value={v}
+                                  onChange={e => updateLista('iglesias', i, e.target.value)}
+                                  className="w-full rounded border border-transparent px-1.5 py-1 text-gray-institutional outline-none focus:border-guinda/40 focus:bg-white"
+                                  placeholder="Iglesia"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeLista('iglesias', i)}
+                                  className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                  aria-label="Quitar iglesia"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => addLista('iglesias')}
+                              className="px-2 py-1.5 text-left text-[11px] font-medium text-purple-700 transition-colors hover:bg-purple-50"
+                            >
+                              + Agregar
+                            </button>
+                          </div>
+                        </td>
+                        <td className="align-top">
+                          <div className="flex flex-col divide-y divide-gray-100">
+                            {editListas.rutas.map((v, i) => (
+                              <div key={i} className="flex items-center gap-1 px-1 py-0.5">
+                                <input
+                                  type="text"
+                                  value={v}
+                                  onChange={e => updateLista('rutas', i, e.target.value)}
+                                  className="w-full rounded border border-transparent px-1.5 py-1 text-gray-institutional outline-none focus:border-guinda/40 focus:bg-white"
+                                  placeholder="Ruta"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeLista('rutas', i)}
+                                  className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                  aria-label="Quitar ruta"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => addLista('rutas')}
+                              className="px-2 py-1.5 text-left text-[11px] font-medium text-orange-600 transition-colors hover:bg-orange-50"
+                            >
+                              + Agregar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
             <div className="mt-6 flex gap-3">
