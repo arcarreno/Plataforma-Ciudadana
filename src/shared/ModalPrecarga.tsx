@@ -10,6 +10,7 @@ export default function ModalPrecarga() {
   const [show, setShow] = useState(false)
   const [descargando, setDescargando] = useState(false)
   const [listo, setListo] = useState(false)
+  const [error, setError] = useState('')
   const [pct, setPct] = useState(0)
   const iniciado = useRef(false)
 
@@ -24,18 +25,26 @@ export default function ModalPrecarga() {
     if (iniciado.current) return
     iniciado.current = true
     setDescargando(true)
+    setError('')
     try {
-      await precargarCapasConProgreso((done, total) => {
+      const ok = await precargarCapasConProgreso((done, total) => {
         setPct(total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0)
       })
+      if (!ok) {
+        iniciado.current = false
+        setDescargando(false)
+        setError('No se pudieron descargar los datos. Revisa tu conexión e inténtalo de nuevo.')
+        return
+      }
       setPct(100)
       setDescargando(false)
       setListo(true)
       sessionStorage.setItem(STORAGE_KEY, 'ok')
       setTimeout(() => setShow(false), 900)
     } catch {
-      sessionStorage.setItem(STORAGE_KEY, 'ok')
-      setShow(false)
+      iniciado.current = false
+      setDescargando(false)
+      setError('Ocurrió un error al descargar. Revisa tu conexión e inténtalo de nuevo.')
     }
   }
 
@@ -78,11 +87,9 @@ export default function ModalPrecarga() {
             onClick={iniciarDescarga}
             disabled={descargando}
             className={`relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl text-sm font-semibold transition-all duration-300 ${
-              descargando
+              descargando || listo
                 ? 'bg-guinda border-2 border-white/40'
-                : listo
-                  ? 'bg-guinda border-2 border-white/40'
-                  : 'bg-white text-guinda shadow-button hover:brightness-105'
+                : 'bg-white text-guinda shadow-button hover:brightness-105'
             }`}
           >
             {descargando && (
@@ -93,11 +100,7 @@ export default function ModalPrecarga() {
             )}
             <span
               className={`relative z-10 flex items-center gap-2 transition-colors duration-150 ${
-                listo
-                  ? 'text-white'
-                  : descargando
-                    ? pct >= 50 ? 'text-guinda' : 'text-white'
-                    : 'text-guinda'
+                listo || (descargando && pct < 50) ? 'text-white' : descargando ? 'text-guinda' : 'text-guinda'
               }`}
             >
               {listo ? (
@@ -107,15 +110,17 @@ export default function ModalPrecarga() {
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              {listo ? 'Datos listos' : descargando ? 'Descargando…' : 'Descargar datos'}
+              {listo ? 'Datos listos' : descargando ? 'Descargando…' : error ? 'Reintentar descarga' : 'Descargar datos'}
             </span>
           </button>
-          <p className="mt-2 text-center text-[11px] text-white/70">
-            {listo
-              ? 'Todo listo, el mapa funcionará al 100%'
-              : descargando
-                ? 'Preparando las capas geográficas…'
-                : 'Solo toma unos segundos la primera vez'}
+          <p className={`mt-2 text-center text-[11px] ${error ? 'text-yellow-200' : 'text-white/70'}`}>
+            {error
+              ? error
+              : listo
+                ? 'Todo listo, el mapa funcionará al 100%'
+                : descargando
+                  ? 'Preparando las capas geográficas…'
+                  : 'Solo toma unos segundos la primera vez'}
           </p>
         </div>
       </div>

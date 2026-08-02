@@ -5,7 +5,7 @@ import { point, lineString } from '@turf/helpers'
 import buffer from '@turf/buffer'
 import { matchJunta, cleanColoniaName } from '../core/geo'
 import { estimarAnchoCalle, haversineDistancia } from './calle'
-import { setCallesData } from '../lib/geolocalizarCalle'
+import { cargarCalles } from '../lib/geolocalizarCalle'
 
 export interface CapasGeoJSON {
   colonias: GeoJSON.FeatureCollection
@@ -191,50 +191,62 @@ function concatChunks(chunks: Uint8Array[]): Uint8Array {
 
 export async function precargarCapasConProgreso(
   onProgress: (bytesDescargados: number, bytesTotal: number) => void
-): Promise<void> {
+): Promise<boolean> {
   const urls = ALL_CAPAS.map(l => l.url)
 
-  let respuestas: { url: string; r: Response }[] = []
-  try {
-    respuestas = await Promise.all(urls.map(async url => ({ url, r: await fetch(url) })))
-  } catch {
-    respuestas = []
+  const resultados = await Promise.allSettled(urls.map(url => fetch(url)))
+
+  let total = 0
+  for (const r of resultados) {
+    if (r.status === 'fulfilled') total += Number(r.value.headers.get('content-length')) || 0
   }
 
-  const total = respuestas.reduce(
-    (s, { r }) => s + (Number(r.headers.get('content-length')) || 0),
-    0
-  )
-
   let descargado = 0
+  let ok = true
 
   await Promise.all(
-    respuestas.map(async ({ url, r }) => {
-      let fc: GeoJSON.FeatureCollection = EMPTY_FC
-      if (r.ok && r.body) {
-        try {
-          const reader = r.body.getReader()
-          const chunks: Uint8Array[] = []
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (done) break
-            chunks.push(value)
-            descargado += value.length
-            onProgress(descargado, total)
-          }
-          fc = JSON.parse(new TextDecoder().decode(concatChunks(chunks))) as GeoJSON.FeatureCollection
-        } catch {
-          fc = EMPTY_FC
-        }
+    ALL_CAPAS.map(async (l, idx) => {
+      const r = resultados[idx]
+      if (r.status !== 'fulfilled' || !r.value.ok || !r.value.body) {
+        console.error('[precarga] no se pudo descargar', l.url)
+        ok = false
+        return
       }
-      capaCache.set(url, Promise.resolve(fc))
-      if (url === '/data/CALLES_PUEBLA.geojson') {
-        setCallesData(fc as unknown as GeoJSON.FeatureCollection<GeoJSON.LineString>)
+      try {
+        const reader = r.value.body.getReader()
+        const chunks: Uint8Array[] = []
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          chunks.push(value)
+          descargado += value.length
+          onProgress(descargado, total)
+        }
+        const bytes = concatChunks(chunks)
+        if (l.key === 'calles') {
+          const listas = await cargarCalles(bytes.buffer as ArrayBuffer)
+          if (!listas) {
+            console.error('[precarga] las calles no quedaron listas en el worker')
+            ok = false
+          }
+        } else {
+          try {
+            const fc = JSON.parse(new TextDecoder().decode(bytes)) as GeoJSON.FeatureCollection
+            capaCache.set(l.url, Promise.resolve(fc))
+          } catch (e) {
+            console.error('[precarga] error al parsear', l.url, e)
+            ok = false
+          }
+        }
+      } catch (e) {
+        console.error('[precarga] error al leer', l.url, e)
+        ok = false
       }
     })
   )
 
   onProgress(total, total)
+  return ok
 }
 
 export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): DeteccionPunto {

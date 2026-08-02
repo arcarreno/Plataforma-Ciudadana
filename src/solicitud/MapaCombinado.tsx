@@ -615,7 +615,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
                       type="button"
                       size="sm"
                       className="mt-1"
-                      disabled={isOutside && (!manualColonia.trim() || !manualJunta.trim())}
+                      disabled={buscandoCalle || (isOutside && (!manualColonia.trim() || !manualJunta.trim()))}
                       onClick={handleConfirmarPunto}
                     >
                       <MapPin className="mr-1.5 h-4 w-4" />
