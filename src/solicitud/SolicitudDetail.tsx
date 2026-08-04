@@ -811,10 +811,10 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                           {showLayersUbicacion && capas?.zonasZap && (
                             <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
                           )}
-                          <div className="absolute left-4 top-4 z-[10000]">
-                            <button
-                              type="button"
-                              onClick={() => setStreetViewUbicacion(prev => !prev)}
+                      <div className="absolute left-4 top-20 z-[10000]">
+                        <button
+                          type="button"
+                          onClick={() => setStreetViewUbicacion(prev => !prev)}
                               className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs shadow-card transition-colors ${
                                 streetViewUbicacion
                                   ? 'bg-guinda text-white'
@@ -959,7 +959,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                       {showLayersTramo && capas?.zonasZap && (
                         <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
                       )}
-                      <div className="absolute left-4 top-4 z-[10000]">
+                      <div className="absolute left-4 top-20 z-[10000]">
                         <button
                           type="button"
                           onClick={() => setStreetViewTramo(prev => !prev)}
