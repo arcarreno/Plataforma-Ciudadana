@@ -203,15 +203,6 @@ export default function StreetView({ active, initialPoint }: StreetViewProps) {
     },
   })
 
-  useEffect(() => {
-    if (!active) return
-    const timer = setTimeout(() => {
-      buscarImagen(point.lat, point.lng)
-    }, 0)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active])
-
   return (
     <>
       {active && <MonitoMarker initial={point} onDrop={handlePoint} />}
