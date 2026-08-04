@@ -147,9 +147,7 @@ function LocateOnMount() {
     const onFound = (e: L.LocationEvent) => {
       marker.setLatLng(e.latlng).addTo(map)
       circle.setLatLng(e.latlng).setRadius(e.accuracy ?? 100).addTo(map)
-      if ((e.accuracy ?? 999) < 100) {
-        map.setView(e.latlng, 16)
-      }
+      map.setView(e.latlng, 16)
       map.stopLocate()
     }
     const onError = () => {
