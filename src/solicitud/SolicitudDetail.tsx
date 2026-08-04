@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle } from 'lucide-react'
+import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle, PersonStanding } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES, CATALOGO_TIPOS_OBRA } from '../core/constants'
@@ -15,6 +15,7 @@ import { consultarSIGED } from '../lib/consultarSIGED'
 import type { SigedEscuela } from '../lib/consultarSIGED'
 import VistaOficioEditable from './VistaOficioEditable'
 import VistaFichaEditable from './VistaFichaEditable'
+import StreetView from './StreetView'
 
 interface SolicitudDetailProps {
   solicitud: Solicitud
@@ -92,6 +93,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const [ubicacionFullscreen, setUbicacionFullscreen] = useState(false)
   const [satelliteUbicacion, setSatelliteUbicacion] = useState(false)
   const [satelliteTramo, setSatelliteTramo] = useState(false)
+  const [streetViewUbicacion, setStreetViewUbicacion] = useState(false)
+  const [streetViewTramo, setStreetViewTramo] = useState(false)
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [showLayersUbicacion, setShowLayersUbicacion] = useState(false)
   const [showLayersTramo, setShowLayersTramo] = useState(false)
@@ -223,6 +226,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const [editObraOpen, setEditObraOpen] = useState(false)
   const [editTramoOpen, setEditTramoOpen] = useState(false)
   const [tramoExpandido, setTramoExpandido] = useState(false)
+  const [editTramoExpandido, setEditTramoExpandido] = useState(false)
   const [editListas, setEditListas] = useState({
     escuelas: s.escuelas_cercanas || [] as string[],
     iglesias: s.iglesias_cercanas || [] as string[],
@@ -307,7 +311,11 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     setEditListas(prev => ({ ...prev, [key]: prev[key].map((v, j) => (j === i ? valor : v)) }))
   }
   const addLista = (key: 'escuelas' | 'iglesias' | 'rutas') => {
-    setEditListas(prev => ({ ...prev, [key]: [...prev[key], ''] }))
+    setEditListas(prev => {
+      const nuevo = { ...prev, [key]: [...prev[key], ''] }
+      if (prev[key].length >= 5) setEditTramoExpandido(true)
+      return nuevo
+    })
   }
   const removeLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number) => {
     setEditListas(prev => ({ ...prev, [key]: prev[key].filter((_, j) => j !== i) }))
@@ -803,6 +811,21 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                           {showLayersUbicacion && capas?.zonasZap && (
                             <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
                           )}
+                          <div className="absolute left-4 top-4 z-[10000]">
+                            <button
+                              type="button"
+                              onClick={() => setStreetViewUbicacion(prev => !prev)}
+                              className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs shadow-card transition-colors ${
+                                streetViewUbicacion
+                                  ? 'bg-guinda text-white'
+                                  : 'bg-white text-guinda hover:bg-guinda hover:text-white'
+                              }`}
+                              aria-label={streetViewUbicacion ? 'Desactivar vista a nivel de calle' : 'Activar vista a nivel de calle'}
+                            >
+                              <PersonStanding className="h-3.5 w-3.5" />
+                              Street view
+                            </button>
+                          </div>
                           <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
                             <button
                               type="button"
@@ -831,6 +854,9 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                               <Minimize2 className="h-5 w-5 text-gray-700" />
                             </button>
                           </div>
+                          {streetViewUbicacion && (
+                            <StreetView active initialPoint={[s.latitud, s.longitud]} />
+                          )}
                         </MapContainer>
                       </div>
                     </div>
@@ -933,6 +959,21 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                       {showLayersTramo && capas?.zonasZap && (
                         <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
                       )}
+                      <div className="absolute left-4 top-4 z-[10000]">
+                        <button
+                          type="button"
+                          onClick={() => setStreetViewTramo(prev => !prev)}
+                          className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs shadow-card transition-colors ${
+                            streetViewTramo
+                              ? 'bg-guinda text-white'
+                              : 'bg-white text-guinda hover:bg-guinda hover:text-white'
+                          }`}
+                          aria-label={streetViewTramo ? 'Desactivar vista a nivel de calle' : 'Activar vista a nivel de calle'}
+                        >
+                          <PersonStanding className="h-3.5 w-3.5" />
+                          Street view
+                        </button>
+                      </div>
                       <div className="absolute right-4 top-4 z-[10000] flex flex-col items-end gap-1.5">
                         <button
                           type="button"
@@ -961,6 +1002,9 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                           <Minimize2 className="h-5 w-5 text-gray-700" />
                         </button>
                       </div>
+                      {streetViewTramo && (
+                        <StreetView active initialPoint={center} />
+                      )}
                     </MapContainer>
                   )
 
@@ -1246,7 +1290,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
       {editTramoOpen && (
         <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="mb-4 text-lg font-semibold text-guinda">Editar información del tramo</h3>
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
@@ -1319,7 +1363,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                       <tr>
                         <td className="align-top">
                           <div className="flex flex-col divide-y divide-gray-100">
-                            {editListas.escuelas.map((v, i) => (
+                            {editListas.escuelas.slice(0, editTramoExpandido ? editListas.escuelas.length : 5).map((v, i) => (
                               <div key={i} className="flex items-center gap-1 px-1 py-0.5">
                                 <input
                                   type="text"
@@ -1338,6 +1382,24 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                                 </button>
                               </div>
                             ))}
+                            {!editTramoExpandido && editListas.escuelas.length > 5 && (
+                              <button
+                                type="button"
+                                onClick={() => setEditTramoExpandido(true)}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                              >
+                                Ver {editListas.escuelas.length - 5} más
+                              </button>
+                            )}
+                            {editTramoExpandido && editListas.escuelas.length > 5 && (
+                              <button
+                                type="button"
+                                onClick={() => setEditTramoExpandido(false)}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                              >
+                                Ver menos
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => addLista('escuelas')}
@@ -1349,7 +1411,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                         </td>
                         <td className="align-top">
                           <div className="flex flex-col divide-y divide-gray-100">
-                            {editListas.iglesias.map((v, i) => (
+                            {editListas.iglesias.slice(0, editTramoExpandido ? editListas.iglesias.length : 5).map((v, i) => (
                               <div key={i} className="flex items-center gap-1 px-1 py-0.5">
                                 <input
                                   type="text"
@@ -1368,6 +1430,24 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                                 </button>
                               </div>
                             ))}
+                            {!editTramoExpandido && editListas.iglesias.length > 5 && (
+                              <button
+                                type="button"
+                                onClick={() => setEditTramoExpandido(true)}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium text-purple-700 transition-colors hover:bg-purple-50"
+                              >
+                                Ver {editListas.iglesias.length - 5} más
+                              </button>
+                            )}
+                            {editTramoExpandido && editListas.iglesias.length > 5 && (
+                              <button
+                                type="button"
+                                onClick={() => setEditTramoExpandido(false)}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium text-purple-700 transition-colors hover:bg-purple-50"
+                              >
+                                Ver menos
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => addLista('iglesias')}
@@ -1379,7 +1459,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                         </td>
                         <td className="align-top">
                           <div className="flex flex-col divide-y divide-gray-100">
-                            {editListas.rutas.map((v, i) => (
+                            {editListas.rutas.slice(0, editTramoExpandido ? editListas.rutas.length : 5).map((v, i) => (
                               <div key={i} className="flex items-center gap-1 px-1 py-0.5">
                                 <input
                                   type="text"
@@ -1398,6 +1478,24 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                                 </button>
                               </div>
                             ))}
+                            {!editTramoExpandido && editListas.rutas.length > 5 && (
+                              <button
+                                type="button"
+                                onClick={() => setEditTramoExpandido(true)}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium text-orange-600 transition-colors hover:bg-orange-50"
+                              >
+                                Ver {editListas.rutas.length - 5} más
+                              </button>
+                            )}
+                            {editTramoExpandido && editListas.rutas.length > 5 && (
+                              <button
+                                type="button"
+                                onClick={() => setEditTramoExpandido(false)}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium text-orange-600 transition-colors hover:bg-orange-50"
+                              >
+                                Ver menos
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => addLista('rutas')}

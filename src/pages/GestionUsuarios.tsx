@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listarUsuarios, crearUsuario } from '../lib/auth'
+import { listarUsuarios, crearUsuario, eliminarUsuario } from '../lib/auth'
 import type { Usuario } from '../types/auth'
-import { UserPlus, Shield, ShieldCheck, User, Users, ArrowLeft } from 'lucide-react'
+import { UserPlus, Shield, ShieldCheck, User, Users, ArrowLeft, Trash2 } from 'lucide-react'
 import Card from '../shared/Card'
 import Button from '../shared/Button'
+import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 
 const ROL_OPTS = [
   { value: 'revisor', label: 'Revisor', icon: Shield },
@@ -27,6 +28,8 @@ export default function GestionUsuarios() {
   const [newRol, setNewRol] = useState<string>('revisor')
   const [formError, setFormError] = useState('')
   const [formLoading, setFormLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Usuario | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   useEffect(() => {
     if (!user || user.rol !== 'admin') { navigate('/admin'); return }
@@ -69,6 +72,21 @@ export default function GestionUsuarios() {
     setNewRol('revisor')
     setShowForm(false)
     setFormLoading(false)
+    cargarUsuarios()
+  }
+
+  const handleEliminar = async () => {
+    if (!deleteTarget || !user) return
+    setDeleteLoading(true)
+    const res = await eliminarUsuario(user.id, deleteTarget.id)
+    if (res.error) {
+      console.warn('Error al eliminar:', res.error)
+      setDeleteLoading(false)
+      setDeleteTarget(null)
+      return
+    }
+    setDeleteLoading(false)
+    setDeleteTarget(null)
     cargarUsuarios()
   }
 
@@ -194,6 +212,7 @@ export default function GestionUsuarios() {
                   <th className="whitespace-nowrap px-3 py-3">Usuario</th>
                   <th className="whitespace-nowrap px-3 py-3">Rol</th>
                   <th className="whitespace-nowrap px-3 py-3">ID</th>
+                  <th className="whitespace-nowrap px-3 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,6 +242,18 @@ export default function GestionUsuarios() {
                     <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-gray-institutional/50">
                       #{u.id}
                     </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right">
+                      {u.id !== user?.id && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(u)}
+                          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -230,6 +261,15 @@ export default function GestionUsuarios() {
           </div>
         )}
       </Card>
+
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget ? `${deleteTarget.nombres} ${deleteTarget.apellidos}` : ''}
+        itemSubtitle={deleteTarget ? `@${deleteTarget.username} · ${ROL_OPTS.find(o => o.value === deleteTarget.rol)?.label}` : ''}
+        onConfirm={handleEliminar}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleteLoading}
+      />
     </div>
   )
 }

@@ -5,9 +5,10 @@ import { useAuth } from '../contexts/AuthContext'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
-import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
+import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import Button from '../shared/Button'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
+import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 
 const ESTATUS_COLORS: Record<string, { bg: string; text: string }> = {
   Revision: { bg: 'bg-amber-100', text: 'text-amber-800' },
@@ -36,6 +37,8 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const debounceRef = useRef<number | undefined>(undefined)
+  const [deleteTarget, setDeleteTarget] = useState<Solicitud | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
@@ -123,6 +126,24 @@ export default function AdminDashboard() {
         : prev
       )
     }
+  }
+
+  const handleEliminar = async () => {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    const { error } = await supabase.rpc('eliminar_solicitud', {
+      p_id: deleteTarget.id_solicitud
+    })
+    if (error) {
+      console.warn('Error al eliminar:', error.message)
+      setDeleteLoading(false)
+      setDeleteTarget(null)
+      return
+    }
+    setDeleteLoading(false)
+    setDeleteTarget(null)
+    setSolicitudes(prev => prev.filter(s => s.id_solicitud !== deleteTarget.id_solicitud))
+    setTotalCount(prev => prev - 1)
   }
 
   return (
@@ -220,10 +241,12 @@ export default function AdminDashboard() {
             const esMaxRanking = s.peso_ranking === 10
             const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] ?? { bg: 'bg-gray-100', text: 'text-gray-700' }
             return (
-              <button
+              <div
                 key={s.id_solicitud}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelected(s)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(s) }}
                 className={`group cursor-pointer rounded-2xl p-5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
                   esPrioridad
                     ? 'border border-guinda/20 bg-guinda text-white'
@@ -253,11 +276,34 @@ export default function AdminDashboard() {
                   </span>
                 </div>
 
-                <p className={`mb-3 text-sm font-medium ${
-                  esPrioridad ? 'text-white' : esConcentracion ? 'text-black' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-gray-institutional'
-                }`}>
-                  {s.nombre_solicitante}
-                </p>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className={`min-w-0 truncate text-sm font-medium ${
+                    esPrioridad ? 'text-white' : esConcentracion ? 'text-black' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-gray-institutional'
+                  }`}>
+                    {s.nombre_solicitante}
+                  </p>
+                  {user?.rol === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleteTarget(s)
+                      }}
+                      className={`shrink-0 rounded-lg p-1 transition-colors ${
+                        esPrioridad
+                          ? 'text-white/50 hover:bg-white/20 hover:text-white'
+                          : esConcentracion
+                            ? 'text-black/30 hover:bg-black/10 hover:text-black'
+                            : esMaxRanking
+                              ? 'text-[#DBC6B3]/50 hover:bg-[#DBC6B3]/20 hover:text-[#DBC6B3]'
+                              : 'text-gray-400 hover:bg-red-50 hover:text-red-500'
+                      }`}
+                      title="Eliminar solicitud"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 <div className={`flex flex-col gap-1 text-xs ${
                   esPrioridad ? 'text-white/70' : esConcentracion ? 'text-black/70' : esMaxRanking ? 'text-[#DBC6B3]/70' : 'text-gray-institutional/60'
@@ -317,7 +363,7 @@ export default function AdminDashboard() {
                     <span>{s.rutas_evidencia.length} archivo(s)</span>
                   </div>
                 )}
-              </button>
+              </div>
             )
           })}
         </div>
@@ -348,6 +394,15 @@ export default function AdminDashboard() {
           </button>
         </div>
       )}
+
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget ? `Solicitud ${deleteTarget.folio_unico}` : ''}
+        itemSubtitle={deleteTarget ? `${deleteTarget.nombre_solicitante} · ${deleteTarget.colonia}` : ''}
+        onConfirm={handleEliminar}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleteLoading}
+      />
     </div>
   )
 }

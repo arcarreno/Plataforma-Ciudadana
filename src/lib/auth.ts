@@ -90,3 +90,20 @@ export async function listarUsuarios(): Promise<{ data?: Usuario[]; error?: stri
     })),
   }
 }
+
+export async function eliminarUsuario(
+  adminId: number,
+  userId: number,
+): Promise<{ error?: string }> {
+  const { data, error } = await supabase.rpc('eliminar_usuario', {
+    p_admin_id: adminId,
+    p_user_id: userId,
+  })
+
+  if (error) return { error: error.message }
+  const result = data as string
+  if (result === 'no_puede_borrarse_a_si_mismo') return { error: 'No puedes eliminar tu propia cuenta' }
+  if (result === 'no_encontrado') return { error: 'Usuario no encontrado' }
+  if (result !== 'ok') return { error: result }
+  return {}
+}
