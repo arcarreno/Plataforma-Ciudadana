@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leafle
 import L from 'leaflet'
 import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle, PersonStanding } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud } from '../lib/servidor'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES, CATALOGO_TIPOS_OBRA } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
@@ -150,11 +151,12 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
       return
     }
     setVecinosLoading(true)
-    supabase.rpc('obtener_concentracion_vecinos', { p_id_solicitud: s.id_solicitud })
-      .then(({ data, error }) => {
-        if (!error && data) setVecinos(data as { id_solicitud: number; folio_unico: string; distancia_m: number }[])
+    concentracionVecinos(s.id_solicitud!)
+      .then((res) => {
+        setVecinos(res.data as { id_solicitud: number; folio_unico: string; distancia_m: number }[])
         setVecinosLoading(false)
       })
+      .catch(() => setVecinosLoading(false))
   }, [s.id_solicitud, s.peso_ranking])
 
   const handleOpenDocumentModal = () => {
@@ -247,29 +249,23 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
   const handleSaveGeo = async () => {
     setEditSaving(true)
-    const { error } = await supabase
-      .from('solicitudes')
-      .update({ calle: editForm.calle, entre_calles: editForm.entre_calles })
-      .eq('id_solicitud', s.id_solicitud)
-    if (!error) {
-      s.calle = editForm.calle
-      s.entre_calles = editForm.entre_calles
-    }
+    await actualizarGeo(s.id_solicitud!, { calle: editForm.calle, entre_calles: editForm.entre_calles })
+    s.calle = editForm.calle
+    s.entre_calles = editForm.entre_calles
     setEditSaving(false)
     setEditGeoOpen(false)
   }
 
   const handleSaveObra = async () => {
     setEditSaving(true)
-    const { error } = await supabase
-      .from('solicitudes')
-      .update({ tipo_solicitud: editForm.tipo_solicitud, colonia: editForm.colonia, junta_auxiliar: editForm.junta_auxiliar })
-      .eq('id_solicitud', s.id_solicitud)
-    if (!error) {
-      s.tipo_solicitud = editForm.tipo_solicitud
-      s.colonia = editForm.colonia
-      s.junta_auxiliar = editForm.junta_auxiliar
-    }
+    await actualizarObra(s.id_solicitud!, {
+      tipo_solicitud: editForm.tipo_solicitud,
+      colonia: editForm.colonia,
+      junta_auxiliar: editForm.junta_auxiliar,
+    })
+    s.tipo_solicitud = editForm.tipo_solicitud
+    s.colonia = editForm.colonia
+    s.junta_auxiliar = editForm.junta_auxiliar
     setEditSaving(false)
     setEditObraOpen(false)
   }
@@ -282,27 +278,22 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     const escuelas = toList(editListas.escuelas)
     const iglesias = toList(editListas.iglesias)
     const rutas = toList(editListas.rutas)
-    const { error } = await supabase
-      .from('solicitudes')
-      .update({
-        distancia_tramo_m: distancia != null && Number.isFinite(distancia) ? distancia : null,
-        ancho_calle_m: ancho != null && Number.isFinite(ancho) ? ancho : null,
-        zona_zap: editForm.zona_zap,
-        cobertura_agua: editForm.cobertura_agua,
-        escuelas_cercanas: escuelas,
-        iglesias_cercanas: iglesias,
-        transportes_cercanos: rutas,
-      })
-      .eq('id_solicitud', s.id_solicitud)
-    if (!error) {
-      s.distancia_tramo_m = distancia != null && Number.isFinite(distancia) ? distancia : undefined
-      s.ancho_calle_m = ancho != null && Number.isFinite(ancho) ? ancho : undefined
-      s.zona_zap = editForm.zona_zap
-      s.cobertura_agua = editForm.cobertura_agua
-      s.escuelas_cercanas = escuelas
-      s.iglesias_cercanas = iglesias
-      s.transportes_cercanos = rutas
-    }
+    await actualizarTramo(s.id_solicitud!, {
+      distancia_tramo_m: distancia != null && Number.isFinite(distancia) ? distancia : null,
+      ancho_calle_m: ancho != null && Number.isFinite(ancho) ? ancho : null,
+      zona_zap: editForm.zona_zap,
+      cobertura_agua: editForm.cobertura_agua,
+      escuelas_cercanas: escuelas,
+      iglesias_cercanas: iglesias,
+      transportes_cercanos: rutas,
+    })
+    s.distancia_tramo_m = distancia != null && Number.isFinite(distancia) ? distancia : undefined
+    s.ancho_calle_m = ancho != null && Number.isFinite(ancho) ? ancho : undefined
+    s.zona_zap = editForm.zona_zap
+    s.cobertura_agua = editForm.cobertura_agua
+    s.escuelas_cercanas = escuelas
+    s.iglesias_cercanas = iglesias
+    s.transportes_cercanos = rutas
     setEditSaving(false)
     setEditTramoOpen(false)
   }
@@ -764,12 +755,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                             type="button"
                             disabled={!onNavigate}
                             onClick={async () => {
-                              const { data } = await supabase
-                                .from('solicitudes')
-                                .select('*')
-                                .eq('id_solicitud', v.id_solicitud)
-                                .single()
-                              if (data) onNavigate?.(data as Solicitud)
+                              const res = await obtenerSolicitud(v.id_solicitud)
+                              if (res.data) onNavigate?.(res.data)
                             }}
                             className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm transition-colors hover:bg-guinda/5 disabled:cursor-default"
                           >

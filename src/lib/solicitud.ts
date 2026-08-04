@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { consultarFolio } from './servidor'
 import type { Solicitud, SolicitudFormData } from '../types/solicitud'
 import {
   RANKING_PUNTOS_BASE,
@@ -133,18 +134,48 @@ export async function crearSolicitud(
   return { data: { ...solicitud, rutas_evidencia: rutas }, advertencia: erroresSubida.length > 0 ? erroresSubida.join('; ') : undefined }
 }
 
+const CACHE_KEY = 'semovinfra_folio_cache'
+const CACHE_TTL_MS = 30 * 60 * 1000
+
+function leerCache(folio: string): Solicitud | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const cache = JSON.parse(raw) as Record<string, { data: Solicitud; ts: number }>
+    const entry = cache[folio]
+    if (!entry) return null
+    if (Date.now() - entry.ts > CACHE_TTL_MS) return null
+    return entry.data
+  } catch {
+    return null
+  }
+}
+
+function escribirCache(folio: string, data: Solicitud) {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    const cache = raw ? (JSON.parse(raw) as Record<string, { data: Solicitud; ts: number }>) : {}
+    cache[folio] = { data, ts: Date.now() }
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+  } catch {
+    // cache es best-effort
+  }
+}
+
 export async function consultarSolicitud(
   folio: string
 ): Promise<{ data?: Solicitud; error?: string }> {
-  const { data, error } = await supabase
-    .from('solicitudes')
-    .select('*')
-    .eq('folio_unico', folio)
-    .single()
-
-  if (error) {
-    return { error: 'Folio no encontrado. Verifica el número e intenta de nuevo.' }
+  const cached = leerCache(folio)
+  if (cached) {
+    return { data: cached }
   }
 
-  return { data }
+  try {
+    const { data } = await consultarFolio(folio)
+    escribirCache(folio, data)
+    return { data }
+  } catch (err) {
+    console.error('Error al consultar folio:', err)
+    return { error: 'Folio no encontrado. Verifica el número e intenta de nuevo.' }
+  }
 }

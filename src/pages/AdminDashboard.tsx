@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { listarSolicitudes, actualizarEstatus, eliminarSolicitud } from '../lib/servidor'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
@@ -44,43 +44,16 @@ export default function AdminDashboard() {
 
   const cargarSolicitudes = useCallback(async () => {
     setLoading(true)
-    let query = supabase
-      .from('solicitudes')
-      .select('*', { count: 'exact' })
-
-    const q = searchQuery.trim()
-    if (q) {
-      query = query.or(
-        `folio_unico.ilike.%${q}%,` +
-        `nombre_solicitante.ilike.%${q}%,` +
-        `curp.ilike.%${q}%,` +
-        `tipo_solicitud.ilike.%${q}%,` +
-        `colonia.ilike.%${q}%,` +
-        `junta_auxiliar.ilike.%${q}%`
-      )
-    }
-    if (filtroEstatus) {
-      query = query.eq('estatus_fase', filtroEstatus)
-    }
-    if (filtroPrioridad === 'alta') {
-      query = query.eq('peso_ranking', 15)
-    } else if (filtroPrioridad === 'media-alta') {
-      query = query.eq('peso_ranking', 12)
-    } else if (filtroPrioridad === 'media') {
-      query = query.eq('peso_ranking', 10)
-    } else if (filtroPrioridad === 'baja') {
-      query = query.eq('peso_ranking', 5)
-    }
-
-    const from = (page - 1) * PAGE_SIZE
-    const { data, count, error } = await query
-      .order('fecha_creacion', { ascending: sortAsc })
-      .range(from, from + PAGE_SIZE - 1)
-
-    if (!error && data) {
-      setSolicitudes(data as Solicitud[])
-      setTotalCount(count ?? 0)
-    }
+    const res = await listarSolicitudes({
+      q: searchQuery,
+      estatus: filtroEstatus,
+      prioridad: filtroPrioridad,
+      page,
+      pageSize: PAGE_SIZE,
+      asc: sortAsc,
+    })
+    setSolicitudes(res.data)
+    setTotalCount(res.total)
     setLoading(false)
   }, [searchQuery, filtroEstatus, filtroPrioridad, page, sortAsc])
 
@@ -113,33 +86,20 @@ export default function AdminDashboard() {
   }
 
   const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFase) => {
-    const { error } = await supabase
-      .from('solicitudes')
-      .update({ estatus_fase: nuevoEstatus })
-      .eq('id_solicitud', solicitud.id_solicitud)
-    if (!error) {
-      setSolicitudes(prev => prev.map(s =>
-        s.id_solicitud === solicitud.id_solicitud ? { ...s, estatus_fase: nuevoEstatus } : s
-      ))
-      setSelected(prev => prev && prev.id_solicitud === solicitud.id_solicitud
-        ? { ...prev, estatus_fase: nuevoEstatus }
-        : prev
-      )
-    }
+    await actualizarEstatus(solicitud.id_solicitud!, nuevoEstatus)
+    setSolicitudes(prev => prev.map(s =>
+      s.id_solicitud === solicitud.id_solicitud ? { ...s, estatus_fase: nuevoEstatus } : s
+    ))
+    setSelected(prev => prev && prev.id_solicitud === solicitud.id_solicitud
+      ? { ...prev, estatus_fase: nuevoEstatus }
+      : prev
+    )
   }
 
   const handleEliminar = async () => {
     if (!deleteTarget) return
     setDeleteLoading(true)
-    const { error } = await supabase.rpc('eliminar_solicitud', {
-      p_id: deleteTarget.id_solicitud
-    })
-    if (error) {
-      console.warn('Error al eliminar:', error.message)
-      setDeleteLoading(false)
-      setDeleteTarget(null)
-      return
-    }
+    await eliminarSolicitud(deleteTarget.id_solicitud!)
     setDeleteLoading(false)
     setDeleteTarget(null)
     setSolicitudes(prev => prev.filter(s => s.id_solicitud !== deleteTarget.id_solicitud))

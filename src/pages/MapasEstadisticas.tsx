@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet.heat'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { solicitudesMapa } from '../lib/servidor'
 import type { Solicitud } from '../types/solicitud'
 import Card from '../shared/Card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts'
@@ -114,11 +114,8 @@ export default function MapasEstadisticas() {
 
   async function cargarSolicitudes() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('solicitudes')
-      .select('id_solicitud, folio_unico, nombre_solicitante, latitud, longitud, colonia, junta_auxiliar, tipo_solicitud, fecha_creacion')
-      .limit(500)
-    if (!error && data) setSolicitudes(data as Solicitud[])
+    const res = await solicitudesMapa(500)
+    setSolicitudes(res.data)
     setLoading(false)
   }
 
