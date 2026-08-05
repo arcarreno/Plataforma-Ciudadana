@@ -179,7 +179,8 @@ function LocateOnMount({
 
     map.on('locationfound', onFound)
     map.on('locationerror', onError)
-    map.locate({ enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 })
+    // No localizar automaticamente al montar: el punto solo debe colocarse
+    // cuando el usuario presiona "Mi ubicación" (map.locate se invoca en localizar).
 
     return () => {
       map.stopLocate()
