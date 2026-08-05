@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
-import { consultarFolio } from './servidor'
+import { consultarFolio, crearSolicitud as crearSolicitudServidor } from './servidor'
+import { esErrorRed } from './servidor'
+import { ApiError } from './api'
 import type { Solicitud, SolicitudFormData } from '../types/solicitud'
 import {
   RANKING_PUNTOS_BASE,
@@ -7,43 +9,101 @@ import {
 } from '../core/constants'
 import { geolocalizarCalle } from './geolocalizarCalle'
 
-function uuidV4(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = (Math.random() * 16) | 0
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
-  })
+const CACHE_KEY = 'semovinfra_folio_cache'
+
+export function normalizarFolio(folio: string): string {
+  return folio.trim().toUpperCase()
 }
 
-const MAX_EVIDENCIA_BYTES = 500 * 1024
-
-async function uploadArchivos(
-  archivos: File[],
-  folio: string
-): Promise<{ rutas: string[]; errores: string[] }> {
-  const rutas: string[] = []
-  const errores: string[] = []
-
-  for (const file of archivos) {
-    if (file.size > MAX_EVIDENCIA_BYTES) {
-      errores.push(`"${file.name}" excede el límite de 500 KB`)
-      continue
-    }
-    const ext = file.name.split('.').pop()
-    const path = `evidencias/${folio}/${uuidV4()}.${ext}`
-    const { error } = await supabase.storage
-      .from('evidencias')
-      .upload(path, file)
-
-    if (error) {
-      errores.push(`${file.name}: ${error.message}`)
-      continue
-    }
-    rutas.push(path)
+function cacheIgual(a: Solicitud, b: Solicitud): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b)
+  } catch {
+    return false
   }
-
-  return { rutas, errores }
 }
 
+export function leerCache(folio: string): Solicitud | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const cache = JSON.parse(raw) as Record<string, Solicitud>
+    const entry = cache[normalizarFolio(folio)]
+    return entry ?? null
+  } catch {
+    return null
+  }
+}
+
+export function escribirCache(folio: string, data: Solicitud) {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    const cache = raw ? (JSON.parse(raw) as Record<string, Solicitud>) : {}
+    cache[normalizarFolio(folio)] = data
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+  } catch {
+    // cache es best-effort
+  }
+}
+
+async function consultarSupabase(folio: string): Promise<Solicitud | null> {
+  const { data, error } = await supabase
+    .from('solicitudes')
+    .select()
+    .eq('folio_unico', folio)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Supabase fallback:', error)
+    return null
+  }
+  return (data as unknown as Solicitud) ?? null
+}
+
+export async function consultarSolicitud(
+  folioRaw: string
+): Promise<{ data?: Solicitud; error?: string; offline?: boolean }> {
+  const folio = normalizarFolio(folioRaw)
+  const cacheActual = leerCache(folio)
+
+  try {
+    const { data } = await consultarFolio(folio)
+
+    if (cacheActual && cacheIgual(cacheActual, data)) {
+      // La BD del servidor confirma que el cache está al día
+      return { data: cacheActual }
+    }
+    if (!cacheActual || !cacheIgual(cacheActual, data)) {
+      escribirCache(folio, data)
+    }
+    return { data }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { error: 'Folio no encontrado. Verifica el número e intenta de nuevo.' }
+    }
+
+    // Error de red (servidor inalcanzable) o error 5xx: usar cache, luego Supabase
+    if (cacheActual) {
+      return { data: cacheActual, offline: true }
+    }
+
+    const supa = await consultarSupabase(folio)
+    if (supa) {
+      escribirCache(folio, supa)
+      return { data: supa, offline: true }
+    }
+
+    return {
+      error: esErrorRed(err)
+        ? 'Servidor no disponible. Verifica tu conexión o intenta más tarde.'
+        : 'Ocurrió un error al consultar el folio. Intenta de nuevo.',
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Crear solicitud (multipart -> servidor, luego escribirCache)
+// ---------------------------------------------------------------------------
 export async function crearSolicitud(
   data: SolicitudFormData,
   pesoRankingOverride?: number,
@@ -58,7 +118,6 @@ export async function crearSolicitud(
   const lat = parseFloat(latitud)
   const lng = parseFloat(longitud)
 
-  // Use calle from form if available, otherwise geocode as fallback
   const calleFinal = calle || ''
   const entreCallesFinal = entre_calles || ''
   let calleToSave = calleFinal
@@ -69,113 +128,58 @@ export async function crearSolicitud(
     entreCallesToSave = calleInfo.entreCalles
   }
 
-  const { data: solicitud, error: insertError } = await supabase
-    .from('solicitudes')
-    .insert({
-      ...rest,
-      estatus_fase: 'Revision',
-      latitud: lat,
-      longitud: lng,
-      tramo_lat_ini: tramo_lat_ini ? parseFloat(tramo_lat_ini) : null,
-      tramo_lng_ini: tramo_lng_ini ? parseFloat(tramo_lng_ini) : null,
-      tramo_lat_fin: tramo_lat_fin ? parseFloat(tramo_lat_fin) : null,
-      tramo_lng_fin: tramo_lng_fin ? parseFloat(tramo_lng_fin) : null,
-      tramo_puntos: tramoData?.puntos ?? [],
-      calle: calleToSave,
-      entre_calles: entreCallesToSave,
-      peso_ranking:
-        pesoRankingOverride ??
-        (archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE),
-      zona_zap: zona_zap ?? false,
-      cobertura_agua: cobertura_agua ?? false,
-      escuelas_cercanas: tramoData?.escuelas_cercanas ?? [],
-      iglesias_cercanas: tramoData?.iglesias_cercanas ?? [],
-      transportes_cercanos: tramoData?.transportes_cercanos ?? [],
-      distancia_tramo_m: tramoData?.distancia_m ?? null,
-      ancho_calle_m: tramoData?.ancho_calle_m ?? null,
-    })
-    .select()
-    .single()
+  const peso =
+    pesoRankingOverride ??
+    (archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE)
 
-  if (insertError) {
-    console.error('Error al insertar solicitud:', insertError)
-    if (insertError.message.includes('Limite de 3 solicitudes')) {
-      return {
-        error:
-          'Has alcanzado el límite de 3 solicitudes mensuales para este CURP.',
-      }
+  const form = new FormData()
+  form.append('nombre_solicitante', rest.nombre_solicitante)
+  form.append('curp', rest.curp)
+  form.append('telefono', rest.telefono ?? '')
+  form.append('correo', rest.correo ?? '')
+  form.append('aviso_privacidad_aceptado', String(rest.aviso_privacidad_aceptado))
+  form.append('tipo_solicitud', rest.tipo_solicitud)
+  form.append('colonia', rest.colonia ?? '')
+  form.append('junta_auxiliar', rest.junta_auxiliar ?? '')
+  form.append('calle', calleToSave)
+  form.append('entre_calles', entreCallesToSave)
+  form.append('latitud', String(lat))
+  form.append('longitud', String(lng))
+  form.append('tramo_lat_ini', tramo_lat_ini ?? '')
+  form.append('tramo_lng_ini', tramo_lng_ini ?? '')
+  form.append('tramo_lat_fin', tramo_lat_fin ?? '')
+  form.append('tramo_lng_fin', tramo_lng_fin ?? '')
+  form.append('tramo_puntos', JSON.stringify(tramoData?.puntos ?? []))
+  form.append('descripcion', rest.descripcion ?? '')
+  form.append('zona_zap', String(zona_zap ?? false))
+  form.append('cobertura_agua', String(cobertura_agua ?? false))
+  form.append('escuelas_cercanas', JSON.stringify(tramoData?.escuelas_cercanas ?? []))
+  form.append('iglesias_cercanas', JSON.stringify(tramoData?.iglesias_cercanas ?? []))
+  form.append('transportes_cercanos', JSON.stringify(tramoData?.transportes_cercanos ?? []))
+  form.append('distancia_tramo_m', tramoData?.distancia_m != null ? String(tramoData.distancia_m) : '')
+  form.append('ancho_calle_m', tramoData?.ancho_calle_m != null ? String(tramoData.ancho_calle_m) : '')
+  form.append('peso_ranking', String(peso))
+  archivos.forEach(f => form.append('archivos', f))
+
+  try {
+    const res = await crearSolicitudServidor(form)
+    const solicitud = res.data
+    if (solicitud?.folio_unico) {
+      escribirCache(solicitud.folio_unico, solicitud)
     }
-    return { error: insertError.message }
-  }
-
-  let rutas: string[] = []
-  let erroresSubida: string[] = []
-  if (archivos.length > 0 && solicitud?.folio_unico) {
-    const result = await uploadArchivos(archivos, solicitud.folio_unico)
-    rutas = result.rutas
-    erroresSubida = result.errores
-
-    if (rutas.length > 0) {
-      const { error: updateError } = await supabase
-        .from('solicitudes')
-        .update({ rutas_evidencia: rutas })
-        .eq('id_solicitud', solicitud.id_solicitud)
-
-      if (updateError) {
-        erroresSubida.push(`Error al guardar rutas: ${updateError.message}`)
-      }
-    }
-  }
-
-  if (erroresSubida.length > 0) {
-    console.warn('Errores al subir evidencia:', erroresSubida)
-  }
-
-  return { data: { ...solicitud, rutas_evidencia: rutas }, advertencia: erroresSubida.length > 0 ? erroresSubida.join('; ') : undefined }
-}
-
-const CACHE_KEY = 'semovinfra_folio_cache'
-const CACHE_TTL_MS = 30 * 60 * 1000
-
-function leerCache(folio: string): Solicitud | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (!raw) return null
-    const cache = JSON.parse(raw) as Record<string, { data: Solicitud; ts: number }>
-    const entry = cache[folio]
-    if (!entry) return null
-    if (Date.now() - entry.ts > CACHE_TTL_MS) return null
-    return entry.data
-  } catch {
-    return null
-  }
-}
-
-function escribirCache(folio: string, data: Solicitud) {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    const cache = raw ? (JSON.parse(raw) as Record<string, { data: Solicitud; ts: number }>) : {}
-    cache[folio] = { data, ts: Date.now() }
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
-  } catch {
-    // cache es best-effort
-  }
-}
-
-export async function consultarSolicitud(
-  folio: string
-): Promise<{ data?: Solicitud; error?: string }> {
-  const cached = leerCache(folio)
-  if (cached) {
-    return { data: cached }
-  }
-
-  try {
-    const { data } = await consultarFolio(folio)
-    escribirCache(folio, data)
-    return { data }
+    return { data: solicitud, advertencia: res.advertencia ?? undefined }
   } catch (err) {
-    console.error('Error al consultar folio:', err)
-    return { error: 'Folio no encontrado. Verifica el número e intenta de nuevo.' }
+    if (err instanceof ApiError) {
+      if (err.status === 400 && /l[íi]mite de 3 solicitudes/i.test(err.message)) {
+        return {
+          error: 'Has alcanzado el límite de 3 solicitudes mensuales para este CURP.',
+        }
+      }
+      if (err.isNetwork) {
+        return { error: 'Servidor no disponible. Verifica tu conexión e intenta de nuevo.' }
+      }
+      return { error: err.message.replace(/^API error \d+: /, '') }
+    }
+    return { error: 'Error inesperado al crear la solicitud' }
   }
 }

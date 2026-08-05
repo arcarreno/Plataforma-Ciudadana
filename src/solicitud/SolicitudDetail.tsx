@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle, PersonStanding } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud } from '../lib/servidor'
+import { urlEvidencia } from '../lib/api'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES, CATALOGO_TIPOS_OBRA } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
@@ -730,7 +730,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                       {s.rutas_evidencia.map((r, i) => (
                         <a
                           key={i}
-                          href={supabase.storage.from('evidencias').getPublicUrl(r).data.publicUrl}
+                          href={urlEvidencia(r)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs text-guinda transition-colors hover:bg-guinda/5"

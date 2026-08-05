@@ -1,14 +1,23 @@
-import { supabase } from './supabase'
+import {
+  loginServidor,
+  listarUsuariosServidor,
+  crearUsuarioServidor,
+  eliminarUsuarioServidor,
+} from './servidor'
+import { ApiError } from './api'
 import type { Usuario } from '../types/auth'
 
 const STORAGE_KEY = 'semovinfra_auth'
+const TOKEN_KEY = 'semovinfra_token'
 
-function guardarStorage(user: Usuario) {
+function guardarStorage(user: Usuario, token: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
+  localStorage.setItem(TOKEN_KEY, token)
 }
 
 function limpiarStorage() {
   localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(TOKEN_KEY)
 }
 
 function leerStorage(): Usuario | null {
@@ -20,28 +29,39 @@ function leerStorage(): Usuario | null {
   }
 }
 
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+function errorMsg(err: unknown): string {
+  if (err instanceof ApiError) {
+    return err.message.replace(/^API error \d+: /, '')
+  }
+  return 'Ocurrió un error inesperado'
+}
+
 export async function login(
   username: string,
   password: string
 ): Promise<{ data?: Usuario; error?: string }> {
-  const { data, error } = await supabase.rpc('login_usuario', {
-    p_username: username,
-    p_password: password,
-  })
-
-  if (error) return { error: error.message }
-  if (!data || data.length === 0) return { error: 'Usuario o contraseña incorrectos' }
-
-  const row = data[0] as { v_id: number; v_username: string; v_rol: string; v_nombres: string; v_apellidos: string }
-  const user: Usuario = {
-    id: row.v_id,
-    username: row.v_username,
-    rol: row.v_rol as Usuario['rol'],
-    nombres: row.v_nombres ?? '',
-    apellidos: row.v_apellidos ?? '',
+  try {
+    const res = await loginServidor(username, password)
+    const row = res.data
+    const user: Usuario = {
+      id: row.id,
+      username: row.username,
+      rol: row.rol,
+      nombres: row.nombres ?? '',
+      apellidos: row.apellidos ?? '',
+    }
+    guardarStorage(user, row.token)
+    return { data: user }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      return { error: 'Usuario o contraseña incorrectos' }
+    }
+    return { error: errorMsg(err) }
   }
-  guardarStorage(user)
-  return { data: user }
 }
 
 export function logout() {
@@ -60,34 +80,34 @@ export async function crearUsuario(
   nombres: string = '',
   apellidos: string = '',
 ): Promise<{ error?: string }> {
-  const { data, error } = await supabase.rpc('crear_usuario', {
-    p_admin_id: adminId,
-    p_username: username,
-    p_password: password,
-    p_rol: rol,
-    p_nombres: nombres,
-    p_apellidos: apellidos,
-  })
-
-  if (error) return { error: error.message }
-  const result = data as string
-  if (result !== 'ok') return { error: result }
-  return {}
+  void adminId
+  const token = getToken()
+  if (!token) return { error: 'Sesión expirada. Inicia sesión de nuevo.' }
+  try {
+    await crearUsuarioServidor(token, {
+      username,
+      password,
+      rol,
+      nombres,
+      apellidos,
+    })
+    return {}
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      return { error: 'El usuario ya existe' }
+    }
+    return { error: errorMsg(err) }
+  }
 }
 
 export async function listarUsuarios(): Promise<{ data?: Usuario[]; error?: string }> {
-  const { data, error } = await supabase.rpc('listar_usuarios')
-
-  if (error) return { error: error.message }
-  const rows = (data ?? []) as { v_id: number; v_username: string; v_rol: string; v_nombres: string; v_apellidos: string }[]
-  return {
-    data: rows.map(r => ({
-      id: r.v_id,
-      username: r.v_username,
-      rol: r.v_rol as Usuario['rol'],
-      nombres: r.v_nombres ?? '',
-      apellidos: r.v_apellidos ?? '',
-    })),
+  const token = getToken()
+  if (!token) return { error: 'Sesión expirada. Inicia sesión de nuevo.' }
+  try {
+    const res = await listarUsuariosServidor(token)
+    return { data: res.data }
+  } catch (err) {
+    return { error: errorMsg(err) }
   }
 }
 
@@ -95,15 +115,20 @@ export async function eliminarUsuario(
   adminId: number,
   userId: number,
 ): Promise<{ error?: string }> {
-  const { data, error } = await supabase.rpc('eliminar_usuario', {
-    p_admin_id: adminId,
-    p_user_id: userId,
-  })
-
-  if (error) return { error: error.message }
-  const result = data as string
-  if (result === 'no_puede_borrarse_a_si_mismo') return { error: 'No puedes eliminar tu propia cuenta' }
-  if (result === 'no_encontrado') return { error: 'Usuario no encontrado' }
-  if (result !== 'ok') return { error: result }
-  return {}
+  void adminId
+  const token = getToken()
+  if (!token) return { error: 'Sesión expirada. Inicia sesión de nuevo.' }
+  const session = getSession()
+  if (session?.id === userId) {
+    return { error: 'No puedes eliminar tu propia cuenta' }
+  }
+  try {
+    await eliminarUsuarioServidor(token, userId)
+    return {}
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return { error: 'Usuario no encontrado' }
+    }
+    return { error: errorMsg(err) }
+  }
 }

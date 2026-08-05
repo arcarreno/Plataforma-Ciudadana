@@ -1,6 +1,7 @@
-import { api } from './api'
+import { api, postForm, ApiError } from './api'
 import type { Solicitud } from '../types/solicitud'
 import type { EstatusFase } from '../core/constants'
+import type { Usuario } from '../types/auth'
 
 export interface ListadoSolicitudes {
   data: Solicitud[]
@@ -90,4 +91,71 @@ export function actualizarEstatus(
 
 export function eliminarSolicitud(id: number): Promise<{ ok: boolean }> {
   return api.delete<{ ok: boolean }>(`/api/solicitudes/${id}`)
+}
+
+// ---------------------------------------------------------------------------
+// Crear solicitud (multipart con archivos)
+// ---------------------------------------------------------------------------
+export interface CrearSolicitudResult {
+  data: Solicitud
+  advertencia?: string | null
+}
+
+export function crearSolicitud(
+  form: FormData
+): Promise<CrearSolicitudResult> {
+  return postForm<CrearSolicitudResult>('/api/solicitudes', form)
+}
+
+export function esErrorRed(err: unknown): boolean {
+  return err instanceof ApiError && err.isNetwork
+}
+
+export function esErrorFormato(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 422
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+export interface LoginResult {
+  data: {
+    token: string
+    id: number
+    username: string
+    rol: Usuario['rol']
+    nombres: string
+    apellidos: string
+  }
+}
+
+export function loginServidor(
+  username: string,
+  password: string
+): Promise<LoginResult> {
+  return api.post<LoginResult>('/api/auth/login', { username, password })
+}
+
+export function listarUsuariosServidor(token: string): Promise<{ data: Usuario[] }> {
+  return api.get<{ data: Usuario[] }>('/api/auth/usuarios', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export function crearUsuarioServidor(
+  token: string,
+  body: { username: string; password: string; rol: string; nombres: string; apellidos: string }
+): Promise<{ ok: boolean; id: number | null }> {
+  return api.post('/api/auth/usuarios', body, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export function eliminarUsuarioServidor(
+  token: string,
+  usuarioId: number
+): Promise<{ ok: boolean }> {
+  return api.delete(`/api/auth/usuarios/${usuarioId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
