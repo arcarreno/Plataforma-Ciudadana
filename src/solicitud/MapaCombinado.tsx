@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
-import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check, ChevronRight, HelpCircle } from 'lucide-react'
+import { X, Crosshair, MapPin, Info, Layers, Eye, EyeOff, Globe, Map, Navigation, Ruler, School, Church, Bus, Undo2, Check, ChevronRight, HelpCircle, LocateFixed } from 'lucide-react'
 import Button from '../shared/Button'
 import { correrTour, detenerTour } from './guiaTour'
 import { cargarCapas, detectarPunto, detectarTramo } from './detectar-ubicacion'
@@ -123,7 +123,15 @@ function ZoomTracker({ onZoom }: { onZoom: (zoom: number) => void }) {
   return null
 }
 
-function LocateOnMount() {
+function LocateOnMount({
+  onLocated,
+  onLocateError,
+  userRequested,
+}: {
+  onLocated?: (latlng: { lat: number; lng: number }) => void
+  onLocateError?: (msg: string) => void
+  userRequested: React.MutableRefObject<boolean>
+}) {
   const map = useMap()
   useEffect(() => {
     const marker = L.circleMarker([0, 0], {
@@ -149,17 +157,29 @@ function LocateOnMount() {
       circle.setLatLng(e.latlng).setRadius(e.accuracy ?? 100).addTo(map)
       map.setView(e.latlng, 16)
       map.stopLocate()
+      onLocated?.({ lat: e.latlng.lat, lng: e.latlng.lng })
     }
-    const onError = () => {
-      if (highAccuracyFallback) {
+    const onError = (err: L.ErrorEvent) => {
+      // codigo 1 = PERMISSION_DENIED: reintentar no ayuda
+      if (err.code !== 1 && highAccuracyFallback) {
         highAccuracyFallback = false
-        map.locate({ setView: false, enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 })
+        map.locate({ enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 })
+        return
+      }
+      // Solo mostrar mensaje cuando el usuario presiono el boton
+      // (el auto-locate de montaje debe ser silencioso)
+      if (userRequested.current) {
+        onLocateError?.(
+          err.code === 1
+            ? 'Permiso de ubicación denegado. Actívalo en la configuración del navegador y vuelve a intentar.'
+            : 'No se pudo obtener tu ubicación. Revisa que tengas GPS/ubicación activada.'
+        )
       }
     }
 
     map.on('locationfound', onFound)
     map.on('locationerror', onError)
-    map.locate({ setView: false, enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 })
+    map.locate({ enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 })
 
     return () => {
       map.stopLocate()
@@ -168,7 +188,7 @@ function LocateOnMount() {
       marker.remove()
       circle.remove()
     }
-  }, [map])
+  }, [map, onLocated, onLocateError, userRequested])
   return null
 }
 
@@ -200,6 +220,28 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const stepRef = useRef<Step>(step)
   stepRef.current = step
   const paso1TourFired = useRef(false)
+  const mapRef = useRef<L.Map | null>(null)
+  const userRequestedLocate = useRef(false)
+  const [locating, setLocating] = useState(false)
+  const [locateMsg, setLocateMsg] = useState<string | null>(null)
+
+  const localizar = useCallback(() => {
+    const map = mapRef.current
+    if (!map || locating) return
+    if (!('geolocation' in navigator)) {
+      setLocateMsg('Tu navegador no soporta geolocalización.')
+      return
+    }
+    userRequestedLocate.current = true
+    setLocating(true)
+    setLocateMsg(null)
+    map.locate({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+  }, [locating])
+
+  const handleLocateError = useCallback((msg: string) => {
+    setLocating(false)
+    setLocateMsg(msg)
+  }, [])
 
   useEffect(() => {
     if (loading || paso1TourFired.current) return
@@ -270,6 +312,14 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     setHasPicado(false)
     setDetection(null)
   }, [])
+
+  const handleLocated = useCallback((latlng: { lat: number; lng: number }) => {
+    setLocating(false)
+    setLocateMsg(null)
+    if (stepRef.current === 'punto') {
+      handlePuntoClick(latlng)
+    }
+  }, [handlePuntoClick])
 
   const handleTramoClick = useCallback((latlng: { lat: number; lng: number }) => {
     if (tramoDone) return
@@ -422,6 +472,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         )}
 
         <MapContainer
+          ref={mapRef}
           center={marker ?? DEFAULT_CENTER}
           zoom={DEFAULT_ZOOM}
           className="h-full w-full"
@@ -439,7 +490,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
             />
           )}
 
-          <LocateOnMount />
+          <LocateOnMount onLocated={handleLocated} onLocateError={handleLocateError} userRequested={userRequestedLocate} />
           <ResizeHandler inline={inline} />
           <ZoomTracker onZoom={setMapZoom} />
 
@@ -482,6 +533,17 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         <div className="pointer-events-auto absolute right-3 top-3 z-[999] flex flex-col gap-1.5">
           <button
             type="button"
+            onClick={localizar}
+            disabled={locating}
+            aria-label="Ir a mi ubicación"
+            title="Ir a mi ubicación"
+            className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LocateFixed className={`h-3.5 w-3.5 ${locating ? 'animate-pulse' : ''}`} />
+            Mi ubicación
+          </button>
+          <button
+            type="button"
             onClick={() => setSatellite(prev => !prev)}
             className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs text-guinda shadow-card transition-colors hover:bg-guinda hover:text-white"
             aria-label={satellite ? 'Vista calle' : 'Vista satélite'}
@@ -503,6 +565,12 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[999] bg-gradient-to-t from-black/60 to-transparent p-4 pt-8">
           <div className="pointer-events-auto mx-auto max-w-md space-y-2 rounded-2xl bg-white p-4 shadow-card" data-tour="panel">
+            {locateMsg && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <Info className="h-4 w-4 shrink-0" />
+                <span>{locateMsg}</span>
+              </div>
+            )}
             {step === 'punto' ? (
               <>
                 {!marker && (
