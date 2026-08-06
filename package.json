@@ -39,6 +39,7 @@
     "recharts": "^3.10.1",
     "sileo": "^0.1.5",
     "tailwindcss": "^4.3.3",
+    "xlsx": "^0.18.5",
     "xmldom": "^0.6.0"
   },
   "devDependencies": {

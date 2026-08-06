@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { listarSolicitudes, actualizarEstatus, eliminarSolicitud } from '../lib/servidor'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_OPCIONES } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
-import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
-import Button from '../shared/Button'
+import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users } from 'lucide-react'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
 import DeleteConfirmModal from '../shared/DeleteConfirmModal'
+import VistaBtTablasModal from '../shared/VistaBtTablas'
+import { exportarExcel } from '../lib/exportarExcel'
 
 const ESTATUS_COLORS: Record<string, { bg: string; text: string }> = {
   Revision: { bg: 'bg-amber-100', text: 'text-amber-800' },
@@ -39,6 +41,9 @@ export default function AdminDashboard() {
   const debounceRef = useRef<number | undefined>(undefined)
   const [deleteTarget, setDeleteTarget] = useState<Solicitud | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [opcionesAbierto, setOpcionesAbierto] = useState(false)
+  const [verTablasAbierto, setVerTablasAbierto] = useState(false)
+  const [exportando, setExportando] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
@@ -105,6 +110,40 @@ export default function AdminDashboard() {
     setSolicitudes(prev => prev.filter(s => s.id_solicitud !== deleteTarget.id_solicitud))
     setTotalCount(prev => prev - 1)
   }
+
+  const cargarTodasSolicitudes = useCallback(async (): Promise<Solicitud[]> => {
+    const todas: Solicitud[] = []
+    const res = await listarSolicitudes({ page: 1, pageSize: 200 })
+    todas.push(...res.data)
+    for (let p = 2; todas.length < res.total; p++) {
+      const siguiente = await listarSolicitudes({ page: p, pageSize: 200 })
+      todas.push(...siguiente.data)
+      if (siguiente.data.length === 0) break
+    }
+    return todas
+  }, [])
+
+  const handleExportarExcel = async () => {
+    setExportando(true)
+    try {
+      const todas = await cargarTodasSolicitudes()
+      if (todas.length === 0) {
+        alert('No hay solicitudes para exportar.')
+      } else {
+        exportarExcel(todas)
+      }
+    } catch {
+      alert('Ocurrió un error al exportar los datos.')
+    } finally {
+      setExportando(false)
+      setOpcionesAbierto(false)
+    }
+  }
+
+  const obtenerTodasParaTablas = useCallback(async (): Promise<Record<string, unknown>[]> => {
+    const todas = await cargarTodasSolicitudes()
+    return todas as unknown as Record<string, unknown>[]
+  }, [cargarTodasSolicitudes])
 
   return (
     <div className="flex flex-col gap-6">
@@ -176,12 +215,62 @@ export default function AdminDashboard() {
           >
             <ArrowUpDown className={`h-4 w-4 transition-transform ${sortAsc ? 'rotate-180' : ''}`} />
           </button>
-          {user?.rol === 'admin' && (
-            <Button size="sm" className="w-full md:w-auto" onClick={() => navigate('/admin/usuarios')}>
-              <FileText className="mr-1.5 h-4 w-4" />
-              Usuarios
-            </Button>
-          )}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setOpcionesAbierto(p => !p)}
+              className="inline-flex items-center gap-2 rounded-xl bg-guinda px-4 py-2 text-sm font-medium text-white shadow-button transition-all duration-200 hover:brightness-110 active:scale-[0.97]"
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${opcionesAbierto ? 'rotate-180' : ''}`} />
+              Opciones
+            </button>
+
+            <AnimatePresence>
+              {opcionesAbierto && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: -6 }}
+                  animate={{ opacity: 1, height: 'auto', y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -6 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className="absolute right-0 top-full z-30 mt-2 w-56 origin-top-right overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl"
+                >
+                  <button
+                    type="button"
+                    onClick={() => { setVerTablasAbierto(true); setOpcionesAbierto(false) }}
+                    className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-guinda transition-colors hover:bg-guinda/5"
+                  >
+                    <Table2 className="h-4 w-4 shrink-0" />
+                    Ver base de datos en tablas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportarExcel}
+                    disabled={exportando}
+                    className="flex w-full items-center gap-2 bg-white px-4 py-3 text-left text-sm font-medium text-guinda transition-colors hover:bg-guinda/5 disabled:opacity-50"
+                  >
+                    {exportando ? (
+                      <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-guinda/40 border-t-guinda" />
+                    ) : (
+                      <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                    )}
+                    {exportando ? 'Exportando…' : 'Descargar en Excel'}
+                  </button>
+                  {user?.rol === 'admin' && (
+                    <div className="border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => { setOpcionesAbierto(false); navigate('/admin/usuarios') }}
+                        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-guinda transition-colors hover:bg-guinda/5"
+                      >
+                        <Users className="h-4 w-4 shrink-0" />
+                        Usuarios
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 
@@ -362,6 +451,12 @@ export default function AdminDashboard() {
         onConfirm={handleEliminar}
         onCancel={() => setDeleteTarget(null)}
         loading={deleteLoading}
+      />
+
+      <VistaBtTablasModal
+        isOpen={verTablasAbierto}
+        onClose={() => setVerTablasAbierto(false)}
+        obtenerDatos={obtenerTodasParaTablas}
       />
     </div>
   )
