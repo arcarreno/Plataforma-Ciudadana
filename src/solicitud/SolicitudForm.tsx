@@ -113,6 +113,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [showAviso, setShowAviso] = useState(false)
   const [mapKey, setMapKey] = useState(0)
+  const [conteoMapa, setConteoMapa] = useState(0)
   const [tramoData, setTramoData] = useState<{
     distancia_m: number; ancho_calle_m: number
     escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
@@ -177,10 +178,12 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
   const handleMapCombinadoConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
     setMapData(data)
     closeMap()
+    setConteoMapa(n => n + 1)
   }
 
   const handleMapInlineConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
     setMapData(data)
+    setConteoMapa(n => n + 1)
   }
 
   const set = (field: keyof SolicitudFormData, value: unknown) => {
@@ -225,6 +228,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
       case 'tipo': return !!form.tipo_solicitud.trim()
       case 'ubicacion':
         return !!(form.colonia.trim() || form.calle.trim() || form.entre_calles.trim())
+      case 'calle': return !!form.calle.trim()
+      case 'entre_calles': return !!form.entre_calles.trim()
       case 'descripcion': return !!form.descripcion.trim()
       default: return true
     }
@@ -549,6 +554,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
               esLleno={esLleno}
               onAplicar={aplicarIA}
               onClose={() => setMostrarAsistente(false)}
+              onAbrirMapa={() => { setShowMapaCombinado(true); setMapKey(k => k + 1) }}
+              mapaConfirmado={conteoMapa}
             />
           </div>
         )}

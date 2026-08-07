@@ -3,7 +3,7 @@ import { Sparkles, Send, X, Mic, MicOff } from 'lucide-react'
 import Button from '../shared/Button'
 import type { IaLlenarResultado } from '../lib/servidor'
 import { extraerCampo, extraerTodo } from '../lib/iaLocal'
-import { hablar, crearReconocedor, transcribirTodo, precargarVoces } from '../lib/speech'
+import { hablar, crearReconocedor, ultimoTranscripcion, fusionarTranscripcion, precargarVoces } from '../lib/speech'
 import type { SpeechRecognitionLike } from '../lib/speech'
 import { TIPOS_OBRA_NOMBRES } from '../core/constants'
 
@@ -16,6 +16,8 @@ interface AsistenteIAProps {
   esLleno: (campo: string) => boolean
   onAplicar: (data: Partial<IaLlenarResultado>) => string[]
   onClose?: () => void
+  onAbrirMapa?: () => void
+  mapaConfirmado?: number
 }
 
 const PREGUNTAS = [
@@ -26,7 +28,9 @@ const PREGUNTAS = [
   { campo: 'telefono', pregunta: '¿Para contactarte, cuál es tu teléfono a 10 dígitos?' },
   { campo: 'correo', pregunta: '¿Cuál es tu correo electrónico?' },
   { campo: 'tipo', pregunta: `¿Qué servicio necesitas? Dime por ejemplo: ${TIPOS_OBRA_NOMBRES.slice(0, 5).join(', ')} u otro.` },
-  { campo: 'ubicacion', pregunta: '¿En qué colonia o calle se ubica el problema?' },
+  { campo: 'ubicacion', pregunta: 'Ahora necesito ubicar en el mapa el lugar donde quieres la obra.' },
+  { campo: 'calle', pregunta: '¿Cuál es el nombre principal de la calle donde se ubica la obra?' },
+  { campo: 'entre_calles', pregunta: '¿Entre qué calles se ubica? Dime las calles que la cruzan.' },
   { campo: 'descripcion', pregunta: 'Cuéntame con detalle, ¿cuál es el problema?' },
 ]
 
@@ -43,8 +47,8 @@ const LLENADO_A_CAMPO: Record<string, string> = {
   'correo': 'correo',
   'tipo de obra': 'tipo',
   'colonia': 'ubicacion',
-  'calle': 'ubicacion',
-  'entre calles': 'ubicacion',
+  'calle': 'calle',
+  'entre calles': 'entre_calles',
   'descripción': 'descripcion',
 }
 
@@ -67,8 +71,9 @@ function valorDeCampo(campo: string, texto: string): Partial<IaLlenarResultado> 
   }
 }
 
-export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIAProps) {
+export default function AsistenteIA({ esLleno, onAplicar, onClose, onAbrirMapa, mapaConfirmado }: AsistenteIAProps) {
   const completadosRef = useRef<Set<string>>(new Set())
+  const mapaPendienteRef = useRef(false)
   const siguientePregunta = (): { campo: string; texto: string } | null => {
     for (const p of PREGUNTAS) {
       if (!completadosRef.current.has(p.campo) && !esLleno(p.campo)) return { campo: p.campo, texto: p.pregunta }
@@ -85,6 +90,7 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIA
   const [mensajes, setMensajes] = useState<Msg[]>(estadoInicial.mensajes)
   const [input, setInput] = useState('')
   const [vivo, setVivo] = useState('')
+  const [estadoVoz, setEstadoVoz] = useState('')
   const [terminado, setTerminado] = useState(estadoInicial.terminado)
   const [escuchando, setEscuchando] = useState(false)
   const listaRef = useRef<HTMLDivElement>(null)
@@ -92,6 +98,8 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIA
   const yaHabladoRef = useRef(0)
   const textoRef = useRef('')
   const manualRef = useRef(false)
+  const reintentosRef = useRef(0)
+  const ultimoErrorRef = useRef('')
 
   useEffect(() => {
     listaRef.current?.scrollTo({ top: listaRef.current.scrollHeight, behavior: 'smooth' })
@@ -112,6 +120,39 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIA
       window.speechSynthesis?.cancel()
     }
   }, [])
+
+  useEffect(() => {
+    if (!mapaConfirmado) return
+    if (mapaPendienteRef.current) mapaPendienteRef.current = false
+    const area = new Set<string>()
+    for (const c of ['colonia', 'calle', 'entre_calles']) {
+      if (c === 'colonia' ? esLleno('ubicacion') : esLleno(c)) area.add(c)
+    }
+    const faltaPunto = !esLleno('ubicacion')
+    completadosRef.current.add('ubicacion')
+    let texto: string
+    if (faltaPunto) {
+      texto = 'Presionaste confirmar, pero no capté el punto del mapa. Vuelve a colocarlo y confirma, o dime el nombre de la colonia.'
+      setMensajes(m => [...m, { autor: 'ia', texto }])
+      onAbrirMapa?.()
+      return
+    }
+    const sinCalle = !esLleno('calle')
+    const sinEntre = !esLleno('entre_calles')
+    const faltanDireccion = sinCalle || sinEntre
+    const sig = siguientePregunta()
+    if (faltanDireccion) {
+      texto = 'Tu punto quedó marcado, pero no tengo los datos exactos de la calle. '
+      if (sinCalle && sinEntre) texto += 'Por favor, dime el nombre principal de la calle y las calles que la cruzan.'
+      else if (sinCalle) texto += 'Por favor, dime el nombre principal de la calle.'
+      else texto += 'Por favor, dime entre cuáles calles se ubica la obra.'
+    } else {
+      texto = 'Perfecto, todos los datos se han extraído con éxito.'
+      if (sig) texto += ` ${sig.texto}`
+    }
+    setMensajes(m => [...m, { autor: 'ia', texto }])
+    if (!sig) setTerminado(true)
+  }, [mapaConfirmado])
 
   const terminarEscucha = () => {
     manualRef.current = true
@@ -139,30 +180,45 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIA
 
     const sig = siguientePregunta()
     if (llenados.length > 0) {
-      setMensajes(m => [...m, { autor: 'ia', texto: `¡Listo! Capturé: ${llenados.join(', ')}.` + (sig ? ` ${sig.texto}` : '') }])
-    } else if (sig) {
+      setMensajes(m => [...m, { autor: 'ia', texto: `¡Listo! Capturé: ${llenados.join(', ')}.` + (sig && sig.campo !== 'ubicacion' ? ` ${sig.texto}` : '') }])
+    } else if (sig && sig.campo !== 'ubicacion') {
       setMensajes(m => [...m, { autor: 'ia', texto: `No pude capturar eso. ${sig.texto}` }])
+    }
+
+    if (sig?.campo === 'ubicacion' && !mapaPendienteRef.current) {
+      mapaPendienteRef.current = true
+      setMensajes(m => [...m, {
+        autor: 'ia',
+        texto: 'A continuación verás el mapa de la Heroica Puebla de Zaragoza. Marca en la pantalla el lugar donde deseas tu obra. Si estás en el lugar ideal, presiona el botón para obtener tu ubicación; si no, desplázate por el mapa y coloca el pin.',
+      }])
+      onAbrirMapa?.()
     }
     if (!sig) setTerminado(true)
   }
 
   const arrancar = (reintento: boolean) => {
     window.speechSynthesis?.cancel()
+    setEstadoVoz('Conectando al servicio de voz…')
     if (!reintento) {
       textoRef.current = ''
       setVivo('')
+      reintentosRef.current = 0
     }
     const rec = crearReconocedor()
     if (!rec) {
+      setEstadoVoz('')
       setMensajes(m => [...m, { autor: 'ia', texto: 'Tu navegador no soporta reconocimiento de voz. Escribe tu respuesta debajo.' }])
       return
     }
+    rec.onstart = () => setEstadoVoz('Escuchando…')
+    rec.onaudiostart = () => {
+      reintentosRef.current = 0
+      setEstadoVoz('Habla ahora…')
+    }
     rec.onresult = (e) => {
-      const nueva = transcribirTodo(e)
-      const previo = textoRef.current.trim()
-      const fusion = previo
-        ? (previo.includes(nueva) ? previo : `${previo} ${nueva}`.trim())
-        : nueva.trim()
+      const nuevo = ultimoTranscripcion(e)
+      if (!nuevo) return
+      const fusion = fusionarTranscripcion(textoRef.current, nuevo)
       textoRef.current = fusion
       setInput(fusion)
       if (fusion) setVivo(fusion)
@@ -170,37 +226,32 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIA
     rec.onend = () => {
       if (recRef.current !== rec) return
       recRef.current = null
-      if (!manualRef.current && !terminado) {
-        setTimeout(() => {
-          if (!manualRef.current && !terminado) arrancar(true)
-        }, 600)
-      } else {
-        setEscuchando(false)
-        setVivo('')
-      }
+      fallar(
+        'El reconocimiento terminó sin captar audio. Revisa que el escudo de Brave no esté bloqueando la voz para este sitio, o recarga la página y vuelve a intentarlo.',
+        false
+      )
     }
     rec.onerror = (ev) => {
       if (recRef.current !== rec) return
-      const nombre = (ev as { error?: string })?.error ?? ''
       recRef.current = null
-      const esPermiso = nombre.includes('not-allowed') || nombre.includes('service-not-allowed') || nombre.startsWith('audio-capture')
-      if (esPermiso) {
-        setEscuchando(false)
-        setVivo('')
-        setMensajes(m => [...m, {
-          autor: 'ia',
-          texto: 'No pude acceder a tu micrófono. Verifica que esté permitido el permiso en el navegador y vuelve a intentarlo, o escribe tu respuesta debajo.',
-        }])
+      const nombre = (ev as { error?: string })?.error ?? ''
+      ultimoErrorRef.current = nombre
+      if (nombre === 'not-allowed' || nombre === 'service-not-allowed' || nombre.startsWith('audio-capture')) {
+        reintentosRef.current = 0
+        fallar(
+          'No pude acceder a tu micrófono. Verifica que esté permitido el permiso en el navegador y vuelve a intentarlo, o escribe tu respuesta debajo.',
+          true
+        )
         return
       }
-      if (!manualRef.current && !terminado) {
-        setTimeout(() => {
-          if (!manualRef.current && !terminado) arrancar(true)
-        }, 600)
-      } else {
-        setEscuchando(false)
-        setVivo('')
+      if (nombre === 'network' || nombre === 'network-timeout') {
+        fallar(
+          'El permiso de voz se bloqueó o no se pudo conectar al servicio. Toca el ícono del escudo al inicio de la barra de direcciones de Brave, permite el micrófono y vuelve a intentar.',
+          true
+        )
+        return
       }
+      fallar('', false)
     }
     recRef.current = rec
     try {
@@ -208,13 +259,30 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIA
       setEscuchando(true)
     } catch {
       recRef.current = null
+      fallar('El micrófono no pudo iniciar. Recarga la página, acepta el permiso y vuelve a intentarlo.', true)
+    }
+  }
+
+  function fallar(mensaje: string, forzar: boolean): void {
+    if (manualRef.current || terminado) {
       setEscuchando(false)
       setVivo('')
-      setMensajes(m => [...m, {
-        autor: 'ia',
-        texto: 'El micrófono no pudo iniciar. Recarga la página, acepta el permiso y vuelve a intentarlo.',
-      }])
+      setEstadoVoz('')
+      return
     }
+    reintentosRef.current += 1
+    if (forzar || reintentosRef.current >= 4) {
+      setEscuchando(false)
+      setVivo('')
+      setEstadoVoz('')
+      setMensajes(m => [...m, { autor: 'ia', texto: mensaje }])
+      reintentosRef.current = 0
+      return
+    }
+    setEstadoVoz(`Reintentando ${reintentosRef.current + 1}/3…`)
+    setTimeout(() => {
+      if (!manualRef.current && !terminado) arrancar(true)
+    }, 800)
   }
 
   const iniciarEscucha = () => {
@@ -328,6 +396,11 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIA
               <Send className="h-4 w-4" />
             </Button>
           </div>
+        )}
+        {estadoVoz && (
+          <p className="mt-2 text-center text-xs" aria-live="polite">
+            <span className="font-medium text-guinda">{estadoVoz}</span>
+          </p>
         )}
       </div>
     </div>

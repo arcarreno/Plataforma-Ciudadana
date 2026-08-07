@@ -95,6 +95,8 @@ export interface SpeechRecognitionLike {
   onresult: ((e: SpeechRecognitionEventLike) => void) | null
   onerror: ((e: unknown) => void) | null
   onend: (() => void) | null
+  onstart?: (() => void) | null
+  onaudiostart?: (() => void) | null
   start: () => void
   stop: () => void
   abort: () => void
@@ -122,7 +124,7 @@ export function transcribirTodo(e: SpeechRecognitionEventLike): string {
   let out = ''
   for (let i = 0; i < e.results.length; i++) {
     const t = e.results[i][0]?.transcript ?? ''
-    if (t && !out.includes(t)) out += (out ? ' ' : '') + t
+    if (t) out = fusionarTranscripcion(out, t)
   }
   return out.trim()
 }
@@ -131,4 +133,29 @@ export function ultimoTranscripcion(e: SpeechRecognitionEventLike): string {
   const n = e.results.length
   if (!n) return ''
   return e.results[n - 1][0]?.transcript ?? ''
+}
+
+export function fusionarTranscripcion(previo: string, nuevo: string): string {
+  const previoT = previo.trim().toLowerCase()
+  const nuevoT = nuevo.trim().toLowerCase()
+  if (!nuevoT) return previo
+  if (!previoT) return nuevo
+  if (previoT === nuevoT) return previo
+  if (previoT.includes(nuevoT)) return previo
+  if (nuevoT.includes(previoT)) return nuevo
+
+  const limpiar = (s: string): string => s.trim().replace(/\s+/g, ' ')
+  const p = limpiar(previo)
+  const n = limpiar(nuevo)
+  const pMin = p.toLowerCase()
+  const nMin = n.toLowerCase()
+
+  const k = Math.min(pMin.length, nMin.length)
+  for (let i = k; i >= Math.min(3, k); i--) {
+    if (nMin.startsWith(pMin.slice(-i))) return p + n.slice(i)
+  }
+  for (let i = k; i >= Math.min(3, k); i--) {
+    if (pMin.startsWith(nMin.slice(-i))) return n + p.slice(i)
+  }
+  return `${p} ${n}`
 }
