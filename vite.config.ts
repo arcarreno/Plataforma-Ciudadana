@@ -267,4 +267,12 @@ function buildEmailText(folio: string): string {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), sigedPlugin(), emailPlugin()],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://10.4.3.154:4920',
+        changeOrigin: true,
+      },
+    },
+  },
 })

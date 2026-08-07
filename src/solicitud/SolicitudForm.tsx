@@ -13,7 +13,9 @@ import { TIPOS_OBRA_NOMBRES, RANKING_PUNTOS_CARGO_PUBLICO } from '../core/consta
 import { crearSolicitud } from '../lib/solicitud'
 import { validarFormatoCURP, validarDigitoVerificador, inicialesCoinciden } from '../lib/curp'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
+import type { IaLlenarResultado } from '../lib/servidor'
 import MapaCombinado from './MapaCombinado'
+import AsistenteIA from './AsistenteIA'
 import { correrTour } from './guiaTour'
 import AvisoPrivacidad from '../shared/AvisoPrivacidad'
 
@@ -71,9 +73,10 @@ function validarForm(data: SolicitudFormData, omitirCurp?: boolean, nombrePiezas
 interface SolicitudFormProps {
   omitirCurp?: boolean
   nombrePrefilled?: string
+  iniciarIA?: boolean
 }
 
-export default function SolicitudForm({ omitirCurp, nombrePrefilled }: SolicitudFormProps = {}) {
+export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }: SolicitudFormProps = {}) {
   const navigate = useNavigate()
   const [form, setForm] = useState<SolicitudFormData>({
     nombre_solicitante: nombrePrefilled ?? '',
@@ -124,6 +127,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
   const initialOffsetRef = useRef(true)
   const [fileErrors, setFileErrors] = useState<string[]>([])
   const [esDesktop, setEsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+  const [mostrarAsistente, setMostrarAsistente] = useState(() => iniciarIA === true)
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)')
@@ -198,6 +202,83 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
     set('tramo_lat_fin', '')
     set('tramo_lng_fin', '')
     setTramoData(null)
+  }
+
+  const esLleno = (campo: string): boolean => {
+    switch (campo) {
+      case 'nombre':
+        return omitirCurp
+          ? !!form.nombre_solicitante.trim()
+          : !!(
+              [apellidoPaterno, apellidoMaterno, nombres].some((p) => p.trim()) ||
+              form.nombre_solicitante.trim()
+            )
+      case 'apellido_paterno':
+        return omitirCurp || !!apellidoPaterno.trim()
+      case 'apellido_materno':
+        return omitirCurp || !!apellidoMaterno.trim()
+      case 'nombres':
+        return omitirCurp || !!nombres.trim()
+      case 'curp': return !!form.curp.trim()
+      case 'telefono': return !!form.telefono.trim()
+      case 'correo': return !!form.correo.trim()
+      case 'tipo': return !!form.tipo_solicitud.trim()
+      case 'ubicacion':
+        return !!(form.colonia.trim() || form.calle.trim() || form.entre_calles.trim())
+      case 'descripcion': return !!form.descripcion.trim()
+      default: return true
+    }
+  }
+
+  const aplicarIA = (datos: Partial<IaLlenarResultado>): string[] => {
+    const aplicados: string[] = []
+    const nombreCompleto = (datos.nombre_solicitante ?? '').trim()
+    const apPaternoIA = (datos.apellido_paterno ?? '').trim()
+    const apMaternoIA = (datos.apellido_materno ?? '').trim()
+    const nombresIA = (datos.nombres ?? '').trim()
+
+    if (omitirCurp) {
+      if (nombreCompleto && !form.nombre_solicitante.trim()) {
+        set('nombre_solicitante', nombreCompleto)
+        aplicados.push('nombre')
+      }
+    } else {
+      const tienePartesSeparadas = apPaternoIA || apMaternoIA || nombresIA
+      if (tienePartesSeparadas) {
+        if (apPaternoIA && !apellidoPaterno.trim()) { setApellidoPaterno(apPaternoIA); aplicados.push('apellido paterno') }
+        if (apMaternoIA && !apellidoMaterno.trim()) { setApellidoMaterno(apMaternoIA); aplicados.push('apellido materno') }
+        if (nombresIA && !nombres.trim()) { setNombres(nombresIA); aplicados.push('nombre(s)') }
+      } else if (nombreCompleto && ![apellidoPaterno, apellidoMaterno, nombres].some((p) => p.trim())) {
+        const partes = nombreCompleto.split(/\s+/)
+        const paterno = partes.pop() ?? ''
+        const materno = partes.length ? (partes.pop() ?? '') : ''
+        setApellidoPaterno(paterno)
+        setApellidoMaterno(materno)
+        setNombres(partes.join(' '))
+        aplicados.push('nombre')
+      }
+    }
+    const curp = (datos.curp ?? '').trim().toUpperCase()
+    if (curp && !form.curp.trim()) { set('curp', curp); aplicados.push('CURP') }
+    const tel = (datos.telefono ?? '').trim().replace(/\D/g, '')
+    if (tel && !form.telefono.trim()) {
+      let limpio = tel
+      if (limpio.length === 12 && limpio.startsWith('52')) limpio = limpio.slice(2)
+      if (limpio.length === 10) { set('telefono', limpio); aplicados.push('teléfono') }
+    }
+    const correo = (datos.correo ?? '').trim()
+    if (correo && !form.correo.trim()) { set('correo', correo); aplicados.push('correo') }
+    const tipo = (datos.tipo_solicitud ?? '').trim()
+    if (tipo && !form.tipo_solicitud.trim()) { set('tipo_solicitud', tipo); aplicados.push('tipo de obra') }
+    const colonia = (datos.colonia ?? '').trim()
+    if (colonia && !form.colonia.trim()) { set('colonia', colonia); aplicados.push('colonia') }
+    const calle = (datos.calle ?? '').trim()
+    if (calle && !form.calle.trim()) { set('calle', calle); aplicados.push('calle') }
+    const entre = (datos.entre_calles ?? '').trim()
+    if (entre && !form.entre_calles.trim()) { set('entre_calles', entre); aplicados.push('entre calles') }
+    const desc = (datos.descripcion ?? '').trim()
+    if (desc && !form.descripcion.trim()) { set('descripcion', desc); aplicados.push('descripción') }
+    return [...new Set(aplicados)]
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -462,6 +543,16 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        {mostrarAsistente && (
+          <div className="mx-auto w-full max-w-2xl">
+            <AsistenteIA
+              esLleno={esLleno}
+              onAplicar={aplicarIA}
+              onClose={() => setMostrarAsistente(false)}
+            />
+          </div>
+        )}
+
         <div className="mx-auto w-full max-w-2xl">
           <Card title="Datos del solicitante">
             <div className="flex flex-col gap-4">
@@ -479,7 +570,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled }: Solicitud
                     value={apellidoMaterno}
                     onChange={(e) => setApellidoMaterno(e.target.value)}
                     error={errors.apellido_materno}
-                    placeholder="Opcional"
+                    placeholder="González"
                   />
                   <Input
                     label="Nombre(s)"

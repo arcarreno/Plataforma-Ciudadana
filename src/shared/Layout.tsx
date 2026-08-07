@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Toaster } from 'sileo'
 import 'sileo/styles.css'
@@ -11,6 +11,7 @@ import AccessibilityPanel from './AccessibilityPanel'
 
 export default function Layout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [fontSize, setFontSize] = useState<FontSize>(() => {
     return (typeof document !== 'undefined'
       ? (document.documentElement.getAttribute('data-font-size') as FontSize)
@@ -142,6 +143,10 @@ export default function Layout() {
         onVoiceTypeChange={setVoiceType}
         talkBackEnabled={talkBackEnabled}
         onTalkBackToggle={() => setTalkBackEnabled((p) => !p)}
+        onIniciarPeticionIA={() => {
+          setPanelOpen(false)
+          navigate(`/nueva-solicitud?ia=${Date.now()}`)
+        }}
       />
     </div>
   )

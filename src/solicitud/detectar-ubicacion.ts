@@ -140,7 +140,7 @@ async function fetchJSON(url: string): Promise<GeoJSON.FeatureCollection> {
   if (cached) return cached
   const promise = (async () => {
     try {
-      const r = await fetch(url)
+      const r = await fetch(url, { headers: { 'ngrok-skip-browser-warning': 'true' } })
       if (!r.ok) return EMPTY_FC
       return await r.json()
     } catch (_e) {
@@ -193,7 +193,7 @@ async function fetchConReintento(url: string, intentos = 3): Promise<Response> {
   let lastErr: unknown = null
   for (let i = 0; i < intentos; i++) {
     try {
-      const r = await fetch(url)
+      const r = await fetch(url, { headers: { 'ngrok-skip-browser-warning': 'true' } })
       if (r.ok) return r
       lastErr = new Error(`HTTP ${r.status}`)
     } catch (e) {

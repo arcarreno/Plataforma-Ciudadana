@@ -1,4 +1,4 @@
-import { Volume2, VolumeX, Type, Sun, Moon, Accessibility } from 'lucide-react'
+import { Volume2, VolumeX, Type, Sun, Moon, Accessibility, Mic } from 'lucide-react'
 import { fontSizeOptions, fontLabels, voiceOptions } from '../core/theme'
 import type { FontSize, Contrast, VoiceType } from '../core/theme'
 import ContrastToggle from './ContrastToggle'
@@ -14,6 +14,7 @@ interface AccessibilityPanelProps {
   onVoiceTypeChange: (v: VoiceType) => void
   talkBackEnabled: boolean
   onTalkBackToggle: () => void
+  onIniciarPeticionIA: () => void
 }
 
 export default function AccessibilityPanel({
@@ -27,6 +28,7 @@ export default function AccessibilityPanel({
   onVoiceTypeChange,
   talkBackEnabled,
   onTalkBackToggle,
+  onIniciarPeticionIA,
 }: AccessibilityPanelProps) {
   return (
     <>
@@ -63,6 +65,26 @@ export default function AccessibilityPanel({
         </div>
 
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-5">
+          <section>
+            <button
+              onClick={onIniciarPeticionIA}
+              className="flex w-full items-center gap-3 rounded-2xl bg-guinda px-4 py-4 text-left text-white shadow-button transition-all duration-200 hover:bg-guindaLight"
+              aria-label="Iniciar petición por voz"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+                <Mic size={20} />
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold leading-tight">Petición por voz</span>
+                <span className="text-xs text-white/70 leading-tight">
+                  Captura tu solicitud hablando con el asistente
+                </span>
+              </span>
+            </button>
+          </section>
+
+          <div className="h-px bg-alabaster-dark/50" />
+
           <section>
             <div className="mb-3 flex items-center gap-2">
               <Type size={18} className="text-guinda" />

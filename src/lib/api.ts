@@ -27,7 +27,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...options?.headers },
       ...options,
     })
   } catch {
@@ -46,6 +46,7 @@ export async function postForm<T>(path: string, form: FormData): Promise<T> {
     res = await fetch(`${API_URL}${path}`, {
       method: 'POST',
       body: form,
+      headers: { 'ngrok-skip-browser-warning': 'true' },
     })
   } catch {
     throw new ApiError('No se pudo conectar con el servidor', 0, true)

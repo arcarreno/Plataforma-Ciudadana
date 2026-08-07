@@ -107,6 +107,28 @@ export function crearSolicitud(
   return postForm<CrearSolicitudResult>('/api/solicitudes', form)
 }
 
+// ---------------------------------------------------------------------------
+// IA guiada (Ollama)
+// ---------------------------------------------------------------------------
+export interface IaLlenarResultado {
+  nombre_solicitante: string
+  apellido_paterno: string
+  apellido_materno: string
+  nombres: string
+  curp: string
+  telefono: string
+  correo: string
+  tipo_solicitud: string
+  colonia: string
+  calle: string
+  entre_calles: string
+  descripcion: string
+}
+
+export function iaLlenar(texto: string): Promise<{ data: IaLlenarResultado }> {
+  return api.post<{ data: IaLlenarResultado }>('/api/ia/llenar', { texto })
+}
+
 export function esErrorRed(err: unknown): boolean {
   return err instanceof ApiError && err.isNetwork
 }

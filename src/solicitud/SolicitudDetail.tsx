@@ -199,7 +199,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
       }
       const res = await fetch('/api/enviar-documentacion', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body,
       })
       if (!res.ok) {

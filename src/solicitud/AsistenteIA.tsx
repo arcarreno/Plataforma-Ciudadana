@@ -1,0 +1,335 @@
+﻿import { useEffect, useRef, useState } from 'react'
+import { Sparkles, Send, X, Mic, MicOff } from 'lucide-react'
+import Button from '../shared/Button'
+import type { IaLlenarResultado } from '../lib/servidor'
+import { extraerCampo, extraerTodo } from '../lib/iaLocal'
+import { hablar, crearReconocedor, transcribirTodo, precargarVoces } from '../lib/speech'
+import type { SpeechRecognitionLike } from '../lib/speech'
+import { TIPOS_OBRA_NOMBRES } from '../core/constants'
+
+interface Msg {
+  autor: 'ia' | 'user'
+  texto: string
+}
+
+interface AsistenteIAProps {
+  esLleno: (campo: string) => boolean
+  onAplicar: (data: Partial<IaLlenarResultado>) => string[]
+  onClose?: () => void
+}
+
+const PREGUNTAS = [
+  { campo: 'apellido_paterno', pregunta: '¿Cuál es tu apellido paterno?' },
+  { campo: 'apellido_materno', pregunta: '¿Y tu apellido materno?' },
+  { campo: 'nombres', pregunta: '¿Cuál es tu nombre o nombres?' },
+  { campo: 'curp', pregunta: '¿Cuál es tu CURP?' },
+  { campo: 'telefono', pregunta: '¿Para contactarte, cuál es tu teléfono a 10 dígitos?' },
+  { campo: 'correo', pregunta: '¿Cuál es tu correo electrónico?' },
+  { campo: 'tipo', pregunta: `¿Qué servicio necesitas? Dime por ejemplo: ${TIPOS_OBRA_NOMBRES.slice(0, 5).join(', ')} u otro.` },
+  { campo: 'ubicacion', pregunta: '¿En qué colonia o calle se ubica el problema?' },
+  { campo: 'descripcion', pregunta: 'Cuéntame con detalle, ¿cuál es el problema?' },
+]
+
+const SALUDO =
+  '¡Hola! Soy el asistente para capturar tu solicitud. Contesta una pregunta a la vez y yo voy llenando el formulario. Empecemos:'
+
+const LLENADO_A_CAMPO: Record<string, string> = {
+  'nombre': 'nombres',
+  'apellido paterno': 'apellido_paterno',
+  'apellido materno': 'apellido_materno',
+  'nombre(s)': 'nombres',
+  'CURP': 'curp',
+  'teléfono': 'telefono',
+  'correo': 'correo',
+  'tipo de obra': 'tipo',
+  'colonia': 'ubicacion',
+  'calle': 'ubicacion',
+  'entre calles': 'ubicacion',
+  'descripción': 'descripcion',
+}
+
+function valorDeCampo(campo: string, texto: string): Partial<IaLlenarResultado> {
+  const extra = extraerTodo(texto)
+  const extrajo = extraerCampo(campo, texto)
+  if (!extrajo) return extra
+
+  switch (campo) {
+    case 'apellido_paterno': return { ...extra, apellido_paterno: extrajo }
+    case 'apellido_materno': return { ...extra, apellido_materno: extrajo }
+    case 'nombres': return { ...extra, nombres: extrajo }
+    case 'curp': return { ...extra, curp: extrajo.toUpperCase() }
+    case 'telefono': return { ...extra, telefono: extrajo }
+    case 'correo': return { ...extra, correo: extrajo.toLowerCase() }
+    case 'tipo': return { ...extra, tipo_solicitud: extrajo }
+    case 'ubicacion': return { ...extra, colonia: extrajo }
+    case 'descripcion': return { ...extra, descripcion: extrajo }
+    default: return extra
+  }
+}
+
+export default function AsistenteIA({ esLleno, onAplicar, onClose }: AsistenteIAProps) {
+  const completadosRef = useRef<Set<string>>(new Set())
+  const siguientePregunta = (): { campo: string; texto: string } | null => {
+    for (const p of PREGUNTAS) {
+      if (!completadosRef.current.has(p.campo) && !esLleno(p.campo)) return { campo: p.campo, texto: p.pregunta }
+    }
+    return null
+  }
+
+  const [estadoInicial] = useState(() => {
+    const primeras: Msg[] = [{ autor: 'ia', texto: SALUDO }]
+    const sig = siguientePregunta()
+    if (sig) primeras.push({ autor: 'ia', texto: sig.texto })
+    return { mensajes: primeras, terminado: !sig }
+  })
+  const [mensajes, setMensajes] = useState<Msg[]>(estadoInicial.mensajes)
+  const [input, setInput] = useState('')
+  const [vivo, setVivo] = useState('')
+  const [terminado, setTerminado] = useState(estadoInicial.terminado)
+  const [escuchando, setEscuchando] = useState(false)
+  const listaRef = useRef<HTMLDivElement>(null)
+  const recRef = useRef<SpeechRecognitionLike | null>(null)
+  const yaHabladoRef = useRef(0)
+  const textoRef = useRef('')
+  const manualRef = useRef(false)
+
+  useEffect(() => {
+    listaRef.current?.scrollTo({ top: listaRef.current.scrollHeight, behavior: 'smooth' })
+  }, [mensajes, vivo])
+
+  useEffect(() => {
+    const nuevas = mensajes.slice(yaHabladoRef.current).filter((m) => m.autor === 'ia')
+    if (nuevas.length === 0) return
+    yaHabladoRef.current = mensajes.length
+    hablar(nuevas.map((m) => m.texto).join(' '))
+  }, [mensajes])
+
+  useEffect(() => {
+    precargarVoces()
+    return () => {
+      recRef.current?.abort()
+      recRef.current = null
+      window.speechSynthesis?.cancel()
+    }
+  }, [])
+
+  const terminarEscucha = () => {
+    manualRef.current = true
+    recRef.current?.abort()
+    recRef.current = null
+    setEscuchando(false)
+    setVivo('')
+    const t = textoRef.current.trim()
+    if (t) enviar(t)
+  }
+
+  const enviar = (texto = input.trim()) => {
+    if (!texto) return
+    setInput('')
+    textoRef.current = ''
+    setMensajes(m => [...m, { autor: 'user', texto }])
+
+    const campo = siguientePregunta()?.campo ?? ''
+    const data = valorDeCampo(campo, texto)
+    const llenados = onAplicar(data)
+    for (const c of llenados) {
+      const campoLlenado = LLENADO_A_CAMPO[c]
+      if (campoLlenado) completadosRef.current.add(campoLlenado)
+    }
+
+    const sig = siguientePregunta()
+    if (llenados.length > 0) {
+      setMensajes(m => [...m, { autor: 'ia', texto: `¡Listo! Capturé: ${llenados.join(', ')}.` + (sig ? ` ${sig.texto}` : '') }])
+    } else if (sig) {
+      setMensajes(m => [...m, { autor: 'ia', texto: `No pude capturar eso. ${sig.texto}` }])
+    }
+    if (!sig) setTerminado(true)
+  }
+
+  const arrancar = (reintento: boolean) => {
+    window.speechSynthesis?.cancel()
+    if (!reintento) {
+      textoRef.current = ''
+      setVivo('')
+    }
+    const rec = crearReconocedor()
+    if (!rec) {
+      setMensajes(m => [...m, { autor: 'ia', texto: 'Tu navegador no soporta reconocimiento de voz. Escribe tu respuesta debajo.' }])
+      return
+    }
+    rec.onresult = (e) => {
+      const nueva = transcribirTodo(e)
+      const previo = textoRef.current.trim()
+      const fusion = previo
+        ? (previo.includes(nueva) ? previo : `${previo} ${nueva}`.trim())
+        : nueva.trim()
+      textoRef.current = fusion
+      setInput(fusion)
+      if (fusion) setVivo(fusion)
+    }
+    rec.onend = () => {
+      if (recRef.current !== rec) return
+      recRef.current = null
+      if (!manualRef.current && !terminado) {
+        setTimeout(() => {
+          if (!manualRef.current && !terminado) arrancar(true)
+        }, 600)
+      } else {
+        setEscuchando(false)
+        setVivo('')
+      }
+    }
+    rec.onerror = (ev) => {
+      if (recRef.current !== rec) return
+      const nombre = (ev as { error?: string })?.error ?? ''
+      recRef.current = null
+      const esPermiso = nombre.includes('not-allowed') || nombre.includes('service-not-allowed') || nombre.startsWith('audio-capture')
+      if (esPermiso) {
+        setEscuchando(false)
+        setVivo('')
+        setMensajes(m => [...m, {
+          autor: 'ia',
+          texto: 'No pude acceder a tu micrófono. Verifica que esté permitido el permiso en el navegador y vuelve a intentarlo, o escribe tu respuesta debajo.',
+        }])
+        return
+      }
+      if (!manualRef.current && !terminado) {
+        setTimeout(() => {
+          if (!manualRef.current && !terminado) arrancar(true)
+        }, 600)
+      } else {
+        setEscuchando(false)
+        setVivo('')
+      }
+    }
+    recRef.current = rec
+    try {
+      rec.start()
+      setEscuchando(true)
+    } catch {
+      recRef.current = null
+      setEscuchando(false)
+      setVivo('')
+      setMensajes(m => [...m, {
+        autor: 'ia',
+        texto: 'El micrófono no pudo iniciar. Recarga la página, acepta el permiso y vuelve a intentarlo.',
+      }])
+    }
+  }
+
+  const iniciarEscucha = () => {
+    if (escuchando) return
+    manualRef.current = false
+    arrancar(false)
+  }
+
+  const hablarUltimo = () => {
+    const ultimas = mensajes.filter((m) => m.autor === 'ia')
+    const texto = ultimas.length ? ultimas[ultimas.length - 1].texto : ''
+    if (texto) hablar(texto)
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-alabaster-dark/40 bg-white shadow-sm">
+      <div className="flex items-center justify-between bg-guinda px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-5 text-white" />
+          <span className="text-sm font-semibold text-white">Asistente de captura por voz</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={hablarUltimo}
+            aria-label="Repetir pregunta"
+            className="rounded-full p-1 text-white/80 transition hover:bg-white/10 hover:text-white"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path d="M11 5 6 9H2v6h4l5 4V5z" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar asistente"
+              className="rounded-full p-1 text-white/80 transition hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div ref={listaRef} className="flex max-h-72 flex-col gap-3 overflow-y-auto bg-alabaster/40 p-4">
+        {mensajes.map((m, i) => (
+          <div key={i} className={`flex ${m.autor === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                m.autor === 'user'
+                  ? 'rounded-br-sm bg-guinda text-white'
+                  : 'rounded-bl-sm border border-alabaster-dark/30 bg-white text-gray-institutional'
+              }`}
+            >
+              {m.texto}
+            </div>
+          </div>
+        ))}
+        {escuchando && (
+          <div className="flex justify-end">
+            <div className="flex max-w-[80%] items-center gap-2 rounded-2xl rounded-br-sm bg-guinda/20 px-3 py-2 text-sm leading-relaxed text-guinda">
+              {vivo ? (
+                <span>{vivo}</span>
+              ) : (
+                <>
+                  <span className="h-2 w-2 shrink-0 animate-bounce rounded-full bg-guinda" />
+                  <span className="italic opacity-80">Escuchando…</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-alabaster-dark/30 bg-white p-3">
+        {terminado ? (
+          <p className="text-center text-xs text-green-700">
+            ¡Gracias! El formulario quedó con tus datos. Revisa, complementa los faltantes y marca la ubicación en el mapa.
+          </p>
+        ) : (
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={escuchando ? terminarEscucha : iniciarEscucha}
+              aria-label={escuchando ? 'Terminar y enviar lo hablado' : 'Empezar a hablar'}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${
+                escuchando
+                  ? 'bg-red-500 text-white shadow-lg animate-pulse'
+                  : 'bg-guinda/10 text-guinda hover:bg-guinda/20'
+              }`}
+            >
+              {escuchando ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            </button>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }}
+              rows={2}
+              placeholder={escuchando ? 'Te estoy escuchando...' : 'Responde hablando o aquí...'}
+              className="min-h-[52px] flex-1 resize-none rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2 text-sm text-gray-institutional outline-none transition focus:border-guinda"
+            />
+            <Button
+              type="button"
+              onClick={() => enviar()}
+              disabled={!input.trim()}
+              className="!px-3"
+              aria-label="Enviar respuesta"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

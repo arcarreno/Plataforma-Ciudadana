@@ -35,7 +35,7 @@ export async function consultarSIGED(
     const params = new URLSearchParams({ cct: cctClean })
     if (turno) params.set('turno', turno)
 
-    const res = await fetch(`/api/consultar-siged?${params.toString()}`)
+    const res = await fetch(`/api/consultar-siged?${params.toString()}`, { headers: { 'ngrok-skip-browser-warning': 'true' } })
 
     if (res.status === 404) {
       return { error: 'Escuela no encontrada en SIGED' }

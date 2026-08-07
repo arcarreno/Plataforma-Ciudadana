@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { nombreCompleto, esCargoPublico } from '../types/auth'
 import SolicitudForm from '../solicitud/SolicitudForm'
@@ -7,8 +8,11 @@ const MODAL_STORAGE_KEY = 'semovinfra_curp_modal_visto'
 
 export default function NuevaSolicitud() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const esCargo = !!user && esCargoPublico(user.rol)
   const [showModal, setShowModal] = useState(false)
+  const iniciarIA = searchParams.get('ia') !== null
+  const iaKey = searchParams.get('ia') ?? 'manual'
 
   useEffect(() => {
     if (!esCargo) return
@@ -47,8 +51,10 @@ export default function NuevaSolicitud() {
       )}
 
       <SolicitudForm
+        key={iaKey}
         omitirCurp={esCargo}
         nombrePrefilled={esCargo ? nombreCompleto(user!) : undefined}
+        iniciarIA={iniciarIA}
       />
     </div>
   )
