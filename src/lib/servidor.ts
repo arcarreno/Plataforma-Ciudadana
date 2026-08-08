@@ -1,4 +1,6 @@
 import { api, postForm, ApiError } from './api'
+import { supabase } from './supabase'
+import { detectarModo, invalidarModo } from './backend'
 import type { Solicitud } from '../types/solicitud'
 import type { EstatusFase } from '../core/constants'
 import type { Usuario } from '../types/auth'
@@ -14,7 +16,11 @@ export interface SolicitudVecino {
   distancia_m: number
 }
 
-export function listarSolicitudes(params: {
+async function modoEsSupabase(): Promise<boolean> {
+  return (await detectarModo()) === 'supabase'
+}
+
+export async function listarSolicitudes(params: {
   q?: string
   estatus?: string
   prioridad?: string
@@ -22,6 +28,9 @@ export function listarSolicitudes(params: {
   pageSize?: number
   asc?: boolean
 }): Promise<ListadoSolicitudes> {
+  if (await modoEsSupabase()) {
+    return listarSolicitudesSupabase(params)
+  }
   const query = new URLSearchParams()
   if (params.q) query.set('q', params.q)
   if (params.estatus) query.set('estatus', params.estatus)
@@ -30,21 +39,134 @@ export function listarSolicitudes(params: {
   if (params.pageSize) query.set('page_size', String(params.pageSize))
   if (params.asc) query.set('asc', 'true')
   const qs = query.toString()
-  return api.get<ListadoSolicitudes>(`/api/solicitudes${qs ? `?${qs}` : ''}`)
+  try {
+    return await api.get<ListadoSolicitudes>(`/api/solicitudes${qs ? `?${qs}` : ''}`)
+  } catch (err) {
+    if (!esErrorRed(err)) throw err
+    invalidarModo()
+    if (await modoEsSupabase()) return listarSolicitudesSupabase(params)
+    throw err
+  }
 }
 
-export function consultarFolio(folio: string): Promise<{ data: Solicitud }> {
-  return api.get<{ data: Solicitud }>(`/api/solicitudes/folio/${encodeURIComponent(folio)}`)
+async function listarSolicitudesSupabase(params: {
+  q?: string
+  estatus?: string
+  prioridad?: string
+  page?: number
+  pageSize?: number
+  asc?: boolean
+}): Promise<ListadoSolicitudes> {
+  const page = params.page ?? 1
+  const pageSize = params.pageSize ?? 50
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  let query = supabase
+    .from('solicitudes')
+    .select('*', { count: 'exact' })
+    .order('fecha_creacion', { ascending: params.asc ?? false })
+
+  if (params.q) {
+    query = query.or(`folio_unico.ilike.%${params.q}%,curp.ilike.%${params.q}%,nombre_solicitante.ilike.%${params.q}%`)
+  }
+  if (params.estatus) {
+    query = query.eq('estatus_fase', params.estatus)
+  }
+  if (params.prioridad) {
+    query = query.eq('peso_ranking', Number(params.prioridad))
+  }
+  query = query.range(from, to)
+
+  const { data, error, count } = await query
+  if (error) throw new ApiError(`Supabase fallback: ${error.message}`, 502)
+  return { data: (data as unknown as Solicitud[]) ?? [], total: count ?? 0 }
 }
 
-export function solicitudesMapa(limit?: number): Promise<{ data: Solicitud[] }> {
-  return api.get<{ data: Solicitud[] }>(
-    `/api/solicitudes/mapa${limit ? `?limit=${limit}` : ''}`
-  )
+export async function consultarFolio(folio: string): Promise<{ data: Solicitud }> {
+  if (await modoEsSupabase()) {
+    const { data, error } = await supabase
+      .from('solicitudes')
+      .select()
+      .eq('folio_unico', folio.trim().toUpperCase())
+      .maybeSingle()
+    if (error) throw new ApiError(`Supabase fallback: ${error.message}`, 502)
+    if (!data) throw new ApiError('No encontrada', 404)
+    return { data: data as unknown as Solicitud }
+  }
+  try {
+    return await api.get<{ data: Solicitud }>(`/api/solicitudes/folio/${encodeURIComponent(folio)}`)
+  } catch (err) {
+    if (!esErrorRed(err)) throw err
+    invalidarModo()
+    if (await modoEsSupabase()) {
+      const { data, error } = await supabase
+        .from('solicitudes')
+        .select()
+        .eq('folio_unico', folio.trim().toUpperCase())
+        .maybeSingle()
+      if (error) throw new ApiError(`Supabase fallback: ${error.message}`, 502)
+      if (!data) throw new ApiError('No encontrada', 404)
+      return { data: data as unknown as Solicitud }
+    }
+    throw err
+  }
 }
 
-export function obtenerSolicitud(id: number): Promise<{ data: Solicitud }> {
-  return api.get<{ data: Solicitud }>(`/api/solicitudes/${id}`)
+export async function solicitudesMapa(limit?: number): Promise<{ data: Solicitud[] }> {
+  if (await modoEsSupabase()) {
+    let query = supabase.from('solicitudes').select()
+    if (limit) query = query.limit(limit)
+    const { data, error } = await query
+    if (error) throw new ApiError(`Supabase fallback: ${error.message}`, 502)
+    return { data: (data as unknown as Solicitud[]) ?? [] }
+  }
+  try {
+    return await api.get<{ data: Solicitud[] }>(
+      `/api/solicitudes/mapa${limit ? `?limit=${limit}` : ''}`
+    )
+  } catch (err) {
+    if (!esErrorRed(err)) throw err
+    invalidarModo()
+    if (await modoEsSupabase()) {
+      let query = supabase.from('solicitudes').select()
+      if (limit) query = query.limit(limit)
+      const { data, error } = await query
+      if (error) throw new ApiError(`Supabase fallback: ${error.message}`, 502)
+      return { data: (data as unknown as Solicitud[]) ?? [] }
+    }
+    throw err
+  }
+}
+
+export async function obtenerSolicitud(id: number): Promise<{ data: Solicitud }> {
+  if (await modoEsSupabase()) {
+    const { data, error } = await supabase
+      .from('solicitudes')
+      .select()
+      .eq('id_solicitud', id)
+      .maybeSingle()
+    if (error) throw new ApiError(`Supabase fallback: ${error.message}`, 502)
+    if (!data) throw new ApiError('No encontrada', 404)
+    return { data: data as unknown as Solicitud }
+  }
+  try {
+    return await api.get<{ data: Solicitud }>(`/api/solicitudes/${id}`)
+  } catch (err) {
+    if (!esErrorRed(err)) throw err
+    invalidarModo()
+    if (await modoEsSupabase()) {
+      const { data, error } = await supabase
+        .from('solicitudes')
+        .select()
+        .eq('id_solicitud', id)
+        .maybeSingle()
+      if (error) throw new ApiError(`Supabase fallback: ${error.message}`, 502)
+      if (!data) throw new ApiError('No encontrada', 404)
+      return { data: data as unknown as Solicitud }
+    }
+    throw err
+  }
 }
 
 export function concentracionVecinos(id: number): Promise<{ data: SolicitudVecino[] }> {

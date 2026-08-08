@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
-import { consultarFolio, crearSolicitud as crearSolicitudServidor } from './servidor'
-import { esErrorRed } from './servidor'
+import { consultarFolio, crearSolicitud as crearSolicitudServidor, esErrorRed } from './servidor'
 import { ApiError } from './api'
+import { detectarModo, invalidarModo } from './backend'
 import type { Solicitud, SolicitudFormData } from '../types/solicitud'
 import {
   RANKING_PUNTOS_BASE,
@@ -104,6 +104,69 @@ export async function consultarSolicitud(
 // ---------------------------------------------------------------------------
 // Crear solicitud (multipart -> servidor, luego escribirCache)
 // ---------------------------------------------------------------------------
+async function crearSupabase(
+  data: SolicitudFormData,
+  pesoRankingOverride?: number,
+  tramoData?: {
+    distancia_m: number; ancho_calle_m: number
+    escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
+    puntos: { lat: number; lng: number }[]
+  }
+): Promise<{ data?: Solicitud; error?: string; advertencia?: string }> {
+  const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, calle, entre_calles, zona_zap, cobertura_agua, ...rest } = data
+
+  const lat = parseFloat(latitud)
+  const lng = parseFloat(longitud)
+
+  const calleFinal = calle || ''
+  const entreCallesFinal = entre_calles || ''
+  let calleToSave = calleFinal
+  let entreCallesToSave = entreCallesFinal
+  if (!calleFinal && !entreCallesFinal) {
+    const calleInfo = await geolocalizarCalle(lat, lng).catch(() => ({ calle: '', entreCalles: '' }))
+    calleToSave = calleInfo.calle
+    entreCallesToSave = calleInfo.entreCalles
+  }
+
+  const peso =
+    pesoRankingOverride ??
+    (archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE)
+
+  const { error } = await supabase.from('solicitudes').insert({
+    nombre_solicitante: rest.nombre_solicitante,
+    curp: rest.curp,
+    telefono: rest.telefono ?? null,
+    correo: rest.correo ?? null,
+    aviso_privacidad_aceptado: rest.aviso_privacidad_aceptado,
+    tipo_solicitud: rest.tipo_solicitud,
+    colonia: rest.colonia ?? '',
+    junta_auxiliar: rest.junta_auxiliar ?? '',
+    calle: calleToSave,
+    entre_calles: entreCallesToSave,
+    latitud: lat,
+    longitud: lng,
+    tramo_lat_ini: tramo_lat_ini ? parseFloat(tramo_lat_ini) : null,
+    tramo_lng_ini: tramo_lng_ini ? parseFloat(tramo_lng_ini) : null,
+    tramo_lat_fin: tramo_lat_fin ? parseFloat(tramo_lat_fin) : null,
+    tramo_lng_fin: tramo_lng_fin ? parseFloat(tramo_lng_fin) : null,
+    tramo_puntos: tramoData?.puntos ?? [],
+    descripcion: rest.descripcion ?? '',
+    zona_zap: zona_zap ?? false,
+    cobertura_agua: cobertura_agua ?? false,
+    escuelas_cercanas: tramoData?.escuelas_cercanas ?? [],
+    iglesias_cercanas: tramoData?.iglesias_cercanas ?? [],
+    transportes_cercanos: tramoData?.transportes_cercanos ?? [],
+    distancia_tramo_m: tramoData?.distancia_m ?? null,
+    ancho_calle_m: tramoData?.ancho_calle_m ?? null,
+    peso_ranking: peso,
+  }).select()
+
+  if (error) {
+    return { error: `No se pudo guardar en el respaldo: ${error.message}` }
+  }
+  return {}
+}
+
 export async function crearSolicitud(
   data: SolicitudFormData,
   pesoRankingOverride?: number,
@@ -176,6 +239,16 @@ export async function crearSolicitud(
         }
       }
       if (err.isNetwork) {
+        invalidarModo()
+        const modo = await detectarModo()
+        if (modo === 'supabase') {
+          const supa = await crearSupabase(data, pesoRankingOverride, tramoData)
+          if (supa.error) return supa
+          return {
+            error: 'El servidor principal no está disponible; tu solicitud se guardó en el respaldo.',
+            advertencia: 'Conexión a respaldo Supabase: podría tardar unos minutos en sincronizarse con el servidor.',
+          }
+        }
         return { error: 'Servidor no disponible. Verifica tu conexión e intenta de nuevo.' }
       }
       return { error: err.message.replace(/^API error \d+: /, '') }
