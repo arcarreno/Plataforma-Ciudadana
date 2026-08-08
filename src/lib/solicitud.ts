@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { consultarFolio, crearSolicitud as crearSolicitudServidor, esErrorRed } from './servidor'
 import { ApiError } from './api'
-import { detectarModo, invalidarModo } from './backend'
+import { invalidarModo } from './backend'
 import type { Solicitud, SolicitudFormData } from '../types/solicitud'
 import {
   RANKING_PUNTOS_BASE,
@@ -112,7 +112,7 @@ async function crearSupabase(
     escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
     puntos: { lat: number; lng: number }[]
   }
-): Promise<{ data?: Solicitud; error?: string; advertencia?: string }> {
+): Promise<{ data?: Solicitud; error?: string; advertencia?: string; respaldo?: boolean }> {
   const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, calle, entre_calles, zona_zap, cobertura_agua, ...rest } = data
 
   const lat = parseFloat(latitud)
@@ -132,7 +132,7 @@ async function crearSupabase(
     pesoRankingOverride ??
     (archivos.length > 0 ? RANKING_PUNTOS_CON_EVIDENCIA : RANKING_PUNTOS_BASE)
 
-  const { error } = await supabase.from('solicitudes').insert({
+  const { data: insertado, error } = await supabase.from('solicitudes').insert({
     nombre_solicitante: rest.nombre_solicitante,
     curp: rest.curp,
     telefono: rest.telefono ?? null,
@@ -164,7 +164,11 @@ async function crearSupabase(
   if (error) {
     return { error: `No se pudo guardar en el respaldo: ${error.message}` }
   }
-  return {}
+  const fila = (insertado as unknown as Solicitud[] | null)?.[0]
+  if (fila?.folio_unico) {
+    escribirCache(fila.folio_unico, fila)
+  }
+  return { data: fila, respaldo: true }
 }
 
 export async function crearSolicitud(
@@ -175,7 +179,7 @@ export async function crearSolicitud(
     escuelas_cercanas: string[]; iglesias_cercanas: string[]; transportes_cercanos: string[]
     puntos: { lat: number; lng: number }[]
   }
-): Promise<{ data?: Solicitud; error?: string; advertencia?: string }> {
+): Promise<{ data?: Solicitud; error?: string; advertencia?: string; respaldo?: boolean }> {
   const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, calle, entre_calles, zona_zap, cobertura_agua, ...rest } = data
 
   const lat = parseFloat(latitud)
@@ -240,16 +244,18 @@ export async function crearSolicitud(
       }
       if (err.isNetwork) {
         invalidarModo()
-        const modo = await detectarModo()
-        if (modo === 'supabase') {
-          const supa = await crearSupabase(data, pesoRankingOverride, tramoData)
-          if (supa.error) return supa
+        const supa = await crearSupabase(data, pesoRankingOverride, tramoData)
+        if (supa.error) {
           return {
-            error: 'El servidor principal no está disponible; tu solicitud se guardó en el respaldo.',
-            advertencia: 'Conexión a respaldo Supabase: podría tardar unos minutos en sincronizarse con el servidor.',
+            error:
+              'No pudimos guardar tu solicitud ni en el respaldo. Revisa tu conexión a internet y vuelve a intentarlo en 5 minutos.',
           }
         }
-        return { error: 'Servidor no disponible. Verifica tu conexión e intenta de nuevo.' }
+        return {
+          data: supa.data,
+          respaldo: true,
+          advertencia: 'El servidor principal no responde; tu solicitud se guardó en el respaldo y se sincronizará sola.',
+        }
       }
       return { error: err.message.replace(/^API error \d+: /, '') }
     }

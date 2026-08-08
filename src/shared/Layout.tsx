@@ -5,7 +5,6 @@ import { Toaster } from 'sileo'
 import 'sileo/styles.css'
 import type { FontSize, Contrast, VoiceType } from '../core/theme'
 import { useTalkBack } from '../hooks/useTalkBack'
-import { detectarModo, suscribirModo, modoEnCache } from '../lib/backend'
 import Header from './Header'
 import Footer from './Footer'
 import AccessibilityPanel from './AccessibilityPanel'
@@ -31,17 +30,10 @@ export default function Layout() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [hideBtn, setHideBtn] = useState(false)
   const [btnPos, setBtnPos] = useState<{ x: number; y: number } | null>(null)
-  const [modoRespaldo, setModoRespaldo] = useState<boolean>(() => modoEnCache() === 'supabase')
   const btnRef = useRef<HTMLButtonElement>(null)
   const dragRef = useRef({ isDragging: false, startX: 0, startY: 0, origX: 0, origY: 0 })
 
   useTalkBack(talkBackEnabled, voiceType)
-
-  useEffect(() => {
-    detectarModo().then((m) => setModoRespaldo(m === 'supabase'))
-    const unsub = suscribirModo((m) => setModoRespaldo(m === 'supabase'))
-    return unsub
-  }, [])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-font-size', fontSize)
@@ -57,16 +49,7 @@ export default function Layout() {
         navOpen={navOpen}
         onNavToggle={() => setNavOpen((p) => !p)}
       />
-      {modoRespaldo && (
-        <div
-          role="status"
-          className="border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm font-medium text-amber-900"
-        >
-          Modo de respaldo activo: el servidor principal no está disponible. Tu información se
-          guardará en la nube y se sincronizará automáticamente.
-        </div>
-      )}
-      <main className="mx-auto w-full max-w-[1400px] flex-1 overflow-x-hidden px-4 py-6 md:px-8 lg:px-12">
+            <main className="mx-auto w-full max-w-[1400px] flex-1 overflow-x-hidden px-4 py-6 md:px-8 lg:px-12">
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0 }}

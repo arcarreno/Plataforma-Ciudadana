@@ -15,6 +15,7 @@ interface Msg {
 interface AsistenteIAProps {
   esLleno: (campo: string) => boolean
   onAplicar: (data: Partial<IaLlenarResultado>) => string[]
+  onLimpiar?: (campo: string) => void
   onClose?: () => void
   onAbrirMapa?: () => void
   mapaConfirmado?: number
@@ -52,6 +53,21 @@ const LLENADO_A_CAMPO: Record<string, string> = {
   'descripción': 'descripcion',
 }
 
+const ETIQUETA_A_DATO: Record<string, keyof IaLlenarResultado> = {
+  'nombre': 'nombre_solicitante',
+  'apellido paterno': 'apellido_paterno',
+  'apellido materno': 'apellido_materno',
+  'nombre(s)': 'nombres',
+  'CURP': 'curp',
+  'teléfono': 'telefono',
+  'correo': 'correo',
+  'tipo de obra': 'tipo_solicitud',
+  'colonia': 'colonia',
+  'calle': 'calle',
+  'entre calles': 'entre_calles',
+  'descripción': 'descripcion',
+}
+
 function valorDeCampo(campo: string, texto: string): Partial<IaLlenarResultado> {
   const extra = extraerTodo(texto)
   const extrajo = extraerCampo(campo, texto)
@@ -71,7 +87,7 @@ function valorDeCampo(campo: string, texto: string): Partial<IaLlenarResultado> 
   }
 }
 
-export default function AsistenteIA({ esLleno, onAplicar, onClose, onAbrirMapa, mapaConfirmado }: AsistenteIAProps) {
+export default function AsistenteIA({ esLleno, onAplicar, onLimpiar, onClose, onAbrirMapa, mapaConfirmado }: AsistenteIAProps) {
   const completadosRef = useRef<Set<string>>(new Set())
   const mapaPendienteRef = useRef(false)
   const siguientePregunta = (): { campo: string; texto: string } | null => {
@@ -80,6 +96,9 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose, onAbrirMapa, 
     }
     return null
   }
+
+const preguntaActivaRef = useRef('')
+  const pendientesRef = useRef<{ campo: string; etiqueta: string; valor: string }[]>([])
 
   const [estadoInicial] = useState(() => {
     const primeras: Msg[] = [{ autor: 'ia', texto: SALUDO }]
@@ -100,6 +119,19 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose, onAbrirMapa, 
   const manualRef = useRef(false)
   const reintentosRef = useRef(0)
   const ultimoErrorRef = useRef('')
+
+  // --- Detección de respuesta sí/no con mucha tolerancia a slang/mexicanismos ---
+  const esSi = (t: string): boolean => {
+    const x = ' ' + t.toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, '') + ' '
+    return /(^|\s)(s[ií]|sip|sipi|sim[oó]n|sipo?|yes|claro|si claro|est[aá] bien|ok|oka|okay|de acuerdo|v[áa]le|correcto|perfecto|sale|si como no|siuu)/.test(x)
+  }
+  const esNo = (t: string): boolean => {
+    const x = ' ' + t.toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, '') + ' '
+    return /(^|\s)(no|noa|non|n[oó]po|nel|ni modo|negativo|nada|jam[aá]s|cambi|repite|otra vez|no es)/.test(x) || /\sno\s/.test(x)
+  }
+
+  const preguntaConfirmacion = (p: { campo: string; etiqueta: string; valor: string }): string =>
+    `Capturé "${p.valor}" como ${p.etiqueta.toLocaleLowerCase()}. ¿Es correcto? Responde sí o no.`
 
   useEffect(() => {
     listaRef.current?.scrollTo({ top: listaRef.current.scrollHeight, behavior: 'smooth' })
@@ -141,11 +173,18 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose, onAbrirMapa, 
     const sinEntre = !esLleno('entre_calles')
     const faltanDireccion = sinCalle || sinEntre
     const sig = siguientePregunta()
-    if (faltanDireccion) {
+if (faltanDireccion) {
       texto = 'Tu punto quedó marcado, pero no tengo los datos exactos de la calle. '
-      if (sinCalle && sinEntre) texto += 'Por favor, dime el nombre principal de la calle y las calles que la cruzan.'
-      else if (sinCalle) texto += 'Por favor, dime el nombre principal de la calle.'
-      else texto += 'Por favor, dime entre cuáles calles se ubica la obra.'
+      if (sinCalle && sinEntre) {
+        texto += 'Por favor, dime el nombre principal de la calle y las calles que la cruzan.'
+        preguntaActivaRef.current = 'calle'
+      } else if (sinCalle) {
+        texto += 'Por favor, dime el nombre principal de la calle.'
+        preguntaActivaRef.current = 'calle'
+      } else {
+        texto += 'Por favor, dime entre cuáles calles se ubica la obra.'
+        preguntaActivaRef.current = 'entre_calles'
+      }
     } else {
       texto = 'Perfecto, todos los datos se han extraído con éxito.'
       if (sig) texto += ` ${sig.texto}`
@@ -164,36 +203,103 @@ export default function AsistenteIA({ esLleno, onAplicar, onClose, onAbrirMapa, 
     if (t) enviar(t)
   }
 
-  const enviar = (texto = input.trim()) => {
-    if (!texto) return
-    setInput('')
-    textoRef.current = ''
-    setMensajes(m => [...m, { autor: 'user', texto }])
+  const hacerPregunta = (sig: { campo: string; texto: string }) => {
+    preguntaActivaRef.current = sig.campo
+    setMensajes(m => [...m, { autor: 'ia', texto: sig.texto }])
+  }
 
-    const campo = siguientePregunta()?.campo ?? ''
-    const data = valorDeCampo(campo, texto)
-    const llenados = onAplicar(data)
-    for (const c of llenados) {
-      const campoLlenado = LLENADO_A_CAMPO[c]
-      if (campoLlenado) completadosRef.current.add(campoLlenado)
-    }
+  const hacerPreguntaDeCampo = (campo: string) => {
+    const p = PREGUNTAS.find(x => x.campo === campo)
+    if (p) hacerPregunta({ campo: p.campo, texto: p.pregunta })
+  }
 
+  const continuar = () => {
     const sig = siguientePregunta()
-    if (llenados.length > 0) {
-      setMensajes(m => [...m, { autor: 'ia', texto: `¡Listo! Capturé: ${llenados.join(', ')}.` + (sig && sig.campo !== 'ubicacion' ? ` ${sig.texto}` : '') }])
-    } else if (sig && sig.campo !== 'ubicacion') {
-      setMensajes(m => [...m, { autor: 'ia', texto: `No pude capturar eso. ${sig.texto}` }])
-    }
-
     if (sig?.campo === 'ubicacion' && !mapaPendienteRef.current) {
+      preguntaActivaRef.current = 'ubicacion'
       mapaPendienteRef.current = true
       setMensajes(m => [...m, {
         autor: 'ia',
         texto: 'A continuación verás el mapa de la Heroica Puebla de Zaragoza. Marca en la pantalla el lugar donde deseas tu obra. Si estás en el lugar ideal, presiona el botón para obtener tu ubicación; si no, desplázate por el mapa y coloca el pin.',
       }])
       onAbrirMapa?.()
+      return
     }
-    if (!sig) setTerminado(true)
+    if (sig) {
+      hacerPregunta(sig)
+      return
+    }
+    setTerminado(true)
+  }
+
+  const enviar = (texto = input.trim()) => {
+    if (!texto) return
+    setInput('')
+    textoRef.current = ''
+    setMensajes(m => [...m, { autor: 'user', texto }])
+
+    // Si hay campos capturados esperando confirmación, interpreta la respuesta
+    const pendiente = pendientesRef.current.length ? pendientesRef.current[0] : null
+    if (pendiente) {
+      if (esNo(texto)) {
+        onLimpiar?.(pendiente.campo)
+        completadosRef.current.delete(pendiente.campo)
+        pendientesRef.current = []
+        if (pendiente.campo) {
+          hacerPreguntaDeCampo(pendiente.campo)
+        } else {
+          continuar()
+        }
+        return
+      }
+      if (esSi(texto)) {
+        pendientesRef.current.shift()
+        if (pendiente.campo) completadosRef.current.add(pendiente.campo)
+        const mas = pendientesRef.current.length ? pendientesRef.current[0] : null
+        if (mas) {
+          setMensajes(m => [...m, { autor: 'ia', texto: preguntaConfirmacion(mas) }])
+          return
+        }
+        continuar()
+        return
+      }
+      setMensajes(m => [...m, { autor: 'ia', texto: `No te entendí. ${preguntaConfirmacion(pendiente)}` }])
+      return
+    }
+
+    // Campo objetivo = el que se está preguntando en pantalla (no saltar al "siguiente")
+    const campo = preguntaActivaRef.current || siguientePregunta()?.campo || ''
+    const data = valorDeCampo(campo, texto)
+    const llenados = onAplicar(data)
+    const nuevosPendientes: { campo: string; etiqueta: string; valor: string }[] = []
+    for (const c of llenados) {
+      const campoLlenado = LLENADO_A_CAMPO[c]
+      if (!campoLlenado) continue
+      const datoKey = ETIQUETA_A_DATO[c]
+      const valor = datoKey ? String(data?.[datoKey] ?? '') : ''
+      nuevosPendientes.push({ campo: campoLlenado, etiqueta: c, valor })
+    }
+    if (nuevosPendientes.length > 0) {
+      pendientesRef.current = nuevosPendientes
+      setMensajes(m => [...m, { autor: 'ia', texto: preguntaConfirmacion(nuevosPendientes[0]) }])
+      return
+    }
+
+    if (llenados.length === 0) {
+      if (preguntaActivaRef.current) {
+        const activa = PREGUNTAS.find(p => p.campo === preguntaActivaRef.current)
+        if (activa) {
+          setMensajes(m => [...m, { autor: 'ia', texto: `No pude capturar eso. ${activa.pregunta}` }])
+          return
+        }
+      }
+      const sig = siguientePregunta()
+      if (sig && sig.campo !== 'ubicacion') {
+        setMensajes(m => [...m, { autor: 'ia', texto: `No pude capturar eso. ${sig.texto}` }])
+        return
+      }
+    }
+    continuar()
   }
 
   const arrancar = (reintento: boolean) => {

@@ -286,6 +286,27 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     return [...new Set(aplicados)]
   }
 
+  const limpiarCampoIA = (campo: string) => {
+    switch (campo) {
+      case 'apellido_paterno': setApellidoPaterno(''); break
+      case 'apellido_materno': setApellidoMaterno(''); break
+      case 'nombres': setNombres(''); break
+      case 'curp': set('curp', ''); break
+      case 'telefono': set('telefono', ''); break
+      case 'correo': set('correo', ''); break
+      case 'tipo': set('tipo_solicitud', ''); break
+      case 'ubicacion':
+        set('colonia', '')
+        set('calle', '')
+        set('entre_calles', '')
+        break
+      case 'calle': set('calle', ''); break
+      case 'entre_calles': set('entre_calles', ''); break
+      case 'descripcion': set('descripcion', ''); break
+      default: break
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const nombreCompleto = omitirCurp
@@ -349,7 +370,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
       },
     })
 
-    let res: { data?: import('../types/solicitud').Solicitud; error?: string; advertencia?: string }
+    let res: { data?: import('../types/solicitud').Solicitud; error?: string; advertencia?: string; respaldo?: boolean }
     try {
       res = await crearSolicitud(
         {
@@ -372,12 +393,23 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     setShowLottie(false)
 
     if (res.error) {
+      sileo.error({
+        title: 'No se pudo registrar',
+        description: res.error,
+        fill: '#ffffff',
+        duration: 6000,
+        autopilot: true,
+        styles: {
+          title: 'text-guinda text-sm font-semibold text-center',
+          description: 'text-xs text-center text-gray-700',
+        },
+      })
       setResultado({ error: res.error })
       setSubmittedOnce(false)
     } else {
       sileo.success({
         title: 'Solicitud recibida',
-        description: `Folio ${res.data?.folio_unico} — pronto recibirás tu acuse en tu correo.`,
+        description: `Folio ${res.data?.folio_unico} — guarda este folio para dar seguimiento.`,
         fill: '#ffffff',
         duration: 6000,
         autopilot: true,
@@ -500,13 +532,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
                 {resultado.folio}
               </p>
               <p className="text-xs text-gray-institutional/50">
-                Pronto recibirás tu acuse en tu correo electrónico.
+                Guarda este folio para dar seguimiento a tu solicitud.
               </p>
-              {resultado.advertencia && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-                  {resultado.advertencia}
-                </div>
-              )}
               <div className="flex w-full flex-col gap-2">
                 <Button
                   variant="secondary"
@@ -553,6 +580,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
             <AsistenteIA
               esLleno={esLleno}
               onAplicar={aplicarIA}
+              onLimpiar={limpiarCampoIA}
               onClose={() => setMostrarAsistente(false)}
               onAbrirMapa={() => { setShowMapaCombinado(true); setMapKey(k => k + 1) }}
               mapaConfirmado={conteoMapa}

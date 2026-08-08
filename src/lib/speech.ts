@@ -44,30 +44,56 @@ export function precargarVoces(): void {
   }
   synth.addEventListener('voiceschanged', escuchar)
   escuchar()
+  // Fuerza la carga en navegadores que no disparan el evento solos
+  if (!vocesCargadas && typeof synth.getVoices !== 'undefined') {
+    void synth.getVoices()
+    setTimeout(escuchar, 250)
+  }
+}
+
+let vocesPrecargadas = false
+
+function vozEsperada(type: VoiceType): SpeechSynthesisVoice | null {
+  const v = findVoice(type)
+  if (v) return v
+  return findVoice('female') ?? null
+}
+
+function emitir(texto: string, type: VoiceType): void {
+  const synth = window.speechSynthesis
+  if (!synth) return
+  synth.cancel()
+  const utterance = new SpeechSynthesisUtterance(texto)
+  utterance.lang = 'es-MX'
+  utterance.rate = 0.95
+  utterance.pitch = 1
+  const voice = vozEsperada(type)
+  if (voice) utterance.voice = voice
+  synth.resume()
+  synth.speak(utterance)
 }
 
 export function hablar(texto: string, type: VoiceType = 'female'): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-  const synth = window.speechSynthesis
-  const decir = () => {
-    synth.cancel()
-    synth.resume()
-    const utterance = new SpeechSynthesisUtterance(texto)
-    utterance.lang = 'es-MX'
-    utterance.rate = 0.95
-    utterance.pitch = 1
-    const voice = findVoice(type)
-    if (voice) utterance.voice = voice
-    if (!vocesCargadas && (synth.getVoices() ?? []).length === 0) {
-      synth.addEventListener('voiceschanged', () => {
-        const v = findVoice(type)
-        if (v) utterance.voice = v
-        synth.speak(utterance)
-      }, { once: true })
-    }
-    synth.speak(utterance)
+  if (!vocesPrecargadas) {
+    vocesPrecargadas = true
+    precargarVoces()
   }
-  decir()
+  const synth = window.speechSynthesis
+  if (vocesCargadas || (synth.getVoices?.() ?? []).length > 0) {
+    emitir(texto, type)
+    return
+  }
+  // Voces aún no disponibles: hablar cuando carguen (una sola vez)
+  const retry = () => {
+    if ((synth.getVoices?.() ?? []).length === 0) return
+    emitir(texto, type)
+  }
+  synth.addEventListener('voiceschanged', retry, { once: true })
+  setTimeout(() => {
+    synth.removeEventListener('voiceschanged', retry)
+    if (!synth.speaking) emitir(texto, type)
+  }, 1000)
 }
 
 export interface ResultadoVoz {
