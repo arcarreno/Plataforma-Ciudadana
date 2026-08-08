@@ -162,6 +162,9 @@ async function crearSupabase(
   }).select()
 
   if (error) {
+    if (/l[ií]mite de 3 solicitudes/i.test(error.message ?? '')) {
+      return { error: 'Has alcanzado el límite de 3 solicitudes mensuales para este CURP.' }
+    }
     return { error: `No se pudo guardar en el respaldo: ${error.message}` }
   }
   const fila = (insertado as unknown as Solicitud[] | null)?.[0]
