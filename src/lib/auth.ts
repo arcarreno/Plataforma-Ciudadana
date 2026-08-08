@@ -5,6 +5,8 @@ import {
   eliminarUsuarioServidor,
 } from './servidor'
 import { ApiError } from './api'
+import { supabase } from './supabase'
+import { detectarModo } from './backend'
 import type { Usuario } from '../types/auth'
 
 const STORAGE_KEY = 'semovinfra_auth'
@@ -57,10 +59,47 @@ export async function login(
     guardarStorage(user, row.token)
     return { data: user }
   } catch (err) {
+    const errorRed =
+      err instanceof ApiError && (err.isNetwork || err.status >= 500)
+    if (errorRed) return loginFallbackSupabase(username, password)
     if (err instanceof ApiError && err.status === 401) {
       return { error: 'Usuario o contraseña incorrectos' }
     }
     return { error: errorMsg(err) }
+  }
+}
+
+// Login de respaldo: si el servidor local no responde, se autentica contra la
+// tabla usuarios de Supabase (funcion login_operador, SECURITY DEFINER).
+async function loginFallbackSupabase(
+  username: string,
+  password: string
+): Promise<{ data?: Usuario; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc('login_operador', {
+      p_username: username,
+      p_password: password,
+    })
+    if (error) {
+      // Si ni siquiera el modo esta definido, forzar deteccion
+      try { await detectarModo(true) } catch { /* best effort */ }
+      return { error: 'Error de conexión. Intenta de nuevo.' }
+    }
+    const r = data as { ok: boolean; id?: number; username?: string; rol?: Usuario['rol']; nombres?: string; apellidos?: string }
+    if (!r?.ok) {
+      return { error: 'Usuario o contraseña incorrectos' }
+    }
+    const user: Usuario = {
+      id: Number(r.id),
+      username: r.username ?? username,
+      rol: r.rol ?? 'revisor',
+      nombres: r.nombres ?? '',
+      apellidos: r.apellidos ?? '',
+    }
+    guardarStorage(user, `respaldo-${Date.now()}`)
+    return { data: user }
+  } catch {
+    return { error: 'Ocurrió un error inesperado' }
   }
 }
 
@@ -107,6 +146,17 @@ export async function listarUsuarios(): Promise<{ data?: Usuario[]; error?: stri
     const res = await listarUsuariosServidor(token)
     return { data: res.data }
   } catch (err) {
+    const errorRed = err instanceof ApiError && (err.isNetwork || err.status >= 500)
+    if (errorRed) {
+      try {
+        const { data, error } = await supabase.rpc('listar_operadores')
+        if (error) return { error: errorMsg(err) }
+        const usuarios = (data as unknown as Usuario[] | null) ?? []
+        return { data: usuarios }
+      } catch {
+        return { error: errorMsg(err) }
+      }
+    }
     return { error: errorMsg(err) }
   }
 }
