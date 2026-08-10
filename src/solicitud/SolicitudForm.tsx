@@ -70,6 +70,58 @@ function validarForm(data: SolicitudFormData, omitirCurp?: boolean, nombrePiezas
   return errors
 }
 
+const LIMITE_ARCHIVOS = 3
+const MAX_IMAGEN_BYTES = 10 * 1024 * 1024
+const MAX_PDF_BYTES = 1 * 1024 * 1024
+const MAX_IMAGEN_COMPRIMIDA_BYTES = 300 * 1024
+const ANCHO_MAX_PX = 1600
+
+async function comprimirImagen(file: File, calidad: number): Promise<File> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = new Image()
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('imagen inválida'))
+      img.src = url
+    })
+    let { width, height } = img
+    if (width > ANCHO_MAX_PX) {
+      height = Math.max(1, Math.round(height * (ANCHO_MAX_PX / width)))
+      width = ANCHO_MAX_PX
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+    ctx.drawImage(img, 0, 0, width, height)
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', calidad)
+    )
+    if (!blob) return file
+    const nombre = file.name.replace(/\.[^/.]+$/, '') + '.jpg'
+    return new File([blob], nombre, { type: 'image/jpeg' })
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+async function comprimirImagenSiNecesario(file: File): Promise<File> {
+  if (file.size <= MAX_IMAGEN_COMPRIMIDA_BYTES) return file
+  let resultado = file
+  for (const calidad of [0.8, 0.6, 0.45, 0.3]) {
+    resultado = await comprimirImagen(file, calidad)
+    if (resultado.size <= MAX_IMAGEN_COMPRIMIDA_BYTES) break
+  }
+  return resultado
+}
+
+function formatoBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${Math.round(bytes / 1024)} KB`
+}
+
 interface SolicitudFormProps {
   omitirCurp?: boolean
   nombrePrefilled?: string
@@ -127,6 +179,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
   const [ready, setReady] = useState(false)
   const initialOffsetRef = useRef(true)
   const [fileErrors, setFileErrors] = useState<string[]>([])
+  const [archivosInfo, setArchivosInfo] = useState<{ archivo: File; originalBytes: number }[]>([])
   const [esDesktop, setEsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
   const [mostrarAsistente, setMostrarAsistente] = useState(() => iniciarIA === true)
 
@@ -446,21 +499,46 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
         archivos: [],
       })
       setFileErrors([])
+      setArchivosInfo([])
     }
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
     const valid: File[] = []
+    const info: { archivo: File; originalBytes: number }[] = []
     const errors: string[] = []
     for (const f of selected) {
-      if (f.size > 500 * 1024) {
-        errors.push(`"${f.name}" excede 500 KB`)
-      } else {
+      if (valid.length >= LIMITE_ARCHIVOS) {
+        errors.push('Máximo 3 archivos de evidencia.')
+        break
+      }
+      const esImagen = f.type.startsWith('image/')
+      const esPdf = f.type === 'application/pdf'
+      if (esImagen) {
+        if (f.size > MAX_IMAGEN_BYTES) {
+          errors.push(`"${f.name}" excede 10 MB.`)
+          continue
+        }
+        const comprimido = await comprimirImagenSiNecesario(f).catch(() => f)
+        valid.push(comprimido)
+        info.push({
+          archivo: comprimido,
+          originalBytes: comprimido.size < f.size ? f.size : 0,
+        })
+      } else if (esPdf) {
+        if (f.size > MAX_PDF_BYTES) {
+          errors.push(`"${f.name}" excede 1 MB.`)
+          continue
+        }
         valid.push(f)
+        info.push({ archivo: f, originalBytes: 0 })
+      } else {
+        errors.push(`"${f.name}" debe ser una imagen o un PDF.`)
       }
     }
     set('archivos', valid)
+    setArchivosInfo(info)
     setFileErrors(errors)
   }
 
@@ -826,7 +904,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
           <Card title="Evidencia (opcional)">
             <div className="flex flex-col gap-3">
               <p className="text-xs text-gray-institutional/60">
-                Sube fotos o un PDF como evidencia. Máximo 500 KB por archivo. Las
+                Sube hasta 3 fotos o PDFs como evidencia. Fotos de hasta 10 MB
+                (se comprimen automáticamente) o PDFs de hasta 1 MB. Las
                 solicitudes con evidencia reciben mayor prioridad.
               </p>
               <input
@@ -850,8 +929,15 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
               </Button>
               {form.archivos.length > 0 && (
                 <ul className="text-xs text-gray-institutional/60">
-                  {form.archivos.map((f, i) => (
-                    <li key={i}>{f.name} <span className="text-gray-institutional/40">({(f.size / 1024).toFixed(0)} KB)</span></li>
+                  {archivosInfo.map(({ archivo, originalBytes }, i) => (
+                    <li key={i} className="truncate">
+                      <span className="font-medium text-gray-institutional/80">{archivo.name}</span>{' '}
+                      <span className="text-gray-institutional/40">
+                        {originalBytes > 0
+                          ? `(${formatoBytes(originalBytes)} → ${formatoBytes(archivo.size)})`
+                          : `(${formatoBytes(archivo.size)})`}
+                      </span>
+                    </li>
                   ))}
                 </ul>
               )}

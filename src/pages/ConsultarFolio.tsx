@@ -71,7 +71,7 @@ export default function ConsultarCurp() {
           <Input
             label="CURP"
             value={curp}
-            onChange={(e) => setCurp(e.target.value)}
+            onChange={(e) => setCurp(e.target.value.toUpperCase())}
             placeholder="18 caracteres en mayúsculas"
             maxLength={CURP_LEN}
           />
