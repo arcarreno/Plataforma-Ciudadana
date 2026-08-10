@@ -128,10 +128,10 @@ export default function Inicio() {
               Nueva Solicitud
             </Button>
           </Link>
-          <Link to="/consultar-folio">
+          <Link to={esCargo ? '/consultar' : '/consultar-curp'}>
             <Button variant="secondary" size="lg">
               <FileText className="mr-2 h-5 w-5" />
-              Consultar Folio
+              {esCargo ? 'Consultar' : 'Consultar por CURP'}
             </Button>
           </Link>
         </div>

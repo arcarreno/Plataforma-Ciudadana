@@ -538,7 +538,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
                 <Button
                   variant="secondary"
                   onClick={() =>
-                    navigate(`/consultar-folio?folio=${encodeURIComponent(resultado.folio!)}`)
+                    navigate(`${omitirCurp ? '/consultar' : '/consultar-curp'}?folio=${encodeURIComponent(resultado.folio!)}`)
                   }
                 >
                   <Eye className="mr-2 h-4 w-4" />

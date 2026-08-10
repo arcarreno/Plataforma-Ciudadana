@@ -17,6 +17,11 @@ export const ESTATUS_OPCIONES = [
   'Concluido no favorable',
 ] as const
 
+export const ESTATUS_ACTIVOS = [
+  'Revision',
+  'Dirección General de Planeación y Proyectos',
+] as const
+
 export type EstatusFase = typeof ESTATUS_OPCIONES[number]
 
 export interface TipoObra {

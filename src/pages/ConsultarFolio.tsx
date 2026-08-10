@@ -4,114 +4,110 @@ import { Search } from 'lucide-react'
 import Button from '../shared/Button'
 import Card from '../shared/Card'
 import { Input } from '../shared/Input'
-import { consultarSolicitud } from '../lib/solicitud'
+import TarjetaSolicitud from '../solicitud/TarjetaSolicitud'
+import { consultarSolicitud, buscarPorCurp, normalizarCurp } from '../lib/solicitud'
 import type { Solicitud } from '../types/solicitud'
 
-export default function ConsultarFolio() {
-  const [folio, setFolio] = useState('')
+const CURP_LEN = 18
+
+export default function ConsultarCurp() {
+  const [curp, setCurp] = useState('')
   const [loading, setLoading] = useState(false)
-  const [resultado, setResultado] = useState<{
-    data?: Solicitud
-    error?: string
-  } | null>(null)
+  const [resultados, setResultados] = useState<Solicitud[] | undefined>(undefined)
+  const [resultadoFolio, setResultadoFolio] = useState<Solicitud | undefined>(undefined)
+  const [error, setError] = useState('')
   const [searchParams] = useSearchParams()
   const folioParam = searchParams.get('folio')
 
-  const consultar = async (f: string) => {
+  const consultarCurp = async (curpRaw: string) => {
+    const curpNorm = normalizarCurp(curpRaw)
+    if (curpNorm.length !== CURP_LEN) {
+      setError('La CURP debe tener 18 caracteres.')
+      setResultados(undefined)
+      return
+    }
     setLoading(true)
-    setResultado(null)
-    const res = await consultarSolicitud(f)
-    setResultado(res)
+    setError('')
+    setResultados(undefined)
+    try {
+      const res = await buscarPorCurp(curpNorm)
+      setResultados(res.data)
+    } catch {
+      setError('Ocurrió un error al consultar. Intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const consultarFolio = async (folioRaw: string) => {
+    setLoading(true)
+    setError('')
+    setResultadoFolio(undefined)
+    const res = await consultarSolicitud(folioRaw)
+    if (res.data) {
+      setResultadoFolio(res.data)
+    } else {
+      setError(res.error ?? 'No se encontró la solicitud.')
+    }
     setLoading(false)
   }
 
   useEffect(() => {
     if (!folioParam) return
-    setFolio(folioParam)
-    consultar(folioParam)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    consultarFolio(folioParam)
   }, [folioParam])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!folio.trim()) return
-    consultar(folio.trim())
+    if (!curp.trim()) return
+    setResultadoFolio(undefined)
+    await consultarCurp(curp.trim())
   }
 
   return (
     <div className="mx-auto max-w-lg py-4">
-      <Card title="Consultar Folio">
+      <Card title="Consultar por CURP">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input
-            label="Número de folio"
-            value={folio}
-            onChange={(e) => setFolio(e.target.value)}
-            placeholder="ST-000001"
+            label="CURP"
+            value={curp}
+            onChange={(e) => setCurp(e.target.value)}
+            placeholder="18 caracteres en mayúsculas"
+            maxLength={CURP_LEN}
           />
-          <Button type="submit" disabled={loading || !folio.trim()}>
+          <Button type="submit" disabled={loading || !curp.trim()}>
             <Search className="mr-2 h-4 w-4" />
             {loading ? 'Buscando...' : 'Buscar'}
           </Button>
         </form>
 
-        {resultado?.error && (
+        {error && (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {resultado.error}
+            {error}
           </div>
         )}
 
-        {resultado?.data && (
-          <div className="mt-4 flex flex-col gap-3 rounded-xl bg-alabaster/50 p-4 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-guinda">Folio</span>
-              <span className="font-bold text-guinda">
-                {resultado.data.folio_unico}
-              </span>
-            </div>
-            <div className="h-px bg-alabaster-dark" />
-            <div className="flex justify-between">
-              <span className="text-gray-institutional/60">Solicitante</span>
-              <span className="text-gray-institutional">
-                {resultado.data.nombre_solicitante}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-institutional/60">Tipo de obra</span>
-              <span className="text-gray-institutional">
-                {resultado.data.tipo_solicitud}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-institutional/60">Colonia</span>
-              <span className="text-gray-institutional">
-                {resultado.data.colonia}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-institutional/60">Estatus</span>
-              <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${
-                resultado.data.estatus_fase === 'Concluido favorable'
-                  ? 'bg-green-100 text-green-700'
-                  : resultado.data.estatus_fase === 'Concluido no favorable'
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-guinda/10 text-guinda'
-              }`}>
-                {resultado.data.estatus_fase}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-institutional/60">Fecha</span>
-              <span className="text-gray-institutional">
-                {new Date(resultado.data.fecha_creacion ?? '').toLocaleDateString(
-                  'es-MX',
-                  {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  }
-                )}
-              </span>
-            </div>
+        {resultadoFolio && (
+          <div className="mt-4 flex flex-col gap-3">
+            <TarjetaSolicitud solicitud={resultadoFolio} />
+          </div>
+        )}
+
+        {resultados && resultados.length === 0 && !error && (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-alabaster/50 px-4 py-3 text-sm text-gray-institutional">
+            No encontramos solicitudes con esa CURP.
+          </div>
+        )}
+
+        {resultados && resultados.length > 0 && !error && (
+          <div className="mt-4 flex flex-col gap-3">
+            <p className="text-sm font-medium text-gray-institutional">
+              Se encontraron {resultados.length}{' '}
+              {resultados.length === 1 ? 'solicitud' : 'solicitudes'}
+            </p>
+            {resultados.map((s) => (
+              <TarjetaSolicitud key={s.id_solicitud} solicitud={s} />
+            ))}
           </div>
         )}
       </Card>

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { consultarFolio, crearSolicitud as crearSolicitudServidor, esErrorRed } from './servidor'
+import { consultarFolio, crearSolicitud as crearSolicitudServidor, listarSolicitudes, esErrorRed } from './servidor'
 import { ApiError } from './api'
 import { invalidarModo } from './backend'
 import type { Solicitud, SolicitudFormData } from '../types/solicitud'
@@ -13,6 +13,14 @@ const CACHE_KEY = 'semovinfra_folio_cache'
 
 export function normalizarFolio(folio: string): string {
   return folio.trim().toUpperCase()
+}
+
+export function normalizarCurp(curp: string): string {
+  return curp.replace(/\s+/g, '').toUpperCase()
+}
+
+export function normalizarNombre(nombre: string): string {
+  return nombre.replace(/\s+/g, ' ').trim().toUpperCase()
 }
 
 function cacheIgual(a: Solicitud, b: Solicitud): boolean {
@@ -99,6 +107,36 @@ export async function consultarSolicitud(
         : 'Ocurrió un error al consultar el folio. Intenta de nuevo.',
     }
   }
+}
+
+export async function buscarPorCurp(
+  curpRaw: string
+): Promise<{ data: Solicitud[] }> {
+  const curp = normalizarCurp(curpRaw)
+  const { data } = await listarSolicitudes({ q: curp, pageSize: 200 })
+  const matches = (data ?? []).filter(
+    s => normalizarCurp(s.curp ?? '') === curp
+  )
+  matches.sort((a, b) =>
+    String(b.fecha_creacion ?? '').localeCompare(String(a.fecha_creacion ?? ''))
+  )
+  return { data: matches }
+}
+
+export async function listarSolicitudesPorNombre(
+  nombreRaw: string
+): Promise<{ data: Solicitud[] }> {
+  const nombre = normalizarNombre(nombreRaw)
+  const { data } = await listarSolicitudes({ q: nombre, pageSize: 200 })
+  const matches = (data ?? []).filter(
+    s =>
+      normalizarNombre(s.nombre_solicitante ?? '') === nombre &&
+      normalizarCurp(s.curp ?? '') === 'SIN CURP'
+  )
+  matches.sort((a, b) =>
+    String(b.fecha_creacion ?? '').localeCompare(String(a.fecha_creacion ?? ''))
+  )
+  return { data: matches }
 }
 
 // ---------------------------------------------------------------------------

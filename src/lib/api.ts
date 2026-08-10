@@ -27,8 +27,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...options?.headers },
       ...options,
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...options?.headers },
     })
   } catch {
     throw new ApiError('No se pudo conectar con el servidor', 0, true)

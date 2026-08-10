@@ -9,7 +9,6 @@ interface NavigationPanelProps {
 const navLinks = [
   { to: '/', label: 'Inicio' },
   { to: '/nueva-solicitud', label: 'Nueva Solicitud' },
-  { to: '/consultar-folio', label: 'Consultar Folio' },
 ]
 
 export default function NavigationPanel({ open, onClose }: NavigationPanelProps) {
@@ -91,6 +90,18 @@ export default function NavigationPanel({ open, onClose }: NavigationPanelProps)
               </Link>
             )
           })}
+
+          <Link
+            to={user ? '/consultar' : '/consultar-curp'}
+            onClick={onClose}
+            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+              location.pathname === (user ? '/consultar' : '/consultar-curp')
+                ? 'bg-guinda text-white shadow-button'
+                : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
+            }`}
+          >
+            {user ? 'Consultar' : 'Consultar por CURP'}
+          </Link>
 
           <div className="mt-auto border-t border-alabaster-dark/30 pt-4">
             <p className="px-4 text-xs text-gray-institutional/40">

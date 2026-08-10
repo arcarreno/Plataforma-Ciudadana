@@ -5,7 +5,7 @@ import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, 
 import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud } from '../lib/servidor'
 import { urlEvidencia } from '../lib/api'
 import type { Solicitud } from '../types/solicitud'
-import { ESTATUS_OPCIONES, CATALOGO_TIPOS_OBRA } from '../core/constants'
+import { ESTATUS_ACTIVOS, CATALOGO_TIPOS_OBRA } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
 import { esCargoPublico } from '../types/auth'
 import Card from '../shared/Card'
@@ -534,7 +534,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                           onChange={e => onEstatusChange(e.target.value as EstatusFase)}
                           className="max-w-[200px] truncate rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
                         >
-                          {ESTATUS_OPCIONES.map(e => (
+                          {ESTATUS_ACTIVOS.map(e => (
                             <option key={e} value={e} className="truncate">{e}</option>
                           ))}
                         </select>

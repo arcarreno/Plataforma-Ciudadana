@@ -14,7 +14,6 @@ interface HeaderProps {
 const navLinks = [
   { to: '/', label: 'Inicio' },
   { to: '/nueva-solicitud', label: 'Nueva Solicitud' },
-  { to: '/consultar-folio', label: 'Consultar Folio' },
 ]
 
 export default function Header({
@@ -138,6 +137,17 @@ export default function Header({
                   </Link>
                 )
               })}
+              <Link
+                to={user ? '/consultar' : '/consultar-curp'}
+                data-active={isActive(user ? '/consultar' : '/consultar-curp')}
+                className={`relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                  isActive(user ? '/consultar' : '/consultar-curp')
+                    ? 'text-white'
+                    : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
+                }`}
+              >
+                {user ? 'Consultar' : 'Consultar por CURP'}
+              </Link>
             </nav>
 
 

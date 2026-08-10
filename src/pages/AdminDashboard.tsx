@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { listarSolicitudes, actualizarEstatus, eliminarSolicitud } from '../lib/servidor'
 import type { Solicitud } from '../types/solicitud'
-import { ESTATUS_OPCIONES } from '../core/constants'
+import { ESTATUS_ACTIVOS } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
 import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users } from 'lucide-react'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
@@ -184,8 +184,7 @@ export default function AdminDashboard() {
                 className="min-w-0 flex-1 truncate bg-transparent text-sm text-gray-institutional [outline:0] sm:max-w-[180px]"
               >
                 <option value="">Todos los estatus</option>
-                <option value="Planeacion - Evaluacion">Planeación - Evaluación</option>
-                {ESTATUS_OPCIONES.map(e => (
+                {ESTATUS_ACTIVOS.map(e => (
                   <option key={e} value={e} className="truncate">{e}</option>
                 ))}
               </select>

@@ -6,6 +6,7 @@ import ModalPrecarga from './shared/ModalPrecarga'
 import Inicio from './pages/Inicio'
 import NuevaSolicitud from './pages/NuevaSolicitud'
 import ConsultarFolio from './pages/ConsultarFolio'
+import Consultar from './pages/Consultar'
 import AdminDashboard from './pages/AdminDashboard'
 import GestionUsuarios from './pages/GestionUsuarios'
 
@@ -19,7 +20,8 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<Inicio />} />
             <Route path="/nueva-solicitud" element={<NuevaSolicitud />} />
-            <Route path="/consultar-folio" element={<ConsultarFolio />} />
+            <Route path="/consultar-curp" element={<ConsultarFolio />} />
+            <Route path="/consultar" element={<Consultar />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/usuarios" element={<GestionUsuarios />} />
             <Route path="/admin/mapas" element={
