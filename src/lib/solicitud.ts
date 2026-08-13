@@ -131,7 +131,7 @@ export async function listarSolicitudesPorNombre(
   const matches = (data ?? []).filter(
     s =>
       normalizarNombre(s.nombre_solicitante ?? '') === nombre &&
-      normalizarCurp(s.curp ?? '') === 'SIN CURP'
+      normalizarCurp(s.curp ?? '') === 'SINCURP'
   )
   matches.sort((a, b) =>
     String(b.fecha_creacion ?? '').localeCompare(String(a.fecha_creacion ?? ''))
