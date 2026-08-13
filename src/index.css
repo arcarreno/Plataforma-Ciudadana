@@ -68,6 +68,12 @@ html[data-contrast="dark"] {
 
   /* Map the default white token to dark surface so bg-white adapts */
   --color-white: #1a1a1e;
+
+  /* Mosaico ripple composable invert (applied alongside the inline ripple filter) */
+  --mosaico-invert: invert(1);
+}
+:root {
+  --mosaico-invert: invert(0);
 }
 html[data-contrast="dark"] body {
   background-color: var(--color-alabaster);
