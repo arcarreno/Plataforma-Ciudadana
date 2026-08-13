@@ -78,3 +78,12 @@ export function urlEvidencia(ruta: string): string {
   if (!folio || !archivo) return ruta
   return `${API_URL}/api/evidencias/${encodeURIComponent(folio)}/${encodeURIComponent(archivo)}`
 }
+
+export function urlFotoVisita(ruta: string): string {
+  // rutas locales: "visitaId/archivo" (sin prefijo visitas_fotos/)
+  const limpia = ruta.replace(/^visitas_fotos\//, '')
+  const [visitaId, ...resto] = limpia.split('/')
+  const archivo = resto.join('/')
+  if (!visitaId || !archivo) return ruta
+  return `${API_URL}/api/visitas/fotos/${encodeURIComponent(visitaId)}/${encodeURIComponent(archivo)}`
+}

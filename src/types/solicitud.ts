@@ -39,6 +39,13 @@ export interface Solicitud {
   peso_ranking?: number
   estatus_fase?: EstatusFase
   fecha_creacion?: string
+
+  visita_id?: number
+  visita_estado?: string
+  visita_fotos?: string[]
+  visita_comentarios?: string | null
+  visita_usuario_nombres?: string
+  visita_usuario_apellidos?: string
 }
 
 export interface SolicitudFormData {
