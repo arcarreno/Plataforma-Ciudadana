@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { solicitudesMapa } from '../lib/servidor'
 import type { Solicitud } from '../types/solicitud'
 import Card from '../shared/Card'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts'
+import MonobarChart from '../shared/MonobarChart'
 import { MapPin, TrendingUp, TrendingDown, Layers, Building2, Maximize2, Minimize2, Globe, Map, Eye, EyeOff } from 'lucide-react'
 import { cargarCapas } from '../solicitud/detectar-ubicacion'
 import type { CapasGeoJSON } from '../solicitud/detectar-ubicacion'
@@ -39,8 +39,6 @@ const ZONA_ZAP_STYLE = {
   fillColor: '#b8860b',
   fillOpacity: 0.06,
 }
-
-const CHART_COLORS = ['#7d2447', '#a3325f', '#c44d78', '#41504D', '#DBC6B3', '#636569', '#5c1a34', '#2d8f6f', '#e07b39', '#3b82f6']
 
 function HeatmapLayer({ puntos }: { puntos: { latitud: number; longitud: number }[] }) {
   const map = useMap()
@@ -81,17 +79,6 @@ function agruparPor(arr: string[]): { name: string; value: number }[] {
     .sort((a, b) => b.value - a.value)
 }
 
-function CustomTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-lg">
-      <p className="text-xs font-semibold text-gray-institutional">{label}</p>
-      <p className="mt-1 text-lg font-bold text-guinda">{payload[0].value}</p>
-      <p className="text-[10px] text-gray-institutional/50">solicitud(es)</p>
-    </div>
-  )
-}
-
 export default function MapasEstadisticas() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -119,7 +106,7 @@ export default function MapasEstadisticas() {
     setLoading(false)
   }
 
-  const porColonia = useMemo(() => agruparPor(solicitudes.map(s => s.colonia)).slice(0, 10), [solicitudes])
+  const porColonia = useMemo(() => agruparPor(solicitudes.map(s => s.colonia)), [solicitudes])
   const porJunta = useMemo(() => agruparPor(solicitudes.map(s => s.junta_auxiliar)), [solicitudes])
   const porTipo = useMemo(() => agruparPor(solicitudes.map(s => s.tipo_solicitud)), [solicitudes])
 
@@ -267,92 +254,52 @@ export default function MapasEstadisticas() {
       {/* Charts */}
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <Card title="Obras por colonia">
-          <p className="mb-3 text-xs text-gray-institutional/40">Top 10 colonias con más solicitudes</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porColonia} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#636569' }} angle={-40} textAnchor="end" interval={0} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
-                {porColonia.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <MonobarChart
+            data={porColonia}
+            subtitle="Top 5 colonias con más solicitudes"
+          />
         </Card>
 
         <Card title="Obras por junta auxiliar">
-          <p className="mb-3 text-xs text-gray-institutional/40">Distribución por junta auxiliar</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porJunta} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#636569' }} angle={-40} textAnchor="end" interval={0} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
-                {porJunta.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <MonobarChart
+            data={porJunta}
+            subtitle="Top 5 juntas auxiliares con más solicitudes"
+          />
         </Card>
 
         <Card title="Obras por tipo">
-          <p className="mb-3 text-xs text-gray-institutional/40">Tipos de obra más solicitados</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porTipo} margin={{ top: 5, right: 10, bottom: 50, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#636569' }} angle={-40} textAnchor="end" interval={0} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={32}>
-                {porTipo.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <MonobarChart
+            data={porTipo}
+            subtitle="Tipos de obra más solicitados"
+          />
         </Card>
 
         <Card title="Solicitudes por día de la semana">
-          <p className="mb-3 text-xs text-gray-institutional/40">Volumen de peticiones por día</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porDiaSemana} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#636569' }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#636569' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(125,36,71,0.04)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={36}>
-                {porDiaSemana.map((entry) => (
-                  <Cell
-                    key={entry.name}
-                    fill={
-                      entry.name === diaMax?.name
-                        ? '#7d2447'
-                        : entry.name === diaMin?.name
-                          ? '#d5d2c8'
-                          : 'rgba(125,36,71,0.35)'
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          {diaMax && diaMin && (
-            <div className="mt-3 flex flex-wrap gap-4 border-t border-gray-100 pt-3">
-              <span className="flex items-center gap-1.5 rounded-lg bg-guinda/5 px-3 py-1.5 text-xs font-medium text-guinda">
-                <TrendingUp className="h-3.5 w-3.5" />
-                Más peticiones: {diaMax.name} ({diaMax.value})
-              </span>
-              <span className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-institutional/60">
-                <TrendingDown className="h-3.5 w-3.5" />
-                Menos peticiones: {diaMin.name} ({diaMin.value})
-              </span>
-            </div>
-          )}
+          <MonobarChart
+            data={porDiaSemana}
+            subtitle="Volumen de peticiones por día"
+            getColor={(entry) =>
+              entry.name === diaMax?.name
+                ? '#7d2447'
+                : entry.name === diaMin?.name
+                  ? '#d5d2c8'
+                  : 'rgba(125,36,71,0.35)'
+            }
+            footer={
+              diaMax && diaMin && (
+                <div className="mt-3 flex flex-wrap gap-4 border-t border-gray-100 pt-3">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-guinda/5 px-3 py-1.5 text-xs font-medium text-guinda">
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    Más peticiones: {diaMax.name} ({diaMax.value})
+                  </span>
+                  <span className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-institutional/60">
+                    <TrendingDown className="h-3.5 w-3.5" />
+                    Menos peticiones: {diaMin.name} ({diaMin.value})
+                  </span>
+                </div>
+              )
+            }
+          />
         </Card>
       </div>
 
