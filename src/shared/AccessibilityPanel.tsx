@@ -41,21 +41,21 @@ export default function AccessibilityPanel({
       )}
 
       <aside
-        className={`fixed right-0 top-0 z-50 flex h-full w-80 flex-col border-l border-alabaster-dark/50 bg-white shadow-xl transition-transform duration-300 ease-in-out ${
+        className={`fixed right-0 top-0 z-50 flex h-full w-[min(320px,100vw)] max-w-full flex-col border-l border-alabaster-dark/50 bg-white shadow-xl transition-transform duration-300 ease-in-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
         aria-label="Panel de accesibilidad"
         role="dialog"
         aria-modal={open}
       >
-        <div className="flex items-center justify-between border-b border-alabaster-dark/30 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Accessibility size={20} className="text-guinda" />
-            <h2 className="font-semibold text-guinda">Accesibilidad</h2>
+        <div className="flex min-w-0 items-center justify-between gap-3 border-b border-alabaster-dark/30 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <Accessibility size={20} className="shrink-0 text-guinda" />
+            <h2 className="truncate font-semibold text-guinda">Accesibilidad</h2>
           </div>
           <button
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-institutional transition-colors hover:bg-guinda/10 hover:text-guinda"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-institutional transition-colors hover:bg-guinda/10 hover:text-guinda"
             aria-label="Cerrar panel de accesibilidad"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -64,7 +64,7 @@ export default function AccessibilityPanel({
           </button>
         </div>
 
-        <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-5">
+        <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden p-5">
           <section>
             <button
               onClick={onIniciarPeticionIA}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, MapPin, Check, Navigation, ChevronRight, Eye } from 'lucide-react'
+import { Upload, MapPin, Check, Navigation, ChevronRight, Eye, Trash2 } from 'lucide-react'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 import { sileo } from 'sileo'
 import lottie from 'lottie-web'
@@ -505,13 +505,21 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    const espacio = LIMITE_ARCHIVOS - form.archivos.length
     const valid: File[] = []
     const info: { archivo: File; originalBytes: number }[] = []
     const errors: string[] = []
+    if (espacio <= 0) {
+      errors.push(`Ya seleccionaste ${LIMITE_ARCHIVOS} archivos. Elimina alguno para agregar otro.`)
+      setFileErrors(errors)
+      return
+    }
+    let rechazadosPorEspacio = 0
     for (const f of selected) {
-      if (valid.length >= LIMITE_ARCHIVOS) {
-        errors.push('Máximo 3 archivos de evidencia.')
-        break
+      if (valid.length >= espacio) {
+        rechazadosPorEspacio++
+        continue
       }
       const esImagen = f.type.startsWith('image/')
       const esPdf = f.type === 'application/pdf'
@@ -537,9 +545,22 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
         errors.push(`"${f.name}" debe ser una imagen o un PDF.`)
       }
     }
-    set('archivos', valid)
-    setArchivosInfo(info)
+    if (rechazadosPorEspacio > 0) {
+      errors.push(
+        rechazadosPorEspacio === 1
+          ? 'Se omitió 1 archivo: solo puedes agregar ' + espacio + ' más.'
+          : `Se omitieron ${rechazadosPorEspacio} archivos: solo puedes agregar ${espacio} más.`
+      )
+    }
+    set('archivos', [...form.archivos, ...valid])
+    setArchivosInfo(prev => [...prev, ...info])
     setFileErrors(errors)
+  }
+
+  const quitarArchivo = (i: number) => {
+    set('archivos', form.archivos.filter((_, idx) => idx !== i))
+    setArchivosInfo(prev => prev.filter((_, idx) => idx !== i))
+    setFileErrors([])
   }
 
   const inlineMap = showMapaCombinado && esDesktop
@@ -924,19 +945,33 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
               >
                 <Upload className="mr-2 h-4 w-4" />
                 {form.archivos.length > 0
-                  ? `${form.archivos.length} archivo(s) seleccionado(s)`
+                  ? `Agregar más archivos (quedan ${LIMITE_ARCHIVOS - form.archivos.length})`
                   : 'Seleccionar archivos'}
               </Button>
               {form.archivos.length > 0 && (
-                <ul className="text-xs text-gray-institutional/60">
+                <ul className="flex flex-col gap-1 text-xs text-gray-institutional/60">
                   {archivosInfo.map(({ archivo, originalBytes }, i) => (
-                    <li key={i} className="truncate">
-                      <span className="font-medium text-gray-institutional/80">{archivo.name}</span>{' '}
-                      <span className="text-gray-institutional/40">
-                        {originalBytes > 0
-                          ? `(${formatoBytes(originalBytes)} → ${formatoBytes(archivo.size)})`
-                          : `(${formatoBytes(archivo.size)})`}
+                    <li
+                      key={`${archivo.name}-${i}`}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-gray-institutional/10 bg-gray-50 px-2.5 py-1.5"
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium text-gray-institutional/80">{archivo.name}</span>{' '}
+                        <span className="text-gray-institutional/40">
+                          {originalBytes > 0
+                            ? `(${formatoBytes(originalBytes)} → ${formatoBytes(archivo.size)})`
+                            : `(${formatoBytes(archivo.size)})`}
+                        </span>
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => quitarArchivo(i)}
+                        aria-label={`Eliminar ${archivo.name}`}
+                        title="Eliminar archivo"
+                        className="shrink-0 cursor-pointer rounded-md p-1 text-gray-institutional/40 transition-colors hover:bg-red-50 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </li>
                   ))}
                 </ul>
