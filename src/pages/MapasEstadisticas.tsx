@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, GeoJSON, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet.heat'
 import { useAuth } from '../contexts/AuthContext'
@@ -77,6 +77,46 @@ function agruparPor(arr: string[]): { name: string; value: number }[] {
   return Object.entries(counts)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
+}
+
+const ESTATUS_CORTO: Record<string, string> = {
+  Revision: 'Revisión',
+  'Dirección General de Planeación y Proyectos': 'DGPP',
+  'obras y proyectos': 'Obras y proyectos',
+  'Concluido no favorable': 'No favorable',
+}
+
+function PopupSolicitud({ s }: { s: Solicitud }) {
+  const estatusCorto = s.estatus_fase ? ESTATUS_CORTO[s.estatus_fase] : undefined
+  return (
+    <div className="w-full min-w-[210px]">
+      {/* Header guinda (full-bleed) */}
+      <div className="flex w-full items-center justify-between gap-2 bg-guinda px-4 py-3 pr-10">
+        <p className="font-bold text-white" style={{ fontSize: '14px' }}>{s.folio_unico}</p>
+        {estatusCorto && (
+          <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-semibold text-white">
+            {estatusCorto}
+          </span>
+        )}
+      </div>
+      {/* Cuerpo */}
+      <div className="px-4 py-3">
+        {(s.calle || s.entre_calles) && (
+          <p className="text-xs font-semibold leading-snug text-gray-800">
+            {s.calle || 'Sin calle'}
+          {s.entre_calles ? (
+            <span className="font-normal text-gray-500"> · entre {s.entre_calles.replace(/^entre\s+/i, '')}</span>
+          ) : null}
+          </p>
+        )}
+        <p className="mt-0.5 text-[11px] text-gray-500">{s.colonia}</p>
+        <div className="mt-2 border-t border-gray-100 pt-2">
+          <p className="text-[11px] font-medium text-gray-700">{s.tipo_solicitud}</p>
+          <p className="mt-0.5 text-[11px] italic text-gray-400">{s.nombre_solicitante}</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function MapasEstadisticas() {
@@ -208,12 +248,11 @@ export default function MapasEstadisticas() {
                 position={[s.latitud, s.longitud]}
                 icon={markerIcon}
               >
-                <Popup maxWidth={240} className="custom-popup">
-                  <div className="py-1">
-                    <p className="font-bold text-guinda" style={{ fontSize: '13px' }}>{s.folio_unico}</p>
-                    <p className="mt-0.5 text-xs text-gray-700">{s.nombre_solicitante}</p>
-                    <p className="text-[11px] text-gray-400">{s.colonia} &mdash; {s.tipo_solicitud}</p>
-                  </div>
+                <Tooltip>
+                  <span>{s.folio_unico} - {s.tipo_solicitud}</span>
+                </Tooltip>
+                <Popup maxWidth={270} className="custom-popup">
+                  <PopupSolicitud s={s} />
                 </Popup>
               </Marker>
             ))}
@@ -320,12 +359,11 @@ export default function MapasEstadisticas() {
                   position={[s.latitud, s.longitud]}
                   icon={markerIcon}
                 >
-                  <Popup maxWidth={240} className="custom-popup">
-                    <div className="py-1">
-                      <p className="font-bold text-guinda" style={{ fontSize: '13px' }}>{s.folio_unico}</p>
-                      <p className="mt-0.5 text-xs text-gray-700">{s.nombre_solicitante}</p>
-                      <p className="text-[11px] text-gray-400">{s.colonia} &mdash; {s.tipo_solicitud}</p>
-                    </div>
+                  <Tooltip>
+                    <span>{s.folio_unico} - {s.tipo_solicitud}</span>
+                  </Tooltip>
+                  <Popup maxWidth={270} className="custom-popup">
+                    <PopupSolicitud s={s} />
                   </Popup>
                 </Marker>
               ))}

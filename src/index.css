@@ -393,3 +393,73 @@ html[data-contrast="dark"] .contrast-mosaico-bg { filter: invert(1); }
     font-size: 16px !important;
   }
 }
+
+/* ================================================================
+   Tooltips y popups de Leaflet (Mapas y Estadisticas)
+   ================================================================ */
+.leaflet-tooltip {
+  background: #ffffff;
+  border: 1px solid #e5e2d8;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  color: #7d2447;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+
+.leaflet-tooltip::before {
+  border-top-color: #ffffff;
+  border-bottom-color: #ffffff;
+  border-left-color: #ffffff;
+  border-right-color: #ffffff;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  line-height: 1.35;
+}
+
+/* Popup con header guinda: sin margen ni padding internos, el componente maneja todo */
+.custom-popup .leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.35;
+}
+
+.custom-popup .leaflet-popup-content-wrapper {
+  padding: 0 !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: #9ca3af;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: #7d2447;
+}
+
+/* Boton de cierre rediseñado (sobre el header guinda del custom-popup) */
+.custom-popup a.leaflet-popup-close-button {
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff !important;
+  font-size: 15px;
+  line-height: 22px;
+  text-align: center;
+  transition: background 0.2s;
+}
+
+.custom-popup a.leaflet-popup-close-button:hover {
+  background: rgba(255, 255, 255, 0.35);
+  color: #ffffff !important;
+}
