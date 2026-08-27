@@ -1,3 +1,36 @@
+/**
+ * @file MapasEstadisticas.tsx
+ * @description Dashboard visual con mapa Leaflet, KPIs y gráficas de distribución de solicitudes.
+ *              Muestra heatmap opcional, capas GeoJSON y estadísticas por colonia/junta/tipo/día.
+ *
+ * Estado & carga:
+ *  - solicitudes: array de Solicitud, loading, mapFullscreen, satellite, capas (colonias/juntas/ZAP),
+ *    showLayers, showHeatmap.
+ *  - cargarSolicitudes: solicitudesMapa(500) -> setSolicitudes. cargarCapas(['colonias','juntas','zonasZap']).
+ *  - Guardia: si !user navigate('/').
+ *
+ * Cálculos (useMemo):
+ *  - porColonia/porJunta/porTipo: agruparPor(solicitudes.map(...)) -> sorted {name,value}[]
+ *  - porDiaSemana: counts[7] por getDay de fecha_creacion -> DIAS_SEMANA slice 3 chars.
+ *  - diaMax/diaMin: reduce sobre porDiaSemana para destacar en chart.
+ *  - puntos: solicitudes con lat/lng válidos; center promedio o default Puebla [19.0414,-98.2063].
+ *
+ * Mapa:
+ *  - markerIcon DivIcon SVG guinda; HeatmapLayer (useMap + L.heatLayer) con gradient
+ *    guinda/gris/naranja, radius25 blur18 maxZoom16. Toggle showHeatmap vs markers.
+ *  - Markers con Tooltip folio-tipo y PopupSolicitud (header guinda + estatus corto + calle/entre
+ *    + colonia + tipo + solicitante). ESTATUS_CORTO mapea nombres largos a abreviaturas.
+ *  - Controles: heatmap/puntos toggle, fullscreen, satellite (Esri vs OSM), capas GeoJSON
+ *    (COLONIA_STYLE etc) en fullscreen.
+ *  - Título Card "Mapa de solicitudes", leyenda de conteo y badge mapa/calor.
+ *
+ * KPIs: grid 3 con Total solicitudes (guinda), Colonias distintas (#41504D), Juntas (#DBC6B3).
+ * Charts: MonobarChart para cada agrupación (top 5, tipos, días). Días usa getColor para diaMax
+ *         guinda, diaMin gris, resto guinda/35% y footer con TrendingUp/Down.
+ *
+ * Fullscreen: overlay fixed z10001 con MapContainer satélite/capas/heatmap.
+ * Dependencias: leaflet.heat, leaflet, react-leaflet, MonobarChart, lucide.
+ */
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, GeoJSON, useMap } from 'react-leaflet'
@@ -12,6 +45,7 @@ import { MapPin, TrendingUp, TrendingDown, Layers, Building2, Maximize2, Minimiz
 import { cargarCapas } from '../solicitud/detectar-ubicacion'
 import type { CapasGeoJSON } from '../solicitud/detectar-ubicacion'
 
+// Icono SVG guinda para markers del mapa
 const markerIcon = new L.DivIcon({
   html: '<svg viewBox="0 0 32 48" width="24" height="36" xmlns="http://www.w3.org/2000/svg"><path d="M16 0C7.16 0 0 7.16 0 16c0 10.6 12.8 26.6 14.6 28.8.6.8 1.8.8 2.4 0C18.8 42.6 32 26.6 32 16 32 7.16 24.84 0 16 0z" fill="#7D2447"/><circle cx="16" cy="16" r="10" fill="white" opacity="0.9"/><circle cx="16" cy="16" r="8" fill="#7D2447"/></svg>',
   className: '',
@@ -19,6 +53,7 @@ const markerIcon = new L.DivIcon({
   iconAnchor: [12, 36],
 })
 
+// Estilos GeoJSON colonia/junta/ZAP
 const COLONIA_STYLE = {
   color: '#7d2447',
   weight: 2,
@@ -40,6 +75,7 @@ const ZONA_ZAP_STYLE = {
   fillOpacity: 0.06,
 }
 
+/** Capa heatmap con leaflet.heat: radius25 blur18 gradient guinda->naranja; se recrea al cambiar puntos. */
 function HeatmapLayer({ puntos }: { puntos: { latitud: number; longitud: number }[] }) {
   const map = useMap()
   const layerRef = useRef<L.HeatLayer | null>(null)
@@ -71,6 +107,7 @@ function HeatmapLayer({ puntos }: { puntos: { latitud: number; longitud: number 
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
+/** Agrupa strings por frecuencia y ordena desc. */
 function agruparPor(arr: string[]): { name: string; value: number }[] {
   const counts: Record<string, number> = {}
   arr.forEach(v => { if (v) counts[v] = (counts[v] || 0) + 1 })
@@ -86,6 +123,7 @@ const ESTATUS_CORTO: Record<string, string> = {
   'Concluido no favorable': 'No favorable',
 }
 
+/** Popup detallado con header guinda, estatus corto y datos de calle/colonia/tipo. */
 function PopupSolicitud({ s }: { s: Solicitud }) {
   const estatusCorto = s.estatus_fase ? ESTATUS_CORTO[s.estatus_fase] : undefined
   return (
@@ -119,9 +157,12 @@ function PopupSolicitud({ s }: { s: Solicitud }) {
   )
 }
 
+// --- MapasEstadisticas: mapa + KPIs + 4 charts (colonia/junta/tipo/día) ---
 export default function MapasEstadisticas() {
+  // user guard, navigate
   const { user } = useAuth()
   const navigate = useNavigate()
+  // solicitudes (500), loading, mapFullscreen/satellite/capas/showLayers/showHeatmap
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [loading, setLoading] = useState(true)
   const [mapFullscreen, setMapFullscreen] = useState(false)
@@ -130,6 +171,7 @@ export default function MapasEstadisticas() {
   const [showLayers, setShowLayers] = useState(false)
   const [showHeatmap, setShowHeatmap] = useState(false)
 
+  // Carga solicitudes y capas al montar si autenticado
   useEffect(() => {
     if (!user) { navigate('/'); return }
     cargarSolicitudes()
@@ -139,17 +181,20 @@ export default function MapasEstadisticas() {
     cargarCapas(['colonias', 'juntas', 'zonasZap']).then(setCapas)
   }, [])
 
-  async function cargarSolicitudes() {
+    // Carga hasta 500 solicitudes para visualización
+async function cargarSolicitudes() {
     setLoading(true)
     const res = await solicitudesMapa(500)
     setSolicitudes(res.data)
     setLoading(false)
   }
 
-  const porColonia = useMemo(() => agruparPor(solicitudes.map(s => s.colonia)), [solicitudes])
+    // Aggregations memoizadas por colonia/junta/tipo/día
+const porColonia = useMemo(() => agruparPor(solicitudes.map(s => s.colonia)), [solicitudes])
   const porJunta = useMemo(() => agruparPor(solicitudes.map(s => s.junta_auxiliar)), [solicitudes])
   const porTipo = useMemo(() => agruparPor(solicitudes.map(s => s.tipo_solicitud)), [solicitudes])
 
+  // Calcula counts por día de semana (getDay) mapeando DIAS_SEMANA slice
   const porDiaSemana = useMemo(() => {
     const counts = new Array(7).fill(0)
     solicitudes.forEach(s => {
@@ -171,6 +216,7 @@ export default function MapasEstadisticas() {
     return porDiaSemana.reduce((a, b) => a.value < b.value ? a : b)
   }, [porDiaSemana])
 
+  // Filtra solicitudes con lat/lng válidos para mapa; center promedio
   const puntos = useMemo(
     () => solicitudes.filter(s => s.latitud && s.longitud),
     [solicitudes]
@@ -183,6 +229,7 @@ export default function MapasEstadisticas() {
     return [lat, lng] as [number, number]
   }, [puntos])
 
+  // Spinner centrado mientras carga
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-32">
@@ -192,6 +239,7 @@ export default function MapasEstadisticas() {
     )
   }
 
+  // --- JSX: título, KPIs 3, mapa Card, grid de 4 charts, fullscreen mapa ---
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8 lg:px-12">
       <div className="mb-8">
@@ -237,7 +285,8 @@ export default function MapasEstadisticas() {
       </div>
 
       {/* Mapa */}
-      <Card title="Mapa de solicitudes">
+            {/* Mapa Leaflet 520px con heatmap/markers + controles flotantes */}
+  <Card title="Mapa de solicitudes">
         <div className="relative h-[520px] w-full overflow-hidden rounded-xl" style={{ isolation: 'isolate' }}>
           <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
@@ -291,7 +340,8 @@ export default function MapasEstadisticas() {
       </Card>
 
       {/* Charts */}
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
+            {/* Charts 2x2: colonia, junta, tipo, día semana con footer max/min */}
+  <div className="mt-6 grid gap-6 md:grid-cols-2">
         <Card title="Obras por colonia">
           <MonobarChart
             data={porColonia}
@@ -343,7 +393,8 @@ export default function MapasEstadisticas() {
       </div>
 
       {/* Mapa fullscreen */}
-      {mapFullscreen && (
+            {/* Fullscreen mapa con tiles satélite/capas/heatmap y controles */}
+  {mapFullscreen && (
         <div className="fixed inset-0 z-[10001] bg-black">
           <div className="h-full w-full">
             <MapContainer center={center} zoom={12} className="h-full w-full" zoomControl>

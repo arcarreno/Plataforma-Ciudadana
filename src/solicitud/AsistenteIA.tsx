@@ -1,3 +1,38 @@
+/**
+ * @file AsistenteIA.tsx
+ * @description Asistente conversacional por voz/texto que guía al usuario paso a paso para
+ *              llenar SolicitudForm. Extrae entidades con iaLocal (regex/NLP ligero) y pide
+ *              confirmación antes de avanzar.
+ *
+ * Flujo conversacional:
+ *  1. Saludo + primera pregunta según siguientePregunta() (recorre PREGUNTAS filtrando
+ *     !completadosRef.has && !esLleno). PREGUNTAS tiene 11 campos: apellido_paterno/materno,
+ *     nombres, curp, telefono, correo, tipo, ubicacion, calle, entre_calles, descripcion.
+ *  2. Usuario responde por texto o voz (SpeechRecognition). enviar(texto) muestra mensaje user,
+ *     verifica si hay pendiente de confirmación (pendientesRef): interpreta sí/no con esSi/esNo
+ *     (regex tolerante a slang mexicano: sip, simón, va, sale, nel, etc.). Si no, limpia o confirma
+ *     y avanza; si pendiente, pide re-confirmación.
+ *  3. Si no hay pendiente: valorDeCampo(campo, texto) usa extraerTodo + extraerCampo (iaLocal)
+ *     para obtener Partial<IaLlenarResultado>; onAplicar(data) intenta llenar form y retorna
+ *     etiquetas llenadas. Se mapean a LLENADO_A_CAMPO/ETIQUETA_A_DATO para generar pendientes
+ *     con preguntaConfirmacion "Capturé \"valor\" como etiqueta. ¿Es correcto?".
+ *  4. Si onAplicar no llenó nada, muestra "No pude capturar..." + repite pregunta activa.
+ *     continuar() maneja caso especial ubicacion: marca mapaPendienteRef, muestra mensaje de
+ *     mapa y dispara onAbrirMapa (MapaCombinado). Si último paso, setTerminado true.
+ *  5. Mapa: effect en mapaConfirmado verifica esLleno('ubicacion') y calles; si falta, reabre mapa;
+ *     si todo ok, agradece y sigue. completa ubicacion siempre tras confirmación.
+ *  6. Voz: arrancar() crea reconocedor via crearReconocedor(), maneja onstart/onaudiostart,
+ *     onresult (fusionarTranscripcion con textoRef + vivo preview), onend/onerror con reintentos
+ *     (max 4, fallar() con mensajes Brave shield, network, mic). hablar() con Web Speech API para
+ *     leer preguntas IA (precargarVoces). Botón Mic/MicOff toggle, textarea sincronizado con input.
+ *     hablarUltimo repite última pregunta.
+ *
+ * Props: esLleno(campo)->bool, onAplicar(data)->string[], onLimpiar(campo), onClose, onAbrirMapa,
+ *        mapaConfirmado (number trigger).
+ * Estado: mensajes (Msg[] con autor ia/user), input/vivo/estadoVoz, terminado, escuchando,
+ *         completadosRef Set, pendientesRef queue, preguntaActivaRef, manualRef, reintentosRef.
+ * UI: header guinda con Sparkles y botones repeat/close, lista scrollable, input + mic + send.
+ */
 ﻿import { useEffect, useRef, useState } from 'react'
 import { Sparkles, Send, X, Mic, MicOff } from 'lucide-react'
 import Button from '../shared/Button'
@@ -7,11 +42,13 @@ import { hablar, crearReconocedor, ultimoTranscripcion, fusionarTranscripcion, p
 import type { SpeechRecognitionLike } from '../lib/speech'
 import { TIPOS_OBRA_NOMBRES } from '../core/constants'
 
+/** Mensaje de chat: autor ia/user y texto. */
 interface Msg {
   autor: 'ia' | 'user'
   texto: string
 }
 
+/** Props: esLleno verifica completitud, onAplicar llena form, onAbrirMapa, mapaConfirmado trigger. */
 interface AsistenteIAProps {
   esLleno: (campo: string) => boolean
   onAplicar: (data: Partial<IaLlenarResultado>) => string[]
@@ -21,6 +58,8 @@ interface AsistenteIAProps {
   mapaConfirmado?: number
 }
 
+// --- Cuestionario secuencial de 11 campos con textos de pregunta ---
+// 11 preguntas ordenadas; ubicacion dispara apertura de mapa
 const PREGUNTAS = [
   { campo: 'apellido_paterno', pregunta: '¿Cuál es tu apellido paterno?' },
   { campo: 'apellido_materno', pregunta: '¿Y tu apellido materno?' },
@@ -38,6 +77,7 @@ const PREGUNTAS = [
 const SALUDO =
   '¡Hola! Soy el asistente para capturar tu solicitud. Contesta una pregunta a la vez y yo voy llenando el formulario. Empecemos:'
 
+// Mapea etiqueta devuelta por onAplicar a campo interno de PREGUNTAS
 const LLENADO_A_CAMPO: Record<string, string> = {
   'nombre': 'nombres',
   'apellido paterno': 'apellido_paterno',
@@ -68,6 +108,7 @@ const ETIQUETA_A_DATO: Record<string, keyof IaLlenarResultado> = {
   'descripción': 'descripcion',
 }
 
+/** Extrae valor específico según campo activo usando iaLocal extraerCampo/extraerTodo. */
 function valorDeCampo(campo: string, texto: string): Partial<IaLlenarResultado> {
   const extra = extraerTodo(texto)
   const extrajo = extraerCampo(campo, texto)
@@ -87,7 +128,9 @@ function valorDeCampo(campo: string, texto: string): Partial<IaLlenarResultado> 
   }
 }
 
+// --- AsistenteIA: orquesta flujo de preguntas, validación sí/no, voz y mapa ---
 export default function AsistenteIA({ esLleno, onAplicar, onLimpiar, onClose, onAbrirMapa, mapaConfirmado }: AsistenteIAProps) {
+  // completadosRef Set de campos ya confirmados; mapaPendienteRef evita reabrir mapa en loop
   const completadosRef = useRef<Set<string>>(new Set())
   const mapaPendienteRef = useRef(false)
   const siguientePregunta = (): { campo: string; texto: string } | null => {
@@ -100,12 +143,14 @@ export default function AsistenteIA({ esLleno, onAplicar, onLimpiar, onClose, on
 const preguntaActivaRef = useRef('')
   const pendientesRef = useRef<{ campo: string; etiqueta: string; valor: string }[]>([])
 
+  // estadoInicial calcula saludo + primera pregunta según siguientePregunta()
   const [estadoInicial] = useState(() => {
     const primeras: Msg[] = [{ autor: 'ia', texto: SALUDO }]
     const sig = siguientePregunta()
     if (sig) primeras.push({ autor: 'ia', texto: sig.texto })
     return { mensajes: primeras, terminado: !sig }
   })
+  // mensajes array ia/user; input/vivo/estadoVoz/terminado/escuchando; refs para voz y scroll
   const [mensajes, setMensajes] = useState<Msg[]>(estadoInicial.mensajes)
   const [input, setInput] = useState('')
   const [vivo, setVivo] = useState('')
@@ -121,7 +166,8 @@ const preguntaActivaRef = useRef('')
   const ultimoErrorRef = useRef('')
 
   // --- Detección de respuesta sí/no con mucha tolerancia a slang/mexicanismos ---
-  const esSi = (t: string): boolean => {
+    // Detecta afirmación tolerante a mexicanismos (sip, simón, va, sale, ok, etc.)
+const esSi = (t: string): boolean => {
     const x = ' ' + t.toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, '') + ' '
     return /(^|\s)(s[ií]|sip|sipi|sim[oó]n|sipo?|yes|claro|si claro|est[aá] bien|ok|oka|okay|de acuerdo|v[áa]le|correcto|perfecto|sale|si como no|siuu)/.test(x)
   }
@@ -130,10 +176,12 @@ const preguntaActivaRef = useRef('')
     return /(^|\s)(no|noa|non|n[oó]po|nel|ni modo|negativo|nada|jam[aá]s|cambi|repite|otra vez|no es)/.test(x) || /\sno\s/.test(x)
   }
 
+  /** Genera texto de confirmación para campo pendiente. */
   const preguntaConfirmacion = (p: { campo: string; etiqueta: string; valor: string }): string =>
     `Capturé "${p.valor}" como ${p.etiqueta.toLocaleLowerCase()}. ¿Es correcto? Responde sí o no.`
 
-  useEffect(() => {
+    // Auto-scroll del chat al añadir mensajes
+useEffect(() => {
     listaRef.current?.scrollTo({ top: listaRef.current.scrollHeight, behavior: 'smooth' })
   }, [mensajes, vivo])
 
@@ -144,7 +192,8 @@ const preguntaActivaRef = useRef('')
     hablar(nuevas.map((m) => m.texto).join(' '))
   }, [mensajes])
 
-  useEffect(() => {
+    // Precarga voces y limpia reconocimiento al desmontar
+useEffect(() => {
     precargarVoces()
     return () => {
       recRef.current?.abort()
@@ -153,7 +202,8 @@ const preguntaActivaRef = useRef('')
     }
   }, [])
 
-  useEffect(() => {
+    // Reacciona a confirmación de mapa: valida punto/calle y decide siguiente pregunta
+useEffect(() => {
     if (!mapaConfirmado) return
     if (mapaPendienteRef.current) mapaPendienteRef.current = false
     const area = new Set<string>()
@@ -193,6 +243,7 @@ if (faltanDireccion) {
     if (!sig) setTerminado(true)
   }, [mapaConfirmado])
 
+  // Abort recognition manual y envía lo capturado
   const terminarEscucha = () => {
     manualRef.current = true
     recRef.current?.abort()
@@ -213,6 +264,7 @@ if (faltanDireccion) {
     if (p) hacerPregunta({ campo: p.campo, texto: p.pregunta })
   }
 
+  /** Avanza al siguiente campo; caso especial ubicacion abre mapa con mensaje guiado. */
   const continuar = () => {
     const sig = siguientePregunta()
     if (sig?.campo === 'ubicacion' && !mapaPendienteRef.current) {
@@ -232,7 +284,8 @@ if (faltanDireccion) {
     setTerminado(true)
   }
 
-  const enviar = (texto = input.trim()) => {
+    /** Maneja envío de texto: gestiona confirmaciones pendientes, extrae entidades y pide confirmación. */
+const enviar = (texto = input.trim()) => {
     if (!texto) return
     setInput('')
     textoRef.current = ''
@@ -302,7 +355,8 @@ if (faltanDireccion) {
     continuar()
   }
 
-  const arrancar = (reintento: boolean) => {
+    // Inicia reconocimiento de voz con manejo de permisos, reintentos y mensajes Brave
+const arrancar = (reintento: boolean) => {
     window.speechSynthesis?.cancel()
     setEstadoVoz('Conectando al servicio de voz…')
     if (!reintento) {
@@ -403,6 +457,7 @@ if (faltanDireccion) {
     if (texto) hablar(texto)
   }
 
+  // --- JSX: header guinda con repeat/close, lista de mensajes, área terminado vs input+mic+send ---
   return (
     <div className="overflow-hidden rounded-2xl border border-alabaster-dark/40 bg-white shadow-sm">
       <div className="flex items-center justify-between bg-guinda px-4 py-3">

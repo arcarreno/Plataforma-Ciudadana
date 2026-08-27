@@ -1,3 +1,35 @@
+/**
+ * @file VistaOficioEditable.tsx
+ * @description Editor visual de Oficio institucional en formato carta (21.6x27.9cm) con
+ *              paginación medida, drag&drop de bloques, edición inline y exportación a PDF.
+ *
+ * Estructura & flujo:
+ *  1. Layout: letterhead.jpg como background, constantes PX_PER_CM=37.8, OFICIO_W/H,
+ *     TOP_PAD_P1/CONT, PAGE1/CONT_CONTENT_H, FOOTER_TEXT_CM. Página absoluta header (year,
+ *     oficioNum, pageNum) + content con destinatario, fundamento, tabla, bloques móviles y footer.
+ *  2. Datos editables en estado editData (yearTag, oficioNum, destinatario, fundamento,
+ *     parrafoCompromiso/Contacto, cierre, firma*, archivo, ccp, iniciales) con contentEditable
+ *     + DOMPurify.sanitize en onBlur (setEdit). escapeHtml para folio/nombre inicial.
+ *  3. Bloques móviles: movableDefaults ['compromiso','contacto','contactsTable','cierre','firma'];
+ *     blockOrder state permite reordenar por drag ghost (cloneNode, mousemove tracking,
+ *     insertAfter logic). CCP es draggable libre con posición absoluta (ccpPosition + drag).
+ *  4. Tabla: tableRows memoized con folio/tipo/fecha/estatus; colWidths state + initResize (RAF
+ *     + mousemove) para redimensionar columnas con límite 590px total.
+ *  5. Paginación: useLayoutEffect mide alturas de segmentos (data-segment) en contenedor oculto
+ *     measureRef (visibility hidden, fixed -9999px). Algoritmo distribuye segmentos en páginas
+ *     respetando PAGE1/CONT_CONTENT_H, theadH y TABLE_MARGIN_PX; mueve CCP junto a firma si se
+ *     separan. Genera measuredPages [{isFirst, segmentIds, rowIds, blockTypes, paddingBottom}].
+ *  6. Render: renderBlocks(blockType) genera JSX con drag-handle (⠿) y contentEditable;
+ *     renderHeaderContent, renderDestinatarioContent, renderTable. Páginas visibles usan scale
+ *     de useFitScale para encajar en scrollRef; pageRefs array para export.
+ *  7. Export: handleExportPdf (descarga) y exportarPdf (base64 para email) usan flushSync
+ *     setExporting true para añadir clase .pdf-export (quita transform/overflow), luego
+ *     exportToPdf/exportToPdfBase64 (html2canvas+jsPDF). useImperativeHandle expone exportarPdf.
+ *
+ * Props: solicitud: Solicitud, ref: {exportarPdf:()=>Promise<string>}
+ * Libs: DOMPurify, html2canvas, jsPDF via exportPdf, useFitScale.
+ * Estilos: CSS-in-JS con .oficio-wrapper, .oficio-content, .tabla-oficio/contactos, .drag-handle.
+ */
 import { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect, useImperativeHandle } from 'react'
 import { flushSync } from 'react-dom'
 import DOMPurify from 'dompurify'
@@ -7,6 +39,7 @@ import { exportToPdf, exportToPdfBase64 } from '../lib/exportPdf'
 
 import { useFitScale } from '../lib/useFitScale'
 
+// --- Constantes de paginación física carta: PX_PER_CM, dimensiones, paddings y alturas de contenido ---
 const PX_PER_CM = 37.8
 const OFICIO_W = 21.6 * PX_PER_CM
 const OFICIO_H = 27.9 * PX_PER_CM
@@ -17,6 +50,7 @@ const PAGE1_CONTENT_H = (FOOTER_TEXT_CM - TOP_PAD_P1) * PX_PER_CM
 const CONT_CONTENT_H = (FOOTER_TEXT_CM - TOP_PAD_CONT) * PX_PER_CM
 const TABLE_MARGIN_PX = 28
 
+// Tabla fija de contactos de áreas SEMOVINFRA para oficio
 const CONTACTOS = [
   { area: 'Atención Ciudadana de la SEMOVINFRA', telefono: '222 309 4400 Ext. 5776 y 5744' },
   { area: 'Secretaría Particular', telefono: '222 309 4400 Ext. 5657' },
@@ -26,6 +60,7 @@ const CONTACTOS = [
   { area: 'Dirección Jurídica', telefono: '222 309 4400 Ext. 5693' },
 ]
 
+/** Formatea fecha actual a 'DD DE MES DE YYYY' en español mayús. */
 function formatDate(): string {
   const d = new Date()
   const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
@@ -40,15 +75,19 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+/** Props: solicitud y ref imperativa para exportar PDF base64. */
 interface Props {
   solicitud: Solicitud
   ref?: React.Ref<{ exportarPdf: () => Promise<string> }>
 }
 
+// --- Editor oficio: estados editData, colWidths, paginación medida, drag&drop y export ---
 export default function VistaOficioEditable({ solicitud, ref }: Props) {
+  // Alias solicitud y fecha formateada es-MX
   const s = solicitud
   const fecha = s.fecha_creacion ? new Date(s.fecha_creacion).toLocaleDateString('es-MX') : '—'
 
+  // editData: todo el contenido editable del oficio con defaults que incluyen folio/nombre/fecha
   const [editData, setEditData] = useState({
     yearTag: formatYearTag(),
     oficioNum: `OFICIO Núm. SEMOVINFRA-${escapeHtml(s.folio_unico || '')}/2026`,
@@ -67,15 +106,19 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     iniciales: 'AAMVP/jol',
   })
 
-  const setEdit = (field: string, e: React.FocusEvent<HTMLElement>) => {
+    // Sanitiza HTML de contentEditable con DOMPurify al perder foco
+const setEdit = (field: string, e: React.FocusEvent<HTMLElement>) => {
     const html = e.currentTarget?.innerHTML ?? ''
     setEditData(prev => ({ ...prev, [field]: DOMPurify.sanitize(html) }))
   }
 
+  // exporting flag para clase pdf-export (sin transform) durante captura
   const [exporting, setExporting] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const scale = useFitScale(scrollRef, OFICIO_W)
+  // colWidths: anchos custom de columnas de tabla por índice
   const [colWidths, setColWidths] = useState<Record<number, number>>({})
+  // measuredPages: páginas calculadas por medición de alturas de segmentos
   const [measuredPages, setMeasuredPages] = useState<any[] | null>(null)
   const pageRefs = useRef<HTMLElement[]>([])
   const measureRef = useRef<HTMLDivElement>(null)
@@ -84,7 +127,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
   const [isDraggingCcp, setIsDraggingCcp] = useState(false)
   const ccpDragStart = useRef({ mouseX: 0, mouseY: 0, elemX: 0, elemY: 0 })
 
-  const tableRows = useMemo(() => [{
+    // Memo de fila única de tabla con folio/tipo/fecha/estatus
+const tableRows = useMemo(() => [{
     _key: 0,
     control: s.folio_unico || '—',
     solicitud: s.tipo_solicitud,
@@ -92,6 +136,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     turnadoA: s.estatus_fase || '—',
   }], [s.folio_unico, s.tipo_solicitud, fecha, s.estatus_fase])
 
+  // Bloques reordenables por drag; blockOrder + dragState controlan ghost y drop
   const movableDefaults = ['compromiso', 'contacto', 'contactsTable', 'cierre', 'firma'] as const
   type BlockType = typeof movableDefaults[number]
   const [blockOrder, setBlockOrder] = useState<BlockType[]>([...movableDefaults])
@@ -102,7 +147,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
 
   const blockKeys = useMemo(() => [...blockOrder, 'ccp'], [blockOrder])
 
-  const startDrag = (blockType: string, e: React.MouseEvent) => {
+    /** Inicia drag de bloque: crea ghost clonado y registra mousemove/mouseup. */
+const startDrag = (blockType: string, e: React.MouseEvent) => {
     e.preventDefault()
     const blockEl = (e.currentTarget as HTMLElement).closest('[data-block]') as HTMLElement
     if (!blockEl) return
@@ -169,7 +215,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     document.removeEventListener('mouseup', onDragDrop)
   }
 
-  const startDragCcp = (e: React.MouseEvent) => {
+    /** Drag libre de bloque CCP con offset escalado por zoom. */
+const startDragCcp = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDraggingCcp(true)
@@ -190,7 +237,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     document.removeEventListener('mouseup', onDragCcpEnd)
   }
 
-  const initResize = useCallback((e: React.MouseEvent, colIdx: number) => {
+    /** Resize de columnas de tabla con RAF y límite total 590px. */
+const initResize = useCallback((e: React.MouseEvent, colIdx: number) => {
     e.preventDefault()
     if (resizeCleanup.current) resizeCleanup.current()
     const th = (e.currentTarget as HTMLElement).parentElement!
@@ -222,7 +270,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     document.addEventListener('mouseup', onMouseUp)
   }, [])
 
-  const handleBold = (e: React.MouseEvent) => {
+    // Toggle <strong> en selección actual (envuelve o desenrolla)
+const handleBold = (e: React.MouseEvent) => {
     e.preventDefault()
     const sel = window.getSelection()
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
@@ -241,7 +290,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
   }
 
 
-  const handleExportPdf = async () => {
+    // Export descarga PDF a tamaño natural usando flushSync y clase pdf-export
+const handleExportPdf = async () => {
     // Forzar flush síncrono: html2canvas clona el DOM al instante y debe ver
     // la clase .pdf-export (sin transform/overflow) para capturar a tamaño natural.
     flushSync(() => setExporting(true))
@@ -280,7 +330,8 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     }
   }, [])
 
-  useLayoutEffect(() => {
+    // --- Medición de alturas para paginación: distribuye segmentos en páginas respetando límites ---
+useLayoutEffect(() => {
     const el = measureRef.current
     if (!el) return
     const content = el.querySelector('.oficio-content') as HTMLElement
@@ -366,6 +417,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     })
   }, [editData, blockOrder, colWidths])
 
+  // Estilo de página con letterhead como background carta
   const pageStyle: React.CSSProperties = {
     backgroundImage: `url(${letterhead})`,
     backgroundSize: '21.6cm 27.9cm',
@@ -378,6 +430,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     return w ? { width: w } : undefined
   }
 
+  /** Renderiza bloques reordenables con drag-handle y contentEditable según tipo. */
   const renderBlocks = (blocks: string[]) => blocks.map(blockType => {
     const isOver = dragState.over === blockType && !dragState.insertAfter
     const isBefore = dragState.over === blockType && dragState.insertAfter
@@ -525,6 +578,7 @@ export default function VistaOficioEditable({ solicitud, ref }: Props) {
     </div>
   )
 
+  // --- JSX: contenedor oculto de medición + toolbar flotante B/PDF + páginas visibles paginadas ---
   return (
     <div className={`${exporting ? 'pdf-export ' : ''}flex h-full flex-col bg-[#eaeaea]`}>
       {/* Measurement container — hidden, continuous flow */}

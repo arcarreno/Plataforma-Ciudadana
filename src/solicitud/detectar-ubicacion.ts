@@ -1,3 +1,31 @@
+/**
+ * @file detectar-ubicacion.ts
+ * @description
+ * Núcleo de geoprocesamiento de la solicitud: detecta colonia/junta/ZAP/cobertura
+ * para un punto y analiza un tramo (distancia, ancho, escuelas/iglesias/STV cercanos).
+ * También gestiona la precarga y caché de todas las capas GeoJSON.
+ *
+ * Algoritmos y capas:
+ * - **Detección puntual** (`detectarPunto`): usa `booleanPointInPolygon` sobre
+ *   colonias, juntas, zonasZap y coberturaAgua. Normaliza nombres con
+ *   `cleanColoniaName`/`matchJunta` y aplica reglas de `fuera_alcance`:
+ *   sin colonia ni junta → fuera de alcance; solo colonia → junta="Zona Metropolitana";
+ *   solo junta → colonia="Desconocida".
+ * - **Detección de tramo** (`detectarTramo`): construye LineString del tramo,
+ *   crea dos buffers con Turf (`RADIO_TRAMO_KM=0.003` y `RADIO_CERCANIA_KM=0.01`),
+ *   suma distancias haversine por segmentos, estima ancho con `estimarAnchoCalle`
+ *   sobre el segmento más largo, y busca puntos (escuelas/iglesias) dentro del
+ *   buffer de cercanía y líneas STV que intersectan el tramo (`lineIntersect` +
+ *   `booleanIntersects` con pre-filtro bbox).
+ * - **Precarga** (`precargarCapasConProgreso`): descarga en paralelo todas las
+ *   capas (`ALL_CAPAS`) con reintentos (`fetchConReintento`), reporta progreso
+ *   por bytes, hace streaming si el body es legible (`leerBytes` + `concatChunks`),
+ *   y alimenta tanto `capaCache` (para capas normales) como el Worker de calles
+ *   (vía `cargarCalles(buffer)`).
+ * - **Caché** (`capaCache`, `fetchJSON`): Map url→Promise para deduplicar fetches
+ *   y permitir `cargarCapas(include?)` selectivo.
+ */
+
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import booleanIntersects from '@turf/boolean-intersects'
 import lineIntersect from '@turf/line-intersect'
@@ -7,6 +35,7 @@ import { matchJunta, cleanColoniaName } from '../core/geo'
 import { estimarAnchoCalle, haversineDistancia } from './calle'
 import { cargarCalles } from '../lib/geolocalizarCalle'
 
+/** Conjunto de capas GeoJSON que alimentan la detección. Todas son FeatureCollection. */
 export interface CapasGeoJSON {
   colonias: GeoJSON.FeatureCollection
   juntas: GeoJSON.FeatureCollection
@@ -18,6 +47,7 @@ export interface CapasGeoJSON {
   calles: GeoJSON.FeatureCollection
 }
 
+/** Resultado de la detección puntual (un marcador). */
 export interface DeteccionPunto {
   colonia: string
   junta_auxiliar: string
@@ -27,6 +57,7 @@ export interface DeteccionPunto {
   coordenadas: { lat: number; lng: number }
 }
 
+/** Resultado del análisis de un tramo (polyline de N puntos). */
 export interface DeteccionTramo {
   escuelas_cercanas: string[]
   iglesias_cercanas: string[]
@@ -36,13 +67,26 @@ export interface DeteccionTramo {
   coordenadas: { lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number }
 }
 
+/** Radio del buffer alrededor del tramo para buscar STV (en km). */
 const RADIO_TRAMO_KM = 0.003
+/** Radio del buffer para escuelas/iglesias cercanas (en km, más amplio). */
 const RADIO_CERCANIA_KM = 0.01
 
+/**
+ * Extrae `properties.name` de un feature de forma segura.
+ * @param f - Feature GeoJSON.
+ * @returns Objeto con `name` (o cadena vacía).
+ */
 function getProps(f: GeoJSON.Feature): { name: string } {
   return f.properties as { name: string } || { name: '' }
 }
 
+/**
+ * Calcula el bounding box [minX, minY, maxX, maxY] de un feature.
+ * Soporta Polygon, MultiPolygon, LineString, MultiLineString.
+ * @param f - Feature a medir.
+ * @returns Bbox en coordenadas [lng, lat].
+ */
 function bboxDe(f: GeoJSON.Feature): [number, number, number, number] {
   let minX = Infinity
   let minY = Infinity
@@ -65,6 +109,12 @@ function bboxDe(f: GeoJSON.Feature): [number, number, number, number] {
   return [minX, minY, maxX, maxY]
 }
 
+/**
+ * Test rápido de intersección de bboxes (sin Turf) para descartar features lejanas.
+ * @param f - Feature a probar.
+ * @param bminX - Bbox de referencia.
+ * @returns `true` si los bboxes se solapan.
+ */
 function seCruzaBBox(
   f: GeoJSON.Feature,
   [bminX, bminY, bmaxX, bmaxY]: [number, number, number, number]
@@ -73,6 +123,13 @@ function seCruzaBBox(
   return fmaxX >= bminX && fminX <= bmaxX && fmaxY >= bminY && fminY <= bmaxY
 }
 
+/**
+ * Busca el primer feature Polygon/MultiPolygon/GeometryCollection que contenga al punto.
+ * Retorna el `name` de su properties o cadena vacía. Usa `booleanPointInPolygon`.
+ * @param pt - Punto Turf.
+ * @param capa - Capa donde buscar.
+ * @returns Nombre del polígono contenedor o "".
+ */
 function detectarPIP(
   pt: GeoJSON.Feature<GeoJSON.Point>,
   capa: GeoJSON.FeatureCollection
@@ -97,11 +154,18 @@ function detectarPIP(
           return getProps(f).name || ''
         }
       }
-    } catch (_e) { /* skip */ }
+    } catch (_e) { /* skip — geometría inválida */ }
   }
   return ''
 }
 
+/**
+ * Variante de `detectarPIP` que retorna el Feature completo en lugar del nombre.
+ * Útil para inspeccionar properties adicionales (ej: `servicio` en coberturaAgua).
+ * @param pt - Punto Turf.
+ * @param capa - Capa donde buscar.
+ * @returns Feature contenedor o `null`.
+ */
 function detectarEnCapa(
   pt: GeoJSON.Feature<GeoJSON.Point>,
   capa: GeoJSON.FeatureCollection
@@ -131,10 +195,18 @@ function detectarEnCapa(
   return null
 }
 
+/** FeatureCollection vacía usada como fallback cuando una capa falla. */
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
+/** Caché de promesas de descarga por URL para deduplicar fetches concurrentes. */
 const capaCache = new Map<string, Promise<GeoJSON.FeatureCollection>>()
 
+/**
+ * Descarga (o reutiliza de caché) un GeoJSON por URL.
+ * Almacena la Promise en `capaCache` para que llamadas paralelas compartan el mismo fetch.
+ * @param url - URL del GeoJSON.
+ * @returns FeatureCollection (o vacía si falla).
+ */
 async function fetchJSON(url: string): Promise<GeoJSON.FeatureCollection> {
   const cached = capaCache.get(url)
   if (cached) return cached
@@ -151,6 +223,7 @@ async function fetchJSON(url: string): Promise<GeoJSON.FeatureCollection> {
   return promise
 }
 
+/** Definición de todas las capas disponibles con su key tipada y URL. */
 export const ALL_CAPAS = [
   { key: 'colonias' as const, url: '/data/COLONIAS PUEBLA.geojson' },
   { key: 'juntas' as const, url: '/data/JUNTAS AUXILIARES.geojson' },
@@ -162,6 +235,12 @@ export const ALL_CAPAS = [
   { key: 'calles' as const, url: '/data/CALLES_PUEBLA.geojson' },
 ]
 
+/**
+ * Carga un subconjunto (o todas) de las capas GeoJSON en paralelo.
+ * Rellena las no solicitadas con `EMPTY_FC` para que el objeto `CapasGeoJSON` quede completo.
+ * @param include - Keys a incluir; si se omite, trae todas.
+ * @returns Objeto `CapasGeoJSON` con cada capa resuelta.
+ */
 export function cargarCapas(include?: (keyof CapasGeoJSON)[]): Promise<CapasGeoJSON> {
   const selected = include ? ALL_CAPAS.filter(l => include.includes(l.key)) : ALL_CAPAS
   return Promise.all(
@@ -178,6 +257,11 @@ export function cargarCapas(include?: (keyof CapasGeoJSON)[]): Promise<CapasGeoJ
   })
 }
 
+/**
+ * Concatena chunks Uint8Array en un único buffer contiguo.
+ * @param chunks - Fragmentos recibidos por streaming.
+ * @returns Uint8Array combinado.
+ */
 function concatChunks(chunks: Uint8Array[]): Uint8Array {
   const total = chunks.reduce((s, c) => s + c.length, 0)
   const out = new Uint8Array(total)
@@ -189,6 +273,13 @@ function concatChunks(chunks: Uint8Array[]): Uint8Array {
   return out
 }
 
+/**
+ * Fetch con reintentos y backoff lineal (700 ms * intento).
+ * @param url - URL a descargar.
+ * @param intentos - Número máximo de intentos (default 3).
+ * @returns Response exitosa.
+ * @throws Último error si todos los intentos fallan.
+ */
 async function fetchConReintento(url: string, intentos = 3): Promise<Response> {
   let lastErr: unknown = null
   for (let i = 0; i < intentos; i++) {
@@ -204,6 +295,15 @@ async function fetchConReintento(url: string, intentos = 3): Promise<Response> {
   throw lastErr ?? new Error(`no se pudo descargar ${url}`)
 }
 
+/**
+ * Lee los bytes de una Response, preferentemente por streaming (`ReadableStream`)
+ * para poder reportar progreso incremental vía `onBytes`. Si el streaming falla
+ * o el body ya fue consumido, hace fallback a `arrayBuffer()` (re-fetcheando si es necesario).
+ * @param r - Response ya obtenida.
+ * @param url - URL (para re-fetch si el body está usado).
+ * @param onBytes - Callback con cantidad de bytes leídos en cada chunk.
+ * @returns Bytes completos o `null` si falla definitivamente.
+ */
 async function leerBytes(
   r: Response,
   url: string,
@@ -235,19 +335,32 @@ async function leerBytes(
   }
 }
 
+/** Resultado de la precarga masiva con reporte de URLs fallidas. */
 export interface ResultadoPrecarga {
   ok: boolean
   fallos: string[]
 }
 
+/**
+ * Precarga todas las capas con barra de progreso por bytes.
+ * - Hace `fetchConReintento` en paralelo para todas las URLs y suma `content-length`
+ *   para el total estimado.
+ * - Lee cada body con `leerBytes` reportando `onProgress(descargado, total)`.
+ * - Para `calles`, transfiere el buffer al Worker (`cargarCalles`); si falla,
+ *   reintenta sin buffer (fetch interno del worker). El resto se parsea y cachea.
+ * @param onProgress - Callback (bytesDescargados, bytesTotal) para UI de progreso.
+ * @returns `ResultadoPrecarga` con lista de URLs que fallaron.
+ */
 export async function precargarCapasConProgreso(
   onProgress: (bytesDescargados: number, bytesTotal: number) => void
 ): Promise<ResultadoPrecarga> {
   const urls = ALL_CAPAS.map(l => l.url)
   const fallos: string[] = []
 
+  // Fase 1: fetch paralelo con reintentos; se toleran fallos individuales (allSettled).
   const resultados = await Promise.allSettled(urls.map(url => fetchConReintento(url)))
 
+  // Suma de content-length de las respuestas exitosas para estimar el total.
   let total = 0
   for (const r of resultados) {
     if (r.status === 'fulfilled') total += Number(r.value.headers.get('content-length')) || 0
@@ -274,6 +387,7 @@ export async function precargarCapasConProgreso(
           return
         }
         if (l.key === 'calles') {
+          // Las calles van al Worker; se transfiere el ArrayBuffer (zero-copy).
           let listas = await cargarCalles(bytes.buffer as ArrayBuffer)
           if (!listas) {
             console.error('[precarga] calles fallaron en el worker, reintentando descarga directa')
@@ -303,6 +417,14 @@ export async function precargarCapasConProgreso(
   return { ok: fallos.length === 0, fallos }
 }
 
+/**
+ * Detecta información territorial para un punto (lat/lng).
+ * Usa `detectarPIP`/`detectarEnCapa` y aplica normalización + reglas de `fuera_alcance`.
+ * @param lat - Latitud del punto.
+ * @param lng - Longitud del punto.
+ * @param capas - Capas ya cargadas.
+ * @returns `DeteccionPunto` con colonia/junta/ZAP/cobertura y flag fuera de alcance.
+ */
 export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): DeteccionPunto {
   const pt = point([lng, lat])
 
@@ -310,6 +432,7 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
   const rawJunta = detectarPIP(pt, capas.juntas)
   const tieneZonaZap = detectarEnCapa(pt, capas.zonasZap) !== null
 
+  // Cobertura de agua: se considera "sin cobertura" si `servicio` empieza con "NO FACTURA".
   const featCoberturaAgua = detectarEnCapa(pt, capas.coberturaAgua)
   const servicioAgua = ((featCoberturaAgua?.properties as Record<string, unknown> | null)?.servicio ?? '') as string
   const tieneCoberturaAgua = featCoberturaAgua !== null && !servicioAgua.toUpperCase().startsWith('NO FACTURA')
@@ -319,6 +442,7 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
 
   let fuera_alcance = false
 
+  // Reglas de negocio para puntos fuera del municipio o con datos incompletos.
   if (!colonia && !junta_auxiliar) {
     fuera_alcance = true
   } else if (colonia && !junta_auxiliar) {
@@ -337,6 +461,16 @@ export function detectarPunto(lat: number, lng: number, capas: CapasGeoJSON): De
   }
 }
 
+/**
+ * Analiza un tramo (secuencia de puntos) para extraer métricas y entorno.
+ * - Calcula `distancia_m` sumando haversine por segmentos.
+ * - Estima `ancho_calle_m` sobre el segmento más largo (para evitar diagonales cortas).
+ * - Crea buffers Turf y busca escuelas/iglesias dentro de `RADIO_CERCANIA_KM`
+ *   y STV que intersectan el tramo (con pre-filtro bbox + `lineIntersect`/`booleanIntersects`).
+ * @param puntos - Array de {lat,lng} en orden del trazo.
+ * @param capas - Capas ya cargadas.
+ * @returns `DeteccionTramo` con listas de referencias cercanas y métricas.
+ */
 export function detectarTramo(
   puntos: { lat: number; lng: number }[],
   capas: CapasGeoJSON
@@ -349,14 +483,17 @@ export function detectarTramo(
   const coords = puntos.map(p => [p.lng, p.lat] as [number, number])
   const line = lineString(coords)
 
+  // Dos buffers: uno ajustado al tramo para STV y uno más amplio para puntos de interés.
   const lineBuffer = buffer(line, RADIO_TRAMO_KM, { units: 'kilometers' })
   const lineBufferCercania = buffer(line, RADIO_CERCANIA_KM, { units: 'kilometers' })
 
+  // Distancia total acumulada por segmentos.
   let distancia_m = 0
   for (let i = 1; i < puntos.length; i++) {
     distancia_m += haversineDistancia(puntos[i - 1].lat, puntos[i - 1].lng, puntos[i].lat, puntos[i].lng)
   }
 
+  // Se busca el segmento más largo para estimar el ancho de forma más representativa.
   let maxSegLen = -1
   let segMidLat = lat_ini
   let segMidLng = lng_ini
@@ -381,6 +518,12 @@ export function detectarTramo(
   const buf = lineBuffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>
   const bufCercania = (lineBufferCercania ?? lineBuffer) as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>
 
+  /**
+   * Busca puntos (escuelas/iglesias) dentro de un buffer poligonal.
+   * @param fc - FeatureCollection de puntos.
+   * @param bufferGeom - Polígono del buffer Turf.
+   * @returns Nombres de los puntos contenidos.
+   */
   function pointInBuffer(fc: GeoJSON.FeatureCollection, bufferGeom: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>): string[] {
     const names: string[] = []
     for (const f of fc.features) {
@@ -396,6 +539,12 @@ export function detectarTramo(
     return names
   }
 
+  /**
+   * Busca líneas STV que intersectan el tramo o su buffer.
+   * Usa pre-filtro bbox + `lineIntersect` (intersección exacta) o `booleanIntersects` (solape con buffer).
+   * @param fc - FeatureCollection de líneas STV.
+   * @returns Nombres de las líneas que cruzan el tramo.
+   */
   function lineIntersects(fc: GeoJSON.FeatureCollection): string[] {
     const names: string[] = []
     const bufBBox = bboxDe(buf)

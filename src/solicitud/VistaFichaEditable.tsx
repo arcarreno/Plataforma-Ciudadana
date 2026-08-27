@@ -1,3 +1,31 @@
+/**
+ * @file VistaFichaEditable.tsx
+ * @description Ficha técnica editable en formato horizontal (960px) con banner, mapa Leaflet,
+ *              datos técnicos, entorno social y exportación a PDF.
+ *
+ * Estructura:
+ *  - Constante FICHA_W=960, fichaRef para captura, scrollRef + useFitScale para responsive,
+ *    docH via useElementHeight.
+ *  - Estado editable: largo/ancho (num), tipoObra, calle/entreCalles, ubicacionTexto (editable
+ *    combinado colonia+junta), escuelasCct (array CCT, dedup, max 3) con funciones
+ *    removeEscuelaRow/clearEscuelas. Valores derivados: intervencion = largo*ancho,
+ *    iglesiasList/transportesList (split, slice 3), coloniaUpper/juntaUpper, googleMapsUrl.
+ *  - Mapa: tramoPuntos (tramo_puntos o lat_ini/fin), mapCenter promedio, tramoBounds para fit,
+ *    Polyline dash guinda y Markers 1/2 (divIcon). TileLayer OSM estático (no drag/zoom).
+ *  - Siged: sigedData opcional para mostrar nivel/alumnos por CCT; match por cct upper.
+ *  - Panel derecho DATOS TÉCNICOS: longitud/ancho editables (contentEditable con cleanText),
+ *    intervención calculada, escuelas tabla (thead CLAVE/NIVEL/ALUMNOS) con botones de borrado
+ *    ocultos en exporting, iglesias/transportes con bullet, coberturaAgua/zonaZap booleans,
+ *    juntaAux display.
+ *  - Export: generarPdf usa flushSync setExporting + html2canvas (scale1.5, bg #F5F0EB) ->
+ *    jsPDF landscape px_scaling -> base64. handleExportPdf descarga blob con URL.createObjectURL.
+ *    useImperativeHandle expone exportarPdf para envío email en SolicitudDetail.
+ *
+ * Props: solicitud, sigedData?, ref.
+ * Helpers: cleanText (innerText trim NBSP), shortRoute (corta en " - ").
+ * Assets: ficha-banner.png, ficha-footer.png, banner/footer CSS url.
+ * Estilos: .ficha-gen 960x720, banner absolute, map-area 444x394, panel 432px, etc.
+ */
 import { useState, useRef, useImperativeHandle } from 'react'
 import { flushSync } from 'react-dom'
 import html2canvas from 'html2canvas'
@@ -11,8 +39,10 @@ import bannerImg from '../assets/ficha-banner.png'
 import footerImg from '../assets/ficha-footer.png'
 import { useFitScale, useElementHeight } from '../lib/useFitScale'
 
+// Ancho fijo de ficha 960px para impresión y escala responsive
 const FICHA_W = 960
 
+/** Limpia innerText: reemplaza NBSP y trim. */
 function cleanText(el: HTMLElement): string {
   return (el.innerText || '').replace(/\u00A0/g, ' ').trim()
 }
@@ -23,13 +53,16 @@ function shortRoute(r: string): string {
 }
 
 
+/** Props: solicitud, sigedData opcional y ref para exportar base64. */
 interface Props {
   solicitud: Solicitud
   sigedData?: SigedEscuela | null
   ref?: React.Ref<{ exportarPdf: () => Promise<string> }>
 }
 
+// --- Ficha editable: estados largo/ancho, textos, CCTs, mapa y export ---
 export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Props) {
+  // largo/ancho editables; tipoObra/calle/entreCalles; colonia/junta fijas upper
   const [largo, setLargo] = useState(s.distancia_tramo_m ?? 0)
   const [ancho, setAncho] = useState(s.ancho_calle_m ?? 0)
   const [tipoObra, setTipoObra] = useState(s.tipo_solicitud)
@@ -42,17 +75,20 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   const coberturaAgua = s.cobertura_agua ?? false
   const zonaZap = s.zona_zap ?? false
 
+  // exporting flag + refs ficha/scroll + scales fit
   const [exporting, setExporting] = useState(false)
   const fichaRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const sFicha = useFitScale(scrollRef, FICHA_W)
   const docH = useElementHeight(fichaRef) ?? 720
+  // Lista CCT dedup slice 3; funciones remove/clear
   const [escuelasCct, setEscuelasCct] = useState<string[]>(() => {
     const raw = (s.escuelas_cercanas || []).map(c => c.trim().toUpperCase()).filter(Boolean).slice(0, 3)
     return [...new Set(raw)]
   })
 
-  const intervencion = Math.round(largo * ancho)
+    // Cálculo derivado largo * ancho (m²)
+const intervencion = Math.round(largo * ancho)
 
   const iglesiasList = iglesiasStr.split(',').map(e => e.trim()).filter(Boolean).slice(0, 3)
   const transportesList = transportesStr.split(',').map(e => e.trim()).filter(Boolean).slice(0, 3)
@@ -67,6 +103,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   const tipoObraUpper = tipoObra.toUpperCase()
   const googleMapsUrl = `https://maps.google.com/?q=${s.latitud},${s.longitud}`
 
+  // Texto inicial EN LA COLONIA... / JUNTA AUXILIAR... construido desde colonia/junta
   const ubicacionInicial = (() => {
     const partes: string[] = []
     if (coloniaUpper) partes.push(`EN LA COLONIA ${coloniaUpper}`)
@@ -80,12 +117,14 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   })()
   const [ubicacionTexto, setUbicacionTexto] = useState(ubicacionInicial)
 
-  const tramoPuntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
+    // Resuelve puntos de tramo desde tramo_puntos o lat_ini/fin (fallback)
+const tramoPuntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
     ? s.tramo_puntos
     : (s.tramo_lat_ini != null && s.tramo_lng_ini != null && s.tramo_lat_fin != null && s.tramo_lng_fin != null
         ? [{ lat: s.tramo_lat_ini, lng: s.tramo_lng_ini }, { lat: s.tramo_lat_fin, lng: s.tramo_lng_fin }]
         : null)
   const hasTramo = tramoPuntos != null
+  // Centro promedio de tramo o pin si no hay tramo
   const mapCenter = hasTramo
     ? [tramoPuntos!.reduce((s, p) => s + p.lat, 0) / tramoPuntos!.length, tramoPuntos!.reduce((s, p) => s + p.lng, 0) / tramoPuntos!.length] as [number, number]
     : [s.latitud, s.longitud] as [number, number]
@@ -100,10 +139,12 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
     ? tramoBounds
     : null
 
+  // Iconos 1/2 para extremos de tramo
   const markerIcon1 = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">1</div>', iconSize: [20, 20], iconAnchor: [10, 10] })
   const markerIcon2 = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">2</div>', iconSize: [20, 20], iconAnchor: [10, 10] })
 
-  const generarPdf = async (): Promise<string> => {
+    /** Captura con html2canvas scale1.5 + jsPDF landscape para exportar/base64. */
+const generarPdf = async (): Promise<string> => {
     if (!fichaRef.current) throw new Error('Ficha no disponible')
     // Forzar flush síncrono: html2canvas clona el DOM al instante y debe ver
     // la clase .pdf-export (sin transform/overflow) para capturar a tamaño natural.
@@ -151,6 +192,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
 
   useImperativeHandle(ref, () => ({ exportarPdf: generarPdf }))
 
+  // --- JSX: banner, tipo obra, calle/entre/colonia, mapa, legend, panel datos técnicos y footer ---
   return (
     <div className={`${exporting ? 'pdf-export ' : ''}flex h-full flex-col bg-[#eaeaea]`}>
       {/* Floating toolbar pill */}
@@ -222,10 +264,11 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
             <span>Ubicación</span>
             <a href={googleMapsUrl} target="_blank" className="ficha-link" rel="noreferrer">{googleMapsUrl}</a>
           </div>
-          <div className="ficha-st-text">ST: {s.folio_unico || '—'}</div>
+          <div className="ficha-st-text">Folio:  {s.folio_unico || '—'}</div>
 
           {/* Right Panel: Datos Técnicos */}
-          <div className="ficha-panel">
+                    {/* Panel derecho: datos técnicos + entorno social + junta */}
+  <div className="ficha-panel">
             <div className="ficha-section">DATOS TÉCNICOS</div>
             <div className="ficha-row">
               <div className="ficha-item">

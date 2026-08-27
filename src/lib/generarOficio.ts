@@ -1,8 +1,32 @@
+/**
+ * @file generarOficio.ts
+ * @description
+ * Generación del oficio de respuesta oficial en PDF (2 páginas, carta 21.6×27.9 cm,
+ * vertical) con membrete SEMOVINFRA. Usa `html2canvas` + `jspdf` para rasterizar
+ * HTML a imagen y embeberlo en PDF.
+ *
+ * Estructura:
+ * - `CONTACTOS`: tabla de áreas y extensiones que se muestra en la página 2.
+ * - `formatDate` / `formatYearTag`: helpers de fecha en español (ej. "27 DE AGOSTO DE 2026").
+ * - `escapeHtml`: evita inyección al interpolar datos de la solicitud.
+ * - `buildOficioHTML`: genera `page1` (encabezado, destinatario, fundamento legal,
+ *   tabla de control con folio/tipo/fecha/estatus) y `page2` (tabla de contactos,
+ *   cierre, firma de la Secretaria Técnica y C.C.P.).
+ * - `getOficioCSS`: CSS fiel al `Generador_Oficios` original — wrappers de 21.6×27.9 cm,
+ *   overlay translúcido, padding 1.5cm 3cm 6.5cm, tipografía Poppins/Calibri 10-11pt,
+ *   tablas con borde negro y header gris #E7E6E6, footer absoluto a 22 cm.
+ * - `generarOficioPDF`: crea contenedor off-screen con dos `.oficio-wrapper`
+ *   (cada uno con `background-image: letterhead`), espera fuentes, captura cada
+ *   wrapper con `html2canvas` (scale 1), y compone un `jsPDF` portrait donde cada
+ *   canvas es una página (`addPage`). Retorna URL `blob:` del PDF.
+ */
+
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import type { Solicitud } from '../types/solicitud'
 import letterhead from '../assets/letterhead.jpg'
 
+/** Directorio de contactos de la SEMOVINFRA que se imprime en la página 2 del oficio. */
 const CONTACTOS = [
   { area: 'Atención Ciudadana de la SEMOVINFRA', telefono: '222 309 4400 Ext. 5776 y 5744' },
   { area: 'Secretaría Particular', telefono: '222 309 4400 Ext. 5657' },
@@ -12,16 +36,29 @@ const CONTACTOS = [
   { area: 'Dirección Jurídica', telefono: '222 309 4400 Ext. 5693' },
 ]
 
+/**
+ * Formatea la fecha actual como "DD DE MES DE AAAA" en mayúsculas.
+ * @returns Fecha en español para la firma del oficio.
+ */
 function formatDate(): string {
   const d = new Date()
   const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
   return `${String(d.getDate()).padStart(2, '0')} DE ${meses[d.getMonth()]} DE ${d.getFullYear()}`
 }
 
+/**
+ * Genera el tag del año con lema oficial para el encabezado.
+ * @returns Ej. "2026, Año de Margarita Maza Parada".
+ */
 function formatYearTag(): string {
   return `${new Date().getFullYear()}, Año de Margarita Maza Parada`
 }
 
+/**
+ * Escapa HTML para interpolación segura de datos de usuario en el oficio.
+ * @param text - Texto a escapar.
+ * @returns Texto con entidades HTML.
+ */
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -30,6 +67,11 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/**
+ * Construye el HTML de las dos páginas del oficio a partir de la solicitud.
+ * @param solicitud - Datos de la solicitud (folio, nombre, tipo, fechas, estatus).
+ * @returns Objeto con `page1` y `page2` como strings HTML.
+ */
 function buildOficioHTML(solicitud: Solicitud): { page1: string; page2: string } {
   const fecha = solicitud.fecha_creacion
     ? new Date(solicitud.fecha_creacion).toLocaleDateString('es-MX')
@@ -111,6 +153,12 @@ function buildOficioHTML(solicitud: Solicitud): { page1: string; page2: string }
 }
 
 // ── CSS exacta del Generador_Oficios (App.css) ──
+/**
+ * Retorna el CSS completo del oficio (reset, wrappers carta, overlay, header,
+ * tablas, firma y footer). Es una réplica exacta del `App.css` del generador
+ * de oficios original para mantener fidelidad visual.
+ * @returns String CSS para inyectar en el contenedor off-screen.
+ */
 function getOficioCSS(): string {
   return `
     /* Reset */
@@ -302,6 +350,7 @@ function getOficioCSS(): string {
   `
 }
 
+/** HTML del pie de página (dirección y contacto del Gobierno de la Ciudad) usado en ambas páginas. */
 const FOOTER_HTML = `
   <div class="footer-text">
     GOBIERNO DE LA CIUDAD 2024 - 2027<br/>
@@ -310,6 +359,14 @@ const FOOTER_HTML = `
     PUEBLA, PUE., MÉXICO
   </div>`
 
+/**
+ * Genera el PDF del oficio (2 páginas) y retorna una URL `blob:`.
+ * Monta un contenedor off-screen con dos wrappers (uno por página) con fondo
+ * `letterhead`, espera fuentes, rasteriza cada wrapper con `html2canvas` y
+ * compone un `jsPDF` portrait donde cada canvas es una página.
+ * @param solicitud - Solicitud cuyos datos se interpolarán en el oficio.
+ * @returns URL de objeto del PDF (revocar con `URL.revokeObjectURL` al terminar).
+ */
 export async function generarOficioPDF(solicitud: Solicitud): Promise<string> {
   const { page1, page2 } = buildOficioHTML(solicitud)
 

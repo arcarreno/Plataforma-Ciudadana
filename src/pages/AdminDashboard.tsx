@@ -1,3 +1,33 @@
+/**
+ * @file AdminDashboard.tsx
+ * @description Panel de administración para revisar, filtrar, paginar y gestionar solicitudes.
+ *              Incluye búsqueda debounced, filtros por estatus/prioridad, orden, cards con
+ *              prioridad visual, detalle modal, eliminación y exportación.
+ *
+ * Estado & flujo:
+ *  - Paginación: PAGE_SIZE=50, page/totalCount/totalPages, cargarSolicitudes con params
+ *    {q, estatus, prioridad, page, pageSize, asc} -> setSolicitudes + total. useCallback
+ *    depende de searchQuery/filtros/page/sort. Effect carga si user existe sino navigate('/').
+ *  - Búsqueda: searchInput + searchQuery debounce 300ms (debounceRef timeout), resetea page 1.
+ *  - Filtros: filtroEstatus (select ESTATUS_ACTIVOS), filtroPrioridad (alta/media-alta/media/baja
+ *    mapeado a peso_ranking). Ambos resetean page.
+ *  - Orden: sortAsc bool toggle con ArrowUpDown, titulo dinámico.
+ *  - Cards grid sm:2 xl:3: cada solicitud calcula esPrioridad (>=15 guinda), esConcentracion (12 beige),
+ *    esMaxRanking (10 verde oscuro) vs default blanco. ESTATUS_COLORS mapea bg/text por estatus.
+ *    Muestra folio, estatus badge, solicitante, CURP/tipo/colonia/junta, ZAP/Agua/distancia/ancho,
+ *    y evidencias count. Click abre SolicitudDetail (selected state).
+ *  - Detail: onEstatusChange -> actualizarEstatus + optimista en solicitudes y selected;
+ *    onNavigate -> setSelected.
+ *  - Eliminación: deleteTarget state + DeleteConfirmModal, handleEliminar -> eliminarSolicitud,
+ *    filtra lista y decrementa total. Solo visible si user.rol==='admin' (Trash2).
+ *  - Opciones dropdown (motion AnimatePresence): Ver base de datos en tablas (VistaBtTablasModal
+ *    con obtenerTodasParaTablas que pagina 200 para cargar todas), Descargar Excel
+ *    (cargarTodasSolicitudes paginando 200 + exportarExcel), y Usuarios (navigate /admin/usuarios
+ *    solo admin).
+ *
+ * Endpoints: lib/servidor - listarSolicitudes, actualizarEstatus, eliminarSolicitud.
+ * Libs: framer-motion, react-router, lucide-react.
+ */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -12,6 +42,7 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 import VistaBtTablasModal from '../shared/VistaBtTablas'
 import { exportarExcel } from '../lib/exportarExcel'
 
+// Mapa de colores de badge por estatus
 const ESTATUS_COLORS: Record<string, { bg: string; text: string }> = {
   Revision: { bg: 'bg-amber-100', text: 'text-amber-800' },
   'Dirección General de Planeación y Proyectos': { bg: 'bg-blue-100', text: 'text-blue-800' },
@@ -23,11 +54,15 @@ const ESTATUS_COLORS: Record<string, { bg: string; text: string }> = {
   'Concluido no favorable': { bg: 'bg-red-100', text: 'text-red-700' },
 }
 
+// Tamaño de página fijo 50
 const PAGE_SIZE = 50
 
+// --- AdminDashboard: gestión paginada con búsqueda debounce, filtros, cards priorizadas y modales ---
 export default function AdminDashboard() {
+  // user para guardia y permisos admin (delete + usuarios)
   const { user } = useAuth()
   const navigate = useNavigate()
+  // solicitudes página actual; loading/selected/search/sort/filtros/page/total/debounce/delete/modals
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Solicitud | null>(null)
@@ -45,9 +80,11 @@ export default function AdminDashboard() {
   const [verTablasAbierto, setVerTablasAbierto] = useState(false)
   const [exportando, setExportando] = useState(false)
 
+  // totalPages derivado de totalCount/PAGE_SIZE
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
-  const cargarSolicitudes = useCallback(async () => {
+    /** Carga página actual con params q/estatus/prioridad/page/asc; actualiza total. */
+const cargarSolicitudes = useCallback(async () => {
     setLoading(true)
     const res = await listarSolicitudes({
       q: searchQuery,
@@ -62,12 +99,14 @@ export default function AdminDashboard() {
     setLoading(false)
   }, [searchQuery, filtroEstatus, filtroPrioridad, page, sortAsc])
 
+  // Carga inicial y cada que cambian params de cargarSolicitudes
   useEffect(() => {
     if (!user) { navigate('/'); return }
     cargarSolicitudes()
   }, [user, cargarSolicitudes])
 
-  const handleSearch = (val: string) => {
+    // Debounce 300ms para searchQuery + reset page 1
+const handleSearch = (val: string) => {
     setSearchInput(val)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
@@ -90,7 +129,8 @@ export default function AdminDashboard() {
     setSortAsc(p => !p)
   }
 
-  const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFase) => {
+    // Actualiza estatus vía API y optimista en lista/selected
+const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFase) => {
     await actualizarEstatus(solicitud.id_solicitud!, nuevoEstatus)
     setSolicitudes(prev => prev.map(s =>
       s.id_solicitud === solicitud.id_solicitud ? { ...s, estatus_fase: nuevoEstatus } : s
@@ -101,6 +141,7 @@ export default function AdminDashboard() {
     )
   }
 
+  // Elimina solicitud y actualiza lista/total optimista
   const handleEliminar = async () => {
     if (!deleteTarget) return
     setDeleteLoading(true)
@@ -111,7 +152,8 @@ export default function AdminDashboard() {
     setTotalCount(prev => prev - 1)
   }
 
-  const cargarTodasSolicitudes = useCallback(async (): Promise<Solicitud[]> => {
+    // Pagina en lotes 200 hasta total para exportación completa
+const cargarTodasSolicitudes = useCallback(async (): Promise<Solicitud[]> => {
     const todas: Solicitud[] = []
     const res = await listarSolicitudes({ page: 1, pageSize: 200 })
     todas.push(...res.data)
@@ -123,7 +165,8 @@ export default function AdminDashboard() {
     return todas
   }, [])
 
-  const handleExportarExcel = async () => {
+    // Exporta todas a Excel con confirmación de vacío
+const handleExportarExcel = async () => {
     setExportando(true)
     try {
       const todas = await cargarTodasSolicitudes()
@@ -140,11 +183,13 @@ export default function AdminDashboard() {
     }
   }
 
+  // Wrapper para modal de tablas: carga todas y adapta tipo
   const obtenerTodasParaTablas = useCallback(async (): Promise<Record<string, unknown>[]> => {
     const todas = await cargarTodasSolicitudes()
     return todas as unknown as Record<string, unknown>[]
   }, [cargarTodasSolicitudes])
 
+  // --- JSX: header con búsqueda/filtros/orden/opciones, grid de cards, paginación, modales ---
   return (
     <div className="flex flex-col gap-6">
       {selected && (
@@ -283,6 +328,7 @@ export default function AdminDashboard() {
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {/* Grid responsive de cards con colores por prioridad y estatus */}
           {solicitudes.map(s => {
             const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
             const esConcentracion = s.peso_ranking === 12

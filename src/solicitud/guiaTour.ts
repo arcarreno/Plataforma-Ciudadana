@@ -1,32 +1,77 @@
+/**
+ * @file guiaTour.ts
+ * @description
+ * Tour guiado interactivo para el flujo de solicitud de obra, basado en `driver.js`.
+ * Guía al usuario paso a paso por el mapa, picado de ubicación, confirmación de
+ * datos, dibujo de tramo y revisión de la tarjeta de obra.
+ *
+ * Algoritmos / mecanismos clave:
+ * - **Definición de pasos** (`paso`): cada `DriveStep` apunta a un selector CSS,
+ *   con `autoAvanzar` (condición para avanzar automáticamente) y flags `verMapa`/
+ *   `mostrarResumen` que alteran el popover.
+ * - **Avance automático** (`programarAvance` + `vigilar`): si la condición ya se
+ *   cumple, espera `AVANCE_DIFERIDO` y avanza; si no, observa el DOM con
+ *   `MutationObserver` + polling cada 400 ms hasta que se cumpla, luego espera
+ *   `AVANCE_RAPIDO` y avanza. Maneja el último paso desvaneciendo el overlay.
+ * - **Popover dinámico** (`onPopoverRender`): inyecta el logo SEMOVINFRA y oculta
+ *   la flecha; si `verMapa` agrega botón "Ver mapa" que salta al highlight del
+ *   mapa completo; si `mostrarResumen` alterna entre `TEXTO_BOTON_REALIZADO` y
+ *   `TEXTO_TARJETA_OBRA` según exista `[data-tour="resumen-obra"]`.
+ * - **Vigilancia de resumen** (`vigilarResumen`): cuando se entra al paso de
+ *   resumen, espera a que aparezca la tarjeta y la highlighta; luego vigila su
+ *   desaparición para cerrar el tour con `desvanecer`.
+ * - **Refresco de posición** (`iniciarRefresco`): `setInterval` cada 600 ms que
+ *   llama `driver.refresh()` si el elemento highlightado sigue conectado y visible,
+ *   evitando recálculos durante la animación tween.
+ * - **Persistencia** (`yaVisto`/`marcarVisto`): localStorage `semovinfra_tour_visto`
+ *   para no repetir el tour; solo en desktop (min-width 768px).
+ */
+
 import { driver } from 'driver.js'
 import type { Driver, DriveStep, PopoverDOM, DriverHook } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 
+/** Tipo de las opciones del hook de driver.js (tercer parámetro). */
 type HookOpts = Parameters<DriverHook>[2]
 
+/** Key de localStorage para recordar si el tour ya fue visto. */
 const TOUR_KEY = 'semovinfra_tour_visto'
+/** Delay corto antes de avanzar cuando la condición ya se venía vigilando. */
 const AVANCE_RAPIDO = 900
+/** Delay inicial antes de verificar si la condición ya está cumplida al entrar al paso. */
 const AVANCE_DIFERIDO = 2000
+/** Duración de la animación tween de driver.js (usada para evitar refresh durante animación). */
 const DURACION_TWEEN = 400
 
+/** Textos para el paso que muestra el botón "Realizado" (antes de que aparezca la tarjeta). */
 const TEXTO_BOTON_REALIZADO = {
   titulo: 'Revisa tus datos',
   descripcion:
     'Presiona «Realizado» para ver la tarjeta con los datos de tu obra ya rellenados: coordenadas del punto y del tramo, colonia, calle y entre calles.',
 }
 
+/** Textos para el paso cuando la tarjeta de obra ya está visible. */
 const TEXTO_TARJETA_OBRA = {
   titulo: 'Datos de obra',
   descripcion:
     'Así quedaron rellenados tus campos de forma automática: coordenadas del punto y del tramo, colonia, junta auxiliar, calle y entre calles. Solo te falta explicar la razón de tu problema, subir evidencias si las tienes y enviar la solicitud.',
 }
 
+/** Instancia activa del driver; null si no hay tour en curso. */
 let driverActivo: Driver | null = null
+/** Intervalo de refresco de posición del highlight. */
 let intervaloRefresco: ReturnType<typeof setInterval> | null = null
+/** Timestamp de la última activación de highlight (para evitar refresh durante tween). */
 let ultimaActivacion = 0
+/** Elemento actualmente highlightado (para verificar isConnected y getBoundingClientRect). */
 let elementoActual: Element | null = null
 
+/**
+ * Verifica si el tour ya fue visto según localStorage.
+ * @param key - Key en localStorage.
+ * @returns `true` si existe el flag.
+ */
 function yaVisto(key: string): boolean {
   try {
     return !!localStorage.getItem(key)
@@ -35,6 +80,10 @@ function yaVisto(key: string): boolean {
   }
 }
 
+/**
+ * Marca el tour como visto en localStorage.
+ * @param key - Key en localStorage.
+ */
 function marcarVisto(key: string) {
   try {
     localStorage.setItem(key, '1')
@@ -43,10 +92,25 @@ function marcarVisto(key: string) {
   }
 }
 
+/**
+ * Lee el texto del panel de datos de ubicación (usado como condición de avance).
+ * @returns Texto del elemento `[data-tour="panel"]` o cadena vacía.
+ */
 function panelTexto(): string {
   return document.querySelector('[data-tour="panel"]')?.textContent ?? ''
 }
 
+/**
+ * Factory de pasos del tour.
+ * @param selector - Selector CSS del elemento a highlightar.
+ * @param titulo - Título del popover.
+ * @param descripcion - Descripción del popover.
+ * @param side - Lado donde aparece el popover respecto al elemento.
+ * @param autoAvanzar - Condición que, al cumplirse, avanza automáticamente al siguiente paso.
+ * @param verMapa - Si true, agrega botón "Ver mapa" en el popover.
+ * @param mostrarResumen - Si true, el popover adapta su texto según exista la tarjeta de obra.
+ * @returns DriveStep configurado.
+ */
 function paso(
   selector: string,
   titulo: string,
@@ -64,6 +128,11 @@ function paso(
   }
 }
 
+/**
+ * Inyecta el header con logo SEMOVINFRA en el popover y oculta la flecha.
+ * Se ejecuta en `onPopoverRender`; evita duplicar el header si ya existe.
+ * @param popover - DOM del popover de driver.js.
+ */
 function prepararPopover(popover: PopoverDOM) {
   if (popover.wrapper.querySelector('.driver-head')) return
   const head = document.createElement('div')
@@ -76,6 +145,14 @@ function prepararPopover(popover: PopoverDOM) {
   popover.arrow.style.display = 'none'
 }
 
+/**
+ * Observa el DOM hasta que `condicion()` sea verdadera, entonces ejecuta `alCumplirse`.
+ * Usa `MutationObserver` sobre `document.documentElement` + polling cada 400 ms como fallback.
+ * Retorna función `parar` para cancelar la vigilancia.
+ * @param condicion - Predicado a evaluar.
+ * @param alCumplirse - Callback al cumplirse la condición.
+ * @returns Función para detener la observación.
+ */
 function vigilar(condicion: () => boolean, alCumplirse: () => void): () => void {
   let detenido = false
   let observador: MutationObserver
@@ -102,6 +179,10 @@ function vigilar(condicion: () => boolean, alCumplirse: () => void): () => void 
   return parar
 }
 
+/**
+ * Anima la desaparición del tour (agrega clase `driver-desvanecer` y destruye tras 650 ms).
+ * @param d - Instancia del driver a desvanecer.
+ */
 function desvanecer(d: Driver) {
   document
     .querySelectorAll('.driver-overlay, .driver-popover.driver-guinda')
@@ -111,6 +192,15 @@ function desvanecer(d: Driver) {
   }, 650)
 }
 
+/**
+ * Crea y configura la instancia de driver.js con todos los hooks.
+ * - `onPopoverRender`: prepara popover, adapta texto de resumen y agrega botón Ver mapa.
+ * - `onHighlightStarted`: registra `ultimaActivacion`/`elementoActual`, programa avance
+ *   automático o vigilancia de resumen según `step.data`.
+ * - `onDeselected`/`onDestroyed`: limpia vigilancias, intervalo de refresco y refs.
+ * @param steps - Array de pasos del tour.
+ * @returns Driver configurado (sin iniciar).
+ */
 function crearTour(steps: DriveStep[]): Driver {
   const paradas: (() => void)[] = []
   const detenerVigilancias = () => {
@@ -221,6 +311,10 @@ function crearTour(steps: DriveStep[]): Driver {
   })
 }
 
+/**
+ * Inicia el intervalo que mantiene el highlight alineado si el layout cambia.
+ * Evita llamar `refresh` durante la animación tween y si el elemento está desconectado o invisible.
+ */
 function iniciarRefresco() {
   detenerRefresco()
   intervaloRefresco = setInterval(() => {
@@ -234,12 +328,20 @@ function iniciarRefresco() {
   }, 600)
 }
 
+/** Detiene el intervalo de refresco de posición. */
 function detenerRefresco() {
   if (!intervaloRefresco) return
   clearInterval(intervaloRefresco)
   intervaloRefresco = null
 }
 
+/**
+ * Inicia el tour guiado si corresponde (solo desktop, no visto antes salvo `marcar=false`).
+ * Destruye cualquier tour previo, construye los 6 pasos (mapa → picar → panel → dibujo
+ * → confirmar tramo → resumen) y lo lanza tras 500 ms para asegurar que el DOM esté listo.
+ * @param marcar - Si true, respeta y actualiza el flag de localStorage; si false, fuerza el tour.
+ * @returns `true` si el tour se inició, `false` si se omitió por viewport/flag.
+ */
 export function correrTour(marcar = true): boolean {
   if (typeof window === 'undefined') return false
   if (!window.matchMedia('(min-width: 768px)').matches) return false
@@ -306,6 +408,9 @@ export function correrTour(marcar = true): boolean {
   return true
 }
 
+/**
+ * Detiene y destruye el tour activo si existe.
+ */
 export function detenerTour() {
   if (!driverActivo) return
   driverActivo.destroy()

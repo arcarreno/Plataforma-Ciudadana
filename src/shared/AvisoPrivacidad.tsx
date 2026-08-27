@@ -1,14 +1,43 @@
+/**
+ * @file AvisoPrivacidad.tsx
+ * @description Modal de Aviso de Privacidad institucional. Muestra el texto legal
+ * completo sobre tratamiento de datos personales conforme a la Ley General de
+ * Protección de Datos en Posesión de Sujetos Obligados. Incluye secciones de:
+ * Responsable, Datos recabados, Finalidad, Protección, Transferencia, Derechos ARCO,
+ * Cambios al aviso y Consentimiento. Se renderiza como overlay fijo con tarjeta
+ * scrolleable (max-h 85vh) y botón "Cerrar" que invoca `onClose`.
+ * No usa portal; se asume que el padre lo monta condicionalmente.
+ *
+ * @props Props
+ * @prop {() => void} onClose - Callback para cerrar el aviso (botón Cerrar).
+ *
+ * @uso
+ * ```tsx
+ * {mostrarAviso && <AvisoPrivacidad onClose={() => setMostrarAviso(false)} />}
+ * ```
+ * Típicamente se muestra al marcar/desmarcar la casilla de consentimiento
+ * en el formulario de nueva solicitud.
+ */
 interface Props {
+  /** Callback para cerrar el modal de aviso. */
   onClose: () => void
 }
 
+/**
+ * Componente de Aviso de Privacidad — overlay con contenido legal scrolleable.
+ */
 export default function AvisoPrivacidad({ onClose }: Props) {
   return (
+    // Overlay de fondo oscuro semitransparente que cubre toda la viewport
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+      {/* Tarjeta blanca scrolleable con el contenido del aviso */}
       <div className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        {/* Título principal del aviso */}
         <h2 className="mb-4 text-xl font-bold text-guinda">Aviso de Privacidad</h2>
 
+        {/* Contenido legal — cada sección es un <section> con h3 + p */}
         <div className="space-y-4 text-sm leading-relaxed text-gray-institutional/80">
+          {/* Sección: Responsable del tratamiento */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">Responsable</h3>
             <p>
@@ -18,6 +47,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
             </p>
           </section>
 
+          {/* Sección: Qué datos se recaban */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">
               Datos personales recabados
@@ -30,6 +60,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
             </p>
           </section>
 
+          {/* Sección: Para qué se usan los datos */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">
               Finalidad del tratamiento
@@ -42,6 +73,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
             </p>
           </section>
 
+          {/* Sección: Medidas de seguridad */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">
               Protección y seguridad
@@ -54,6 +86,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
             </p>
           </section>
 
+          {/* Sección: Transferencia a terceros */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">
               Transferencia de datos
@@ -65,6 +98,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
             </p>
           </section>
 
+          {/* Sección: Derechos ARCO */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">
               Derechos ARCO
@@ -77,6 +111,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
             </p>
           </section>
 
+          {/* Sección: Cambios al aviso */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">
               Cambios al aviso
@@ -88,6 +123,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
             </p>
           </section>
 
+          {/* Sección: Consentimiento */}
           <section>
             <h3 className="mb-1 font-semibold text-gray-institutional">Consentimiento</h3>
             <p>
@@ -99,6 +135,7 @@ export default function AvisoPrivacidad({ onClose }: Props) {
           </section>
         </div>
 
+        {/* Botón de cierre — ocupa todo el ancho, estilo guinda */}
         <button
           className="mt-6 w-full rounded-xl bg-guinda px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-guinda/90"
           onClick={onClose}

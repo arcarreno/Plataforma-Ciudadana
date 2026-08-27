@@ -1,3 +1,43 @@
+/**
+ * @file SolicitudForm.tsx
+ * @description Formulario principal para registrar una petición ciudadana de obra pública.
+ *              Gestiona datos del solicitante, datos de la obra, ubicación georreferenciada
+ *              (punto + tramo), evidencia comprimida y envío al backend.
+ *
+ * Flujo general:
+ *  1. Captura de datos personales (nombre separado en paterno/materno/nombres o nombre completo
+ *     si omitirCurp). Valida CURP con formato, dígito verificador y coincidencia de iniciales.
+ *  2. Captura de contacto (tel 10 dígitos, correo) + aceptación de aviso de privacidad.
+ *  3. Selección de tipo de obra (Select con TIPOS_OBRA_NOMBRES) y ubicación vía MapaCombinado.
+ *     El mapa resuelve colonia, junta auxiliar, calle, entre_calles, ZAP y cobertura agua.
+ *     Puede devolver también un tramo multipunto con distancia, ancho y POIs cercanos.
+ *  4. Evidencia opcional (3 archivos máx, imágenes hasta 10MB comprimidas a ~300KB JPEG, PDFs 1MB).
+ *  5. Validación con validarForm(), notificaciones sileo por campo y envío con crearSolicitud().
+ *     Muestra lottie de carga, maneja folio/advertencia/error y resetea formulario.
+ *  6. Integración con AsistenteIA (llenado por voz/texto con confirmación) y tour guiado.
+ *
+ * Endpoints / libs:
+ *  - lib/solicitud.crearSolicitud(form, pesoRanking?, tramoData?) -> POST /api/solicitud
+ *  - lib/curp: validarFormatoCURP, validarDigitoVerificador, inicialesCoinciden
+ *  - shared: Button, Card, Input, Textarea, Select, AvisoPrivacidad
+ *  - MapaCombinado: provee pin + tramo; integrado inline en desktop, modal en móvil
+ *  - sileo: toasts para validación y feedback
+ *
+ * Decisiones clave:
+ *  - Compresión progresiva de imágenes por canvas (calidades 0.8->0.3, ancho máx 1600px) para
+ *    no superar límites de Supabase/edge. Solo comprime si >300KB.
+ *  - Validación CURP en 3 capas: regex formato 18, dígito verificador (algoritmo), e iniciales
+ *    vs nombre capturado (detecta inconsistencias). Omitible si omitirCurp (cargo público).
+ *  - Teléfono normalizado a 10 dígitos, correo con regex simple, folio con truncate.
+ *  - Desktop vs móvil: esDesktop via matchMedia, inlineMap para layout de 2 columnas con
+ *    animación de transform/flex-basis; mobile usa overlay de MapaCombinado.
+ *  - Lottie-web para animación de espera, cardOffset calculado con ResizeObserver.
+ *
+ * Props:
+ *  - omitirCurp?: boolean — si true, no pide CURP y usa campo nombre completo.
+ *  - nombrePrefilled?: string — nombre prellenado (solo lectura) para usuarios logueados.
+ *  - iniciarIA?: boolean — arranca con AsistenteIA visible.
+ */
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, MapPin, Check, Navigation, ChevronRight, Eye, Trash2 } from 'lucide-react'
@@ -25,6 +65,7 @@ interface NombrePiezas {
   nombres: string
 }
 
+// --- Validación de formulario: comprueba nombre, CURP (formato+digito+iniciales), teléfono, correo, aviso y ubicación ---
 function validarForm(data: SolicitudFormData, omitirCurp?: boolean, nombrePiezas?: NombrePiezas): SolicitudErrors {
   const errors: SolicitudErrors = {}
 
@@ -70,12 +111,14 @@ function validarForm(data: SolicitudFormData, omitirCurp?: boolean, nombrePiezas
   return errors
 }
 
+// --- Constantes de límite de archivos y compresión de imágenes ---
 const LIMITE_ARCHIVOS = 3
 const MAX_IMAGEN_BYTES = 10 * 1024 * 1024
 const MAX_PDF_BYTES = 1 * 1024 * 1024
 const MAX_IMAGEN_COMPRIMIDA_BYTES = 300 * 1024
 const ANCHO_MAX_PX = 1600
 
+/** Comprime una imagen redimensionando a ANCHO_MAX_PX y exportando a JPEG con calidad dada. Usa canvas y URL.createObjectURL. */
 async function comprimirImagen(file: File, calidad: number): Promise<File> {
   const url = URL.createObjectURL(file)
   try {
@@ -107,6 +150,7 @@ async function comprimirImagen(file: File, calidad: number): Promise<File> {
   }
 }
 
+/** Intenta comprimir solo si supera MAX_IMAGEN_COMPRIMIDA_BYTES, probando calidades 0.8->0.3 secuencialmente. */
 async function comprimirImagenSiNecesario(file: File): Promise<File> {
   if (file.size <= MAX_IMAGEN_COMPRIMIDA_BYTES) return file
   let resultado = file
@@ -122,12 +166,14 @@ function formatoBytes(bytes: number): string {
   return `${Math.round(bytes / 1024)} KB`
 }
 
+/** Props del formulario: omitirCurp para cargo público, nombrePrefilled y flag de IA. */
 interface SolicitudFormProps {
   omitirCurp?: boolean
   nombrePrefilled?: string
   iniciarIA?: boolean
 }
 
+// --- Componente principal del formulario: estados de form, errores, mapa, archivos y envío ---
 export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }: SolicitudFormProps = {}) {
   const navigate = useNavigate()
   const [form, setForm] = useState<SolicitudFormData>({
@@ -153,13 +199,17 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     archivos: [],
   })
 
+  // errors: mapa de SolicitudErrors por campo (CURP, teléfono, etc.) usado para mensajes inline y toasts sileo
   const [errors, setErrors] = useState<SolicitudErrors>({})
-  const [apellidoPaterno, setApellidoPaterno] = useState('')
+    // Estado separado de nombre en 3 partes para validar contra CURP (paterno/materno/nombres)
+const [apellidoPaterno, setApellidoPaterno] = useState('')
   const [apellidoMaterno, setApellidoMaterno] = useState('')
   const [nombres, setNombres] = useState('')
-  const [submittedOnce, setSubmittedOnce] = useState(false)
+    // submittedOnce evita doble envío; showLottie controla overlay de espera; resultado guarda folio/error
+const [submittedOnce, setSubmittedOnce] = useState(false)
   const [showLottie, setShowLottie] = useState(false)
   const [resultado, setResultado] = useState<{ folio?: string; error?: string; advertencia?: string } | null>(null)
+  // showMapaCombinado controla modal/inline de mapa; isClosingAnimating evita dobles cierres durante transición 1s
   const [showMapaCombinado, setShowMapaCombinado] = useState(false)
   const [isClosingAnimating, setIsClosingAnimating] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
@@ -178,19 +228,24 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
   const [cardOffset, setCardOffset] = useState(0)
   const [ready, setReady] = useState(false)
   const initialOffsetRef = useRef(true)
+  // fileErrors: mensajes de validación de archivos; archivosInfo guarda File + originalBytes para mostrar compresión
   const [fileErrors, setFileErrors] = useState<string[]>([])
   const [archivosInfo, setArchivosInfo] = useState<{ archivo: File; originalBytes: number }[]>([])
+  // esDesktop: media query (min-width:768px) para elegir layout inline vs modal
   const [esDesktop, setEsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+  // mostrarAsistente: toggle del chat AsistenteIA (inicia visible si iniciarIA=true)
   const [mostrarAsistente, setMostrarAsistente] = useState(() => iniciarIA === true)
 
-  useEffect(() => {
+    // --- Responsive: suscripción a matchMedia para detectar desktop vs móvil ---
+useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)')
     const onChange = () => setEsDesktop(mq.matches)
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
-  useEffect(() => {
+    // --- Lottie: inicia/destruye animación de celular cuando showLottie cambia ---
+useEffect(() => {
     if (!showLottie || !lottieRef.current) return
     const anim = lottie.loadAnimation({
       container: lottieRef.current,
@@ -201,7 +256,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     return () => anim.destroy()
   }, [showLottie])
 
-  const setMapData = (data: import('./MapaCombinado').MapaCombinadoResult) => {
+    /** Aplica datos resueltos por MapaCombinado al estado form (pin + tramo). Normaliza coordenadas a string. */
+const setMapData = (data: import('./MapaCombinado').MapaCombinadoResult) => {
     const { pin, tramo } = data
     set('latitud', String(pin.lat))
     set('longitud', String(pin.lng))
@@ -228,7 +284,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     }
   }
 
-  const handleMapCombinadoConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
+    // Confirma modal de mapa (móvil): aplica datos, cierra y notifica a AsistenteIA
+const handleMapCombinadoConfirm = (data: import('./MapaCombinado').MapaCombinadoResult) => {
     setMapData(data)
     closeMap()
     setConteoMapa(n => n + 1)
@@ -239,11 +296,13 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     setConteoMapa(n => n + 1)
   }
 
-  const set = (field: keyof SolicitudFormData, value: unknown) => {
+    // Helper genérico para actualizar campo del form y limpiar su error asociado
+const set = (field: keyof SolicitudFormData, value: unknown) => {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
   }
 
+  /** Limpia todos los campos geográficos del form y tramoData (usado al abrir mapa de nuevo). */
   const clearMapData = () => {
     set('latitud', '')
     set('longitud', '')
@@ -260,7 +319,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     setTramoData(null)
   }
 
-  const esLleno = (campo: string): boolean => {
+    /** Para AsistenteIA: indica si un campo lógico ya está lleno (considera omitirCurp y partes de nombre). */
+const esLleno = (campo: string): boolean => {
     switch (campo) {
       case 'nombre':
         return omitirCurp
@@ -288,7 +348,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     }
   }
 
-  const aplicarIA = (datos: Partial<IaLlenarResultado>): string[] => {
+    /** Aplica datos extraídos por IA solo si el campo destino está vacío (no sobrescribe). Retorna etiquetas aplicadas. */
+const aplicarIA = (datos: Partial<IaLlenarResultado>): string[] => {
     const aplicados: string[] = []
     const nombreCompleto = (datos.nombre_solicitante ?? '').trim()
     const apPaternoIA = (datos.apellido_paterno ?? '').trim()
@@ -339,6 +400,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     return [...new Set(aplicados)]
   }
 
+  /** Limpia campo específico cuando el usuario niega confirmación en AsistenteIA. */
   const limpiarCampoIA = (campo: string) => {
     switch (campo) {
       case 'apellido_paterno': setApellidoPaterno(''); break
@@ -360,7 +422,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    // --- Envío: valida, muestra toasts por campo, llama crearSolicitud y maneja éxito/error + reset ---
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const nombreCompleto = omitirCurp
       ? form.nombre_solicitante.trim()
@@ -503,7 +566,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     }
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // --- Manejo de archivos: valida límite 3, tipo imagen/pdf, tamaño y compresión; genera fileErrors/archivosInfo ---
+const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
     e.target.value = ''
     const espacio = LIMITE_ARCHIVOS - form.archivos.length
@@ -563,7 +627,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     setFileErrors([])
   }
 
-  const inlineMap = showMapaCombinado && esDesktop
+    // --- Lógica responsive de mapa inline vs modal y animación de cardOffset ---
+const inlineMap = showMapaCombinado && esDesktop
   inlineMapRef.current = inlineMap
 
   const closeMap = () => {
@@ -573,6 +638,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     setTimeout(() => setIsClosingAnimating(false), 1000)
   }
 
+  // --- LayoutEffect inicial: calcula cardOffset para centrar card cuando inlineMap es false ---
   useLayoutEffect(() => {
     if (!initialOffsetRef.current) return
     initialOffsetRef.current = false
@@ -583,6 +649,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     requestAnimationFrame(() => setReady(true))
   }, [inlineMap])
 
+  // Sincroniza cardOffset al cambiar inlineMap (desktop toggle)
   useEffect(() => {
     if (initialOffsetRef.current) return
     const container = containerRef.current
@@ -595,6 +662,7 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     }
   }, [inlineMap])
 
+  // ResizeObserver mantiene cardOffset centrado al redimensionar contenedor
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -608,9 +676,11 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
     return () => ro.disconnect()
   }, [])
 
-  return (
+    // --- JSX: modales de éxito (folio), lottie, error y formulario por secciones ---
+return (
     <>
-      {resultado?.folio && (
+              {/* Modal éxito: muestra folio en grande, botón ver petición y nueva solicitud */}
+  {resultado?.folio && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
           <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl">
             <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />
@@ -658,7 +728,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
           </div>
         </div>
       )}
-      {showLottie && (
+              {/* Overlay Lottie fullscreen durante envío (celu.json loop) */}
+  {showLottie && (
         <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-8 bg-white px-6">
           <div ref={lottieRef} className="w-72 sm:w-96" />
           <div className="rounded-full bg-[#41504D] px-6 py-3 text-center text-sm text-[#DBC6B3] sm:px-10 sm:text-base">
@@ -673,7 +744,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            {/* Formulario principal dividido en 3 Cards: solicitante, obra, evidencia + aviso */}
+  <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         {mostrarAsistente && (
           <div className="mx-auto w-full max-w-2xl">
             <AsistenteIA
@@ -687,7 +759,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
           </div>
         )}
 
-        <div className="mx-auto w-full max-w-2xl">
+                {/* --- Card solicitante: 3 inputs de nombre separados o nombre completo, CURP condicional, tel/correo --- */}
+  <div className="mx-auto w-full max-w-2xl">
           <Card title="Datos del solicitante">
             <div className="flex flex-col gap-4">
               {!omitirCurp ? (
@@ -759,7 +832,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
           </Card>
         </div>
 
-        <div
+                {/* Contenedor animado para Card de obra + mapa inline: transforma cardOffset y flexBasis */}
+  <div
           ref={containerRef}
           className="flex w-full"
           style={{
@@ -922,7 +996,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
         </div>
 
         <div className="mx-auto w-full max-w-2xl">
-          <Card title="Evidencia (opcional)">
+                  {/* Card evidencia: input file oculto, botón seleccionar, lista con nombre/tamaño y trash */}
+  <Card title="Evidencia (opcional)">
             <div className="flex flex-col gap-3">
               <p className="text-xs text-gray-institutional/60">
                 Sube hasta 3 fotos o PDFs como evidencia. Fotos de hasta 10 MB
@@ -986,7 +1061,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
             </div>
           </Card>
 
-          <Card>
+                  {/* Checkbox aviso de privacidad con link a modal AvisoPrivacidad */}
+  <Card>
             <label className="flex items-start gap-3">
               <input
                 type="checkbox"
@@ -1023,7 +1099,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
         </div>
       </form>
 
-      {showMapaCombinado && !esDesktop && (
+          {/* MapaCombinado modal solo en móvil */}
+  {showMapaCombinado && !esDesktop && (
         <div className="md:hidden">
           <MapaCombinado
             key={mapKey}
@@ -1035,7 +1112,8 @@ export default function SolicitudForm({ omitirCurp, nombrePrefilled, iniciarIA }
           />
         </div>
       )}
-      {showInfoModal && (
+          {/* Modal informativo: colonia/junta se auto-resuelven vía mapa pero pueden variar */}
+  {showInfoModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowInfoModal(false)}>
           <div className="relative mx-auto w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />

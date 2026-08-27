@@ -1,6 +1,41 @@
+/**
+ * @file iaLocal.ts
+ * @description
+ * "IA local" sin servidor: heurísticas de extracción de entidades a partir de texto dictado
+ * o escrito por el ciudadano. Decodifica dictado por voz (es-MX) que transcribe letras/números
+ * como palabras ("cero", "equis", "ge") y extrae campos estructurados para el formulario.
+ *
+ * Dependencias:
+ * - `./servidor` → tipo `IaLlenarResultado` (contrato de campos que puede llenar la IA).
+ * - `../core/constants` → `TIPOS_OBRA_NOMBRES` (catálogo oficial de tipos de solicitud).
+ * - APIs nativas: `String.normalize`, `RegExp`, `Map/Set`.
+ *
+ * Flujo general:
+ * 1. El usuario dicta ("mi CURP es ...", "mi teléfono 222...") y el Web Speech API transcribe palabras.
+ * 2. `extraerCampo(campo, texto)` / `extraerTodo(texto)` aplican decodificadores por tipo:
+ *    - `telefono` → `decodificarTelefono` + ventana de 10 dígitos válida (MX).
+ *    - `curp` → `textoSoloCurp` + regex CURP o prefijo progresivo.
+ *    - `correo` → regex directa.
+ *    - `tipo` → `coincidirTipo` (nombres exactos + sinónimos regex).
+ *    - `nombre` etc. → `quitarRelleno` + `limpiarValor` + truncado `MAX_K`.
+ * 3. Se retorna un objeto parcial `IaLlenarResultado` que el formulario puede autocompletar.
+ *
+ * Decisiones de diseño:
+ * - `PALABRA_DIGITO` y `PALABRA_LETRA` cubren cómo es-MX verbaliza dígitos y deletreo (fonético).
+ * - `MISHEARD_DIGITO` corrige confusiones frecuentes ("pero"→0, "sitio"→7).
+ * - `TOKENS_IRRELEVANTES` se filtran al reconstruir CURP para no inventar letras.
+ * - Teléfono: se quita prefijo `52`/`521`, se buscan ventanas de 10 dígitos que no empiecen en 0/1 y se queda la última.
+ * - CURP: tres intentos (crudo → decodificado → prefijo progresivo con ≥6 dígitos) para soportar dictado parcial.
+ * - `quitarRelleno` elimina muletillas ("mi nombre es", "la colonia") que el STT incluye.
+ */
 import type { IaLlenarResultado } from './servidor'
 import { TIPOS_OBRA_NOMBRES } from '../core/constants'
 
+// ---------------------------------------------------------------------------
+// Límites de longitud por campo (truncado defensivo)
+// ---------------------------------------------------------------------------
+
+/** Longitudes máximas por campo para evitar overflows en UI/BD; usadas en `extraerCampo`. */
 const MAX_K = {
   nombre: 80,
   apellido: 40,
@@ -9,6 +44,11 @@ const MAX_K = {
   correo: 60,
 }
 
+/**
+ * Normaliza quitando diacríticos (NFD) — usado para comparaciones case/diacritic-insensitive.
+ * @param s - Texto con acentos.
+ * @returns Texto sin marcas combinantes.
+ */
 function normalizar(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
@@ -19,6 +59,10 @@ function normalizar(s: string): string {
 // como palabras ("cero", "tres", "equis", "ge"), lo que rompe CURP y teléfono.
 // ---------------------------------------------------------------------------
 
+/**
+ * Mapa palabra → dígito(s) para decodificar dictado numérico.
+ * Incluye del 0 al 30 y decenas (40,50...) porque el STT a veces junta ("veintidós"→"22").
+ */
 const PALABRA_DIGITO: Record<string, string> = {
   'cero': '0',
   'uno': '1',
@@ -60,6 +104,10 @@ const PALABRA_DIGITO: Record<string, string> = {
   'cien': '100',
 }
 
+/**
+ * Mapa palabra → letra para decodificar deletreo fonético es-MX.
+ * Cubre variantes ("be"/"b", "efe"/"f", "uve doble"/"w") que el STT produce al deletrear.
+ */
 const PALABRA_LETRA: Record<string, string> = {
   'a': 'A',
   'be': 'B',
@@ -120,15 +168,29 @@ const PALABRA_LETRA: Record<string, string> = {
   'z': 'Z',
 }
 
+/** Palabras conectoras/muletillas que no aportan a la CURP y se filtran en `textoSoloCurp`. */
 const TOKENS_IRRELEVANTES = new Set(['y', 'o', 'e', 'a', 'el', 'la', 'mi', 'es', 'con', 'de', 'del', 'al', 'pero', 'por', 'que'])
 
+// ---------------------------------------------------------------------------
+// Helpers de tipo de obra y teléfono
+// ---------------------------------------------------------------------------
+
+/**
+ * Intenta mapear texto libre a un `TIPOS_OBRA_NOMBRES` oficial.
+ * 1) Busca coincidencia exacta (substring normalizado) contra el catálogo.
+ * 2) Si no, prueba sinónimos regex (paviment→Pavimentación, banqueta→Banquetas, etc.).
+ * @param texto - Texto dictado/escrito.
+ * @returns Nombre oficial del tipo o `''` si no se reconoce.
+ */
 function coincidirTipo(texto: string): string {
   const t = normalizar(texto.toLowerCase())
+  // 1) Match exacto contra catálogo oficial
   const match = TIPOS_OBRA_NOMBRES.find((nombre) => {
     const n = normalizar(nombre.toLowerCase())
     return t.includes(n)
   })
   if (match) return match
+  // 2) Sinónimos coloquiales → nombre oficial
   const sinonimos: [RegExp, string][] = [
     [/paviment/, 'Pavimentación'],
     [/guarnicion/, 'Guarniciones'],
@@ -153,7 +215,8 @@ function coincidirTipo(texto: string): string {
   return ''
 }
 
-// Errores típicos del reconocimiento de voz es-MX al leer dígitos.
+// Errores típicos del reconocimiento de voz es-MX al leer dígitos (confusiones acústicas).
+/** Correcciones de palabras mal reconocidas que en realidad eran dígitos. */
 const MISHEARD_DIGITO: Record<string, string> = {
   'pero': '0',
   'perro': '0',
@@ -165,6 +228,12 @@ const MISHEARD_DIGITO: Record<string, string> = {
   'nueve': '9',
 }
 
+/**
+ * Decodifica cualquier texto a una cadena solo de dígitos, interpretando palabras numéricas.
+ * Limpia puntuación, pasa a minúsculas y para cada token: si es palabra-dígito o misheard, append; si no, extrae dígitos del token.
+ * @param texto - Texto crudo del STT.
+ * @returns Cadena de dígitos concatenados (puede ser vacía).
+ */
 function decodificarTelefono(texto: string): string {
   const limpio = normalizar(texto.toLocaleLowerCase('es')).replace(/[^\w\s]/g, ' ')
   let out = ''
@@ -178,10 +247,16 @@ function decodificarTelefono(texto: string): string {
   return out
 }
 
+/**
+ * Extrae un teléfono mexicano válido (10 dígitos) desde texto dictado.
+ * Pasos: decodifica → quita prefijo 52/521 → busca ventanas de 10 dígitos que no empiecen en 0/1 → fallback a última corrida.
+ * @param texto - Texto con posible teléfono.
+ * @returns Teléfono de 10 dígitos o `''` si no se puede extraer uno válido.
+ */
 function extraerTelefono(texto: string): string {
   let tel = decodificarTelefono(texto)
   if (!tel) return ''
-  // Quitar prefijo internacional mexicano si el reconocimiento lo capturó
+  // Quitar prefijo internacional mexicano si el reconocimiento lo capturó (+52 / 521)
   if (tel.startsWith('521') && tel.length >= 13) tel = tel.slice(2)
   else if (tel.startsWith('52') && tel.length >= 12 && tel[2] !== '51') tel = tel.slice(2)
 
@@ -196,12 +271,17 @@ function extraerTelefono(texto: string): string {
     mejor = win // quedarse con la última ventana válida (la más reciente del dictado)
   }
   if (mejor) return mejor
-  // Fallback: la última corrida larga
+  // Fallback: la última corrida larga de dígitos
   const corridas = tel.match(/\d{6,}/g) ?? []
   const ult = corridas[corridas.length - 1] ?? tel
   return (ult.length === 10 ? ult : ult.length > 10 ? ult.slice(-10) : tel.length === 10 ? tel : '')
 }
 
+/**
+ * Extrae un correo electrónico vía regex simple.
+ * @param texto - Texto que puede contener un email.
+ * @returns Email en minúsculas o `''` si no hay match.
+ */
 function extraerCorreo(texto: string): string {
   const m = texto.match(/[\w.+-]+@[\w-]+\.[\w.]+/)
   return m ? m[0].toLowerCase() : ''
@@ -210,6 +290,9 @@ function extraerCorreo(texto: string): string {
 /**
  * Convierte texto hablado o mezclado en una secuencia plana de caracteres
  * útiles para una CURP (letras + dígitos), limpiando ruido del STT.
+ * Para cada token: mapea palabra→dígito/letra/misheard, filtra irrelevantes, o limpia a alfanumérico upper.
+ * @param texto - Texto crudo del STT o escrito.
+ * @returns Cadena alfanumérica upper sin espacios (ej. "HEGM..." + dígitos).
  */
 function textoSoloCurp(texto: string): string {
   const limpio = normalizar(texto.toLocaleLowerCase('es')).replace(/[^\w\s]/g, ' ')
@@ -226,6 +309,14 @@ function textoSoloCurp(texto: string): string {
   return out
 }
 
+/**
+ * Extrae una CURP de 18 caracteres desde texto con 3 estrategias en cascada:
+ * 1) Regex directa sobre texto crudo (si el usuario la escribió).
+ * 2) Regex sobre `textoSoloCurp` (dictado deletreado).
+ * 3) Prefijo progresivo: si ya hay ≥6 dígitos, acepta `AAAA + dígitos` para autocompletado parcial.
+ * @param texto - Texto que puede contener CURP.
+ * @returns CURP de 18 o prefijo (4 letras + 1-6 dígitos) o `''` si no hay señal suficiente.
+ */
 function extraerCurp(texto: string): string {
   // 1) Intento directo sobre el texto crudo (si el usuario escribió la CURP)
   const crudo = texto.toUpperCase()
@@ -249,6 +340,15 @@ function extraerCurp(texto: string): string {
   return ''
 }
 
+// ---------------------------------------------------------------------------
+// Limpieza genérica de valores y muletillas
+// ---------------------------------------------------------------------------
+
+/**
+ * Limpia un valor: trim, quita puntuación final y colapsa espacios.
+ * @param v - Valor crudo.
+ * @returns Valor limpio.
+ */
 function limpiarValor(v: string): string {
   return v
     .trim()
@@ -256,6 +356,13 @@ function limpiarValor(v: string): string {
     .replace(/\s+/g, ' ')
 }
 
+/**
+ * Quita muletillas/ Prefijos conversacionales según el campo.
+ * Ej. "mi nombre es Juan" → "Juan", "la colonia es Centro" → "Centro".
+ * @param texto - Texto crudo.
+ * @param campo - Nombre del campo (determina qué regex aplicar).
+ * @returns Texto sin el prefijo detectado (o el original si no hay match).
+ */
 function quitarRelleno(texto: string, campo: string): string {
   let t = texto.trim()
   if (campo === 'nombre' || campo === 'nombres') {
@@ -275,6 +382,19 @@ function quitarRelleno(texto: string, campo: string): string {
   return t
 }
 
+// ---------------------------------------------------------------------------
+// API pública
+// ---------------------------------------------------------------------------
+
+/**
+ * Extrae un solo campo a partir de texto libre, aplicando el decodificador correspondiente.
+ * @param campo - Nombre del campo (`telefono`, `curp`, `correo`, `tipo`, o genérico como `nombre`/`colonia`).
+ * @param texto - Texto dictado/escrito.
+ * @returns Valor extraído/limpiado y truncado a `MAX_K`; `''` si no se pudo extraer.
+ * @example
+ * extraerCampo('telefono', 'mi teléfono es dos dos dos uno...') // → "2221..."
+ * extraerCampo('curp', 'HEGM...') // → "HEGM...18"
+ */
 export function extraerCampo(campo: string, texto: string): string {
   if (campo === 'telefono') return extraerTelefono(texto) || ''
   if (campo === 'curp') return extraerCurp(texto) || textoSoloCurp(texto).slice(0, MAX_K.curp)
@@ -283,6 +403,14 @@ export function extraerCampo(campo: string, texto: string): string {
   return limpiarValor(quitarRelleno(texto, campo)).slice(0, MAX_K.nombre)
 }
 
+/**
+ * Extrae todos los campos reconocibles de un texto largo (teléfono, CURP, correo, tipo, nombre).
+ * Útil para el modo "dictado libre" donde el usuario habla todo de corrido.
+ * @param texto - Texto completo dictado.
+ * @returns Objeto parcial `IaLlenarResultado` con solo los campos que se pudieron extraer.
+ * @example
+ * extraerTodo('Hola me llamo Juan Pérez, mi CURP es..., mi tel 222...') // → { nombre_solicitante, curp, telefono }
+ */
 export function extraerTodo(texto: string): Partial<IaLlenarResultado> {
   const out: Partial<IaLlenarResultado> = {}
   const tel = extraerTelefono(texto)
@@ -294,6 +422,7 @@ export function extraerTodo(texto: string): Partial<IaLlenarResultado> {
   if (correo) out.correo = correo
   if (tipo) out.tipo_solicitud = tipo
 
+  // Intentar extraer nombre completo con patrones conversacionales
   const mNombre = texto.match(/(?:mi nombre es|me llamo|soy|nombre)\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+?)(?:[,;.]|\s+(?:en|de|que|para|y mi|mi tel|mi correo|mi numero|mi colonia|la colonia|mi curp))/i)
   if (mNombre) {
     const nombreCompleto = limpiarValor(mNombre[1])

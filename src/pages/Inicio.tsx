@@ -1,3 +1,24 @@
+/**
+ * @file Inicio.tsx
+ * @description Página de inicio / landing de Peticiones Ciudadanas. Presenta hero, features,
+ *              pasos y CTA con animaciones de mosaico y ripple. Diferencia vista para cargo público.
+ *
+ * Secciones:
+ *  - Hero bienvenida si esCargoPublico (nombreCompleto) + logo circular.
+ *  - Hero principal: título "Peticiones Ciudadanas", subtítulo y botones Nueva Solicitud (/nueva-solicitud)
+ *    y Consultar (/consultar o /consultar-curp según rol).
+ *  - Features grid (4 cards): Solicita obras, Ubicación en mapa, Acuse y Ficha, Seguimiento (icons
+ *    ClipboardList, MapPin, FileText, Shield). Card hover.
+ *  - Mosaico: background repeat elemento-Mosaico.svg con radial mask, SVG filter feTurbulence +
+ *    feDisplacementMap con rippleScale spring (framer-motion useSpring stiffness180 damping15).
+ *    scale animado 3->28 en hover, desactivado en móvil. Demo: dispRef controla scale attr.
+ *  - "Cómo funciona" 3 pasos (Registro, Evidencia, Acuse) con animación secuencial en desktop:
+ *    activePos state (0..10) avanza cada 300ms después de 800ms delay; step-num con bounce y
+ *    dots conectores. Mobile muestra grid estático. MQ_DESKTOP '(min-width:768px)' con esMovil state.
+ *
+ * Hooks: useAuth para rol, useSpring para ripple, useEffect para matchMedia y anim loops.
+ * Estilos: Tailwind, contrast-mosaico-bg, step-num/dot-active/dot-base (clases globales).
+ */
 import { useEffect, useState, useRef } from 'react'
 import { useSpring } from 'framer-motion'
 import { Link } from 'react-router-dom'
@@ -9,6 +30,7 @@ import { nombreCompleto, esCargoPublico } from '../types/auth'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 import mosaico from '../assets/elemento-Mosaico.svg'
 
+// --- Features de landing: 4 cards con icon y descripción ---
 const features = [
   {
     icon: ClipboardList,
@@ -32,6 +54,7 @@ const features = [
   },
 ]
 
+// Pasos 'Cómo funciona' en 3 etapas
 const steps = [
   {
     number: '01',
@@ -52,10 +75,13 @@ const steps = [
 
 const MQ_DESKTOP = '(min-width: 768px)'
 
+// --- Inicio: hero, mosaico animado con ripple, features y pasos animados vs estáticos ---
 export default function Inicio() {
+  // user + esCargoPublico para personalizar hero y destino de Consultar
   const { user } = useAuth()
   const esCargo = user && esCargoPublico(user.rol)
 
+  // activePos para animar steps/dots; rippleActive para filtro mosaico; esMovil media query
   const [activePos, setActivePos] = useState(-1)
   const [rippleActive, setRippleActive] = useState(false)
   const [esMovil, setEsMovil] = useState(() => !window.matchMedia(MQ_DESKTOP).matches)
@@ -69,19 +95,22 @@ export default function Inicio() {
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
-  useEffect(() => {
+    // Suscribe rippleScale a feDisplacementMap scale (solo desktop)
+useEffect(() => {
     if (esMovil) return
     return rippleScale.on('change', (v) => {
       dispRef.current?.setAttribute('scale', String(v))
     })
   }, [rippleScale, esMovil])
 
-  useEffect(() => {
+    // Cambia escala de ripple en hover (3->28)
+useEffect(() => {
     if (esMovil) return
     rippleScale.set(rippleActive ? 28 : 3)
   }, [rippleActive, rippleScale, esMovil])
 
-  useEffect(() => {
+    // Anima activePos secuencialmente 0..10 cada 300ms para steps/dots
+useEffect(() => {
     if (esMovil) return
     let pos = 0
     let timer: number
@@ -97,6 +126,7 @@ export default function Inicio() {
     return () => clearTimeout(timer)
   }, [esMovil])
 
+  // --- JSX: hero con bienvenida condicional, hero principal, mosaico con ripple SVG, steps ---
   return (
     <div className="flex flex-col gap-12 py-4 md:py-8">
       {esCargo && (
@@ -116,7 +146,7 @@ export default function Inicio() {
           />
         </div>
         <h1 className="text-4xl font-bold tracking-tight text-guinda md:text-5xl">
-          Plataforma Ciudadana
+          Peticiones Ciudadanas
         </h1>
         <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-institutional/80">
           Solicita obras públicas para tu colonia de manera fácil, rápida y transparente
@@ -137,7 +167,8 @@ export default function Inicio() {
         </div>
       </section>
 
-      <section className="relative -mx-4 py-8 md:-mx-8">
+            {/* Sección mosaico con background repeat + mask radial + filter ripple */}
+  <section className="relative -mx-4 py-8 md:-mx-8">
         {!esMovil && (
           <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
             <defs>
@@ -182,7 +213,8 @@ export default function Inicio() {
         </div>
       </section>
 
-      <section className="overflow-hidden py-4">
+            {/* Cómo funciona: desktop animado con activePos vs mobile grid estático */}
+  <section className="overflow-hidden py-4">
         <h2 className="text-center text-2xl font-bold tracking-tight text-guinda">
           ¿Cómo funciona?
         </h2>

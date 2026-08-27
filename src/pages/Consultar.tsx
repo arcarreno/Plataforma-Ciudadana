@@ -1,3 +1,21 @@
+/**
+ * @file Consultar.tsx
+ * @description Página para consultar solicitudes propias cuando el usuario está autenticado.
+ *              Soporta dos modos: listado por nombre (cargo público logueado) y detalle por folio
+ *              via query param ?folio=.
+ *
+ * Flujo:
+ *  - Guardia: si !user, redirige a /consultar-curp (replace).
+ *  - Si folioParam presente: consultarSolicitud(folio) -> setResultadoFolio o error.
+ *  - Si no folio: listarSolicitudesPorNombre(nombreCompleto(user)) -> setResultados.
+ *  - Loading state con mensaje "Cargando tus peticiones...".
+ *  - Render: error en alert rojo, resultadoFolio en TarjetaSolicitud, vacío con CTA "Crear nueva",
+ *    o listado con conteo y map de TarjetaSolicitud (key id_solicitud).
+ *
+ * Endpoints: lib/solicitud - consultarSolicitud, listarSolicitudesPorNombre.
+ * Dependencias: useSearchParams, useNavigate, useAuth, TarjetaSolicitud, Card, Button.
+ * Layout: Card title "Consultar" centrada max-w-lg.
+ */
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { FileText } from 'lucide-react'
@@ -9,18 +27,22 @@ import { consultarSolicitud, listarSolicitudesPorNombre } from '../lib/solicitud
 import { nombreCompleto } from '../types/auth'
 import type { Solicitud } from '../types/solicitud'
 
+/** Consultar autenticado: lista por nombre o detalle por ?folio=. Redirige a /consultar-curp si no hay user. */
 export default function Consultar() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  // folioParam desde ?folio= para modo detalle directo
   const folioParam = searchParams.get('folio')
 
+  // loading + resultados lista vs resultadoFolio single + error
   const [loading, setLoading] = useState(true)
   const [resultados, setResultados] = useState<Solicitud[]>([])
   const [resultadoFolio, setResultadoFolio] = useState<Solicitud | undefined>(undefined)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+    // Effect principal: ramifica entre detalle por folio y listado por nombreCompleto(user)
+useEffect(() => {
     if (!user) {
       navigate('/consultar-curp', { replace: true })
       return
@@ -50,8 +72,10 @@ export default function Consultar() {
     return () => { activo = false }
   }, [user, folioParam, navigate])
 
+  // Guard: no renderiza nada si no hay user (redirección ya lanzada)
   if (!user) return null
 
+  // --- JSX Card Consultar con estados loading/error/resultado/vacío/lista ---
   return (
     <div className="mx-auto max-w-lg py-4">
       <Card title="Consultar">

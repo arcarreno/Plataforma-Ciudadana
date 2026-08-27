@@ -1,3 +1,37 @@
+/**
+ * @file SolicitudDetail.tsx
+ * @description Modal de detalle completo de una Solicitud. Muestra datos del solicitante,
+ *              obra, tramo, mapas Leaflet, evidencias, escuelas/iglesias/rutas, y permite
+ *              edición (si es cargo público) y generación/envío de documentación.
+ *
+ * Flujo:
+ *  1. Renderiza cabecera con folio y prioridad (peso_ranking: >=15 alta guinda, 12 media-alta,
+ *     10 media, resto baja) + botón cerrar.
+ *  2. Carga capas GeoJSON (cargarCapas) y detecta punto para mostrar colonia/junta/ZAP en mapa.
+ *     Resuelve SIGED por CCT (debounce 500ms, consultarSIGED) y vecinos cercanos si peso=12
+ *     (concentracionVecinos).
+ *  3. Mapas: Ubicación (pin) y Tramo (polyline multipunto) con react-leaflet. Controles para
+ *     satélite (Esri World_Imagery), capas (colonias/juntas/ZAP), StreetView (Mapillary) y
+ *     fullscreen. Estilos COLONIA_STYLE/JUNTA_STYLE/ZONA_ZAP_STYLE.
+ *  4. Edición inline (actualizarGeo / actualizarObra / actualizarTramo) — solo si esCargoPublico.
+ *     Gestiona listas dinámicas de escuelas/iglesias/rutas con add/update/remove.
+ *  5. Documentación: tabs Oficio/Ficha/Enviar. VistaOficioEditable y VistaFichaEditable se
+ *     exportan a PDF base64 (html2canvas+jsPDF) y se envían vía POST /api/enviar-documentacion
+ *     con límite 3.8MB (413 handling). Blur forzado en contentEditable antes de capturar.
+ *  6. Vecinos: si peso=12, lista de folios cercanos navegables via obtenerSolicitud + onNavigate.
+ *
+ * Endpoints:
+ *  - servidor: concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud
+ *  - consultarSIGED(CCT) -> datos SEP (nivel, alumnos)
+ *  - /api/enviar-documentacion (oficioPdf, fichaPdf base64)
+ *
+ * Decisiones:
+ *  - Leaflet divIcon SVG guinda personalizado; DetailMarker usa useMap para añadir marker nativo.
+ *  - parseList/shortRoute normalizan arrays de strings con comas y rutas "X - Y".
+ *  - Satélite vs calle toggle, capas toggle, StreetView toggle con PersonStanding.
+ *  - Mutación directa de objeto s (s.calle=...) tras save para reflejar sin refetch (tradeoff).
+ *  - Email docs: blur en activeElement contentEditable + 80ms delay para que DOM refleje edición.
+ */
 import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
@@ -26,6 +60,7 @@ interface SolicitudDetailProps {
   userRole?: string
 }
 
+// --- Iconos Leaflet: pin principal guinda + markers numerados 1/2 para tramo ---
 const icon = L.divIcon({
   className: '',
   html: '<svg viewBox="0 0 32 48" width="24" height="36" xmlns="http://www.w3.org/2000/svg"><path d="M16 0C7.16 0 0 7.16 0 16c0 10.6 12.8 26.6 14.6 28.8.6.8 1.8.8 2.4 0C18.8 42.6 32 26.6 32 16 32 7.16 24.84 0 16 0z" fill="#7D2447"/><circle cx="16" cy="16" r="10" fill="white" opacity="0.9"/><circle cx="16" cy="16" r="8" fill="#7D2447"/></svg>',
@@ -47,6 +82,7 @@ const marker2 = L.divIcon({
   iconAnchor: [10, 10],
 })
 
+// --- Estilos GeoJSON para capas de colonia (guinda), junta (verde) y ZAP (dorado) ---
 const COLONIA_STYLE = {
   color: '#7d2447',
   weight: 2,
@@ -68,6 +104,7 @@ const ZONA_ZAP_STYLE = {
   fillOpacity: 0.06,
 }
 
+/** Normaliza array de strings con comas internas en lista plana. */
 function parseList(items?: string[]): string[] {
   return (items || []).join(', ').split(',').map(s => s.trim()).filter(Boolean)
 }
@@ -77,6 +114,7 @@ function shortRoute(r: string): string {
   return idx > 0 ? r.slice(0, idx).trim() : r.trim()
 }
 
+/** Helper react-leaflet: añade L.marker nativo al mapa y lo limpia en unmount. */
 function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: L.DivIcon }) {
   const map = useMap()
   useEffect(() => {
@@ -86,10 +124,14 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
   return null
 }
 
+// --- Componente detalle: estado para capas, detection, fullscreen, satélite, StreetView, SIGED, vecinos y docs ---
 export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, onNavigate, userRole }: SolicitudDetailProps) {
+  // Alias s para brevedad; hasTramo indica si hay p1/p2 válidos
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
+  // detection: DeteccionPunto resuelta via detectarPunto para el pin principal
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
+  // Estados de fullscreen y modo satélite/StreetView para ambos mapas (ubicación + tramo)
   const [tramoFullscreen, setTramoFullscreen] = useState(false)
   const [ubicacionFullscreen, setUbicacionFullscreen] = useState(false)
   const [satelliteUbicacion, setSatelliteUbicacion] = useState(false)
@@ -100,28 +142,34 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const [showLayersUbicacion, setShowLayersUbicacion] = useState(false)
   const [showLayersTramo, setShowLayersTramo] = useState(false)
 
+  // Normaliza calle/entre_calles a objeto o null para mostrar bloque
   const calleInfo = s.calle || s.entre_calles
     ? { calle: s.calle || '', entreCalles: s.entre_calles || '' }
     : null
+  // SIGED: CCT input (10 chars), sigedData con datos SEP, loading/error
   const [sigedCct, setSigedCct] = useState('')
   const [sigedData, setSigedData] = useState<SigedEscuela | null>(null)
   const [sigedLoading, setSigedLoading] = useState(false)
   const [sigedError, setSigedError] = useState<string | null>(null)
+  // Vecinos cercanos solo si peso=12 (concentración), con loading
   const [vecinos, setVecinos] = useState<{ id_solicitud: number; folio_unico: string; distancia_m: number }[]>([])
   const [vecinosLoading, setVecinosLoading] = useState(false)
+  // Tabs de documentación: oficio/ficha/enviar (null cierra modal)
   const [documentTab, setDocumentTab] = useState<'oficio' | 'ficha' | 'enviar' | null>(null)
   const [enviandoEmail, setEnviandoEmail] = useState(false)
   const [emailEnviado, setEmailEnviado] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
 
-  useEffect(() => {
+    // Carga capas GeoJSON y resuelve DeteccionPunto para el pin de la solicitud
+useEffect(() => {
     cargarCapas().then(c => {
       setCapas(c)
       setDetection(detectarPunto(s.latitud, s.longitud, c))
     })
   }, [s.latitud, s.longitud])
 
-  useEffect(() => {
+    // --- SIGED: debounce 500ms al escribir CCT de 10 chars, consulta y maneja data/error ---
+useEffect(() => {
     if (sigedCct.length !== 10) {
       setSigedData(null)
       setSigedError(null)
@@ -145,7 +193,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     return () => { cancelled = true; clearTimeout(timer) }
   }, [sigedCct])
 
-  useEffect(() => {
+    // --- Vecinos: si peso_ranking 12 (concentración) carga solicitudes cercanas para navegar ---
+useEffect(() => {
     if (s.peso_ranking !== 12 || !s.id_solicitud) {
       setVecinos([])
       return
@@ -159,6 +208,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
       .catch(() => setVecinosLoading(false))
   }, [s.id_solicitud, s.peso_ranking])
 
+  // Abre modal de docs en Oficio por defecto
   const handleOpenDocumentModal = () => {
     setDocumentTab('oficio')
   }
@@ -170,7 +220,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const oficioRef = useRef<{ exportarPdf: () => Promise<string> }>(null)
   const fichaRef = useRef<{ exportarPdf: () => Promise<string> }>(null)
 
-  const handleEnviarDocumentacion = async () => {
+    /** Exporta oficio+ficha a base64 (blur en contentEditable) y POST a /api/enviar-documentacion con límite 3.8MB. */
+const handleEnviarDocumentacion = async () => {
     setEnviandoEmail(true)
     setEmailError(null)
     try {
@@ -218,12 +269,14 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     setEnviandoEmail(false)
   }
 
+  // Solo cargo público ve botones de generar docs (esCargoPublico)
   const showGenerateButtons = userRole && esCargoPublico(userRole)
 
   const esMaxRanking = s.peso_ranking === 10
   const esConcentracion = s.peso_ranking === 12
   const esPrioridad = s.peso_ranking != null && s.peso_ranking >= 15
 
+  // Estados de edición (geo/obra/tramo) con modales inline; editListas y editForm guardan borradores
   const [editGeoOpen, setEditGeoOpen] = useState(false)
   const [editObraOpen, setEditObraOpen] = useState(false)
   const [editTramoOpen, setEditTramoOpen] = useState(false)
@@ -247,7 +300,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   })
   const [editSaving, setEditSaving] = useState(false)
 
-  const handleSaveGeo = async () => {
+    // --- Edición: guarda calle/entre_calles via actualizarGeo (optimista muta s) ---
+const handleSaveGeo = async () => {
     setEditSaving(true)
     await actualizarGeo(s.id_solicitud!, { calle: editForm.calle, entre_calles: editForm.entre_calles })
     s.calle = editForm.calle
@@ -270,6 +324,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     setEditObraOpen(false)
   }
 
+  /** Guarda tramo: normaliza listas, convierte distancia/ancho a Number/null y persiste vía actualizarTramo. */
   const handleSaveTramo = async () => {
     setEditSaving(true)
     const toList = (arr: string[]) => arr.map(x => x.trim()).filter(Boolean)
@@ -298,7 +353,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     setEditTramoOpen(false)
   }
 
-  const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: string) => {
+    // Helpers para editar listas dinámicas de tramo (escuelas/iglesias/rutas)
+const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: string) => {
     setEditListas(prev => ({ ...prev, [key]: prev[key].map((v, j) => (j === i ? valor : v)) }))
   }
   const addLista = (key: 'escuelas' | 'iglesias' | 'rutas') => {
@@ -312,8 +368,10 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
     setEditListas(prev => ({ ...prev, [key]: prev[key].filter((_, j) => j !== i) }))
   }
 
+  //Flag de permiso edición (cargo público)
   const puedeEditar = userRole && esCargoPublico(userRole)
 
+  // --- Render condicional: si documentTab, muestra editor oficio/ficha/enviar; si no, detalle completo ---
   return (
     <>
       {documentTab ? (
@@ -481,7 +539,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
             <div className="bg-white p-6">
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="flex flex-col gap-4">
-                <Card title="Datos del solicitante">
+                              {/* Card solicitante con User/Phone/Mail icons */}
+  <Card title="Datos del solicitante">
                   <div className="flex flex-col gap-2 text-sm">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-guinda" />
@@ -502,7 +561,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                   </div>
                 </Card>
 
-                <Card title="Datos de la obra" className="relative">
+                              {/* Card obra editable: tipo/colonia/junta/estatus/peso/fecha + select si onEstatusChange */}
+  <Card title="Datos de la obra" className="relative">
                   {puedeEditar && (
                     <button
                       type="button"
@@ -567,6 +627,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
 
                 {(s.zona_zap != null || s.cobertura_agua != null || s.distancia_tramo_m != null || s.ancho_calle_m != null || (s.escuelas_cercanas && s.escuelas_cercanas.length > 0) || (s.iglesias_cercanas && s.iglesias_cercanas.length > 0) || (s.transportes_cercanos && s.transportes_cercanos.length > 0)) && (
                   <Card title="Información del tramo" className="relative">
+                    {/* Card tramo con distancia/ancho/ZAP/agua + tabla escuelas/iglesias/rutas */}
                     <div className="absolute right-2 top-2 flex items-center gap-1">
                       {(() => {
                         const total = parseList(s.escuelas_cercanas).length + parseList(s.iglesias_cercanas).length + parseList(s.transportes_cercanos).length
@@ -716,6 +777,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                   </Card>
                 )}
 
+                {/* Descripción libre del problema */}
                 {s.descripcion && (
                   <Card title="Descripción">
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-institutional">
@@ -724,6 +786,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                   </Card>
                 )}
 
+                {/* Evidencias adjuntas con links a urlEvidencia */}
                 {s.rutas_evidencia && s.rutas_evidencia.length > 0 && (
                   <Card title={`Evidencia (${s.rutas_evidencia.length})`}>
                     <div className="flex flex-wrap gap-2">
@@ -773,6 +836,7 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
               </div>
 
               <div className="flex flex-col gap-4">
+                {/* Mapa pin 16 zoom no draggable con fullscreen satélite/capas/StreetView */}
                 <Card title="Ubicación">
                   {ubicacionFullscreen && (
                     <div className="fixed inset-0 z-[10001] bg-black">
@@ -874,7 +938,8 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
                   </div>
                 </Card>
 
-                {hasTramo && (() => {
+                              {/* Mapa tramo con markers numerados y polyline dash guinda; fullscreen opcional */}
+  {hasTramo && (() => {
                   const puntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
                     ? s.tramo_puntos
                     : [

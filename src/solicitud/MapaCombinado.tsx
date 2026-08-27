@@ -1,3 +1,41 @@
+/**
+ * @file MapaCombinado.tsx
+ * @description Mapa combinado en 2 pasos: 1) pin de ubicación, 2) tramo multipunto. Es el
+ *              selector geográfico principal de SolicitudForm. Soporta modo inline (desktop
+ *              embebido) y modal (móvil). Integra geolocalización, validaciones de distancia,
+ *              reverse geocoding y tour guiado.
+ *
+ * Flujo detallado:
+ *  Paso "punto":
+ *   - Usuario hace click para colocar marker; se guarda lastClick sin resolver.
+ *   - "Picar ubicación": cargarCalles() + detectarPunto() para colonia/junta/ZAP/cobertura +
+ *     geolocalizarCalle() para calle/entreCalles. Maneja caso fuera_alcance con inputs manuales.
+ *   - Confirmar ubicación: guarda PinData en pinDataRef y avanza a step="tramo". Entre-calles
+ *     resuelve con lógica de entreCallesDetected (0/1/>=2) combinando detections + manual.
+ *  Paso "tramo":
+ *   - Validación de distancia: primer punto del tramo debe estar <=500m del pin, siguientes
+ *     <=5000m (usa L.latLng.distanceTo). Muestra tramoError si excede.
+ *   - Cada click añade a tramoPoints; programarDeteccionTramo debounce 150ms para
+ *     detectarTramo(puntos,capas) -> distancia, ancho, escuelas/iglesias/transportes.
+ *   - Controles Undo, Reiniciar, Terminar, Confirmar tramo -> construye MapaCombinadoResult
+ *     {pin, tramo} y llama onConfirm. Muestra Circle de 500m/5000m según zoom <=14.
+ *
+ * Subcomponentes:
+ *  - TramoMarker: marker numerado vía useMap.
+ *  - ResizeHandler: ResizeObserver + timeouts para invalidateSize (crucial en inline con animación).
+ *  - ZoomTracker: reporta zoom para mostrar/ocultar círculos de referencia.
+ *  - LocateOnMount: escucha locationfound/error con fallback highAccuracy false, muestra marker
+ *    azul y círculo de accuracy; localizar() dispara map.locate con UX locating/locateMsg.
+ *  - ClickHandler: delega click según stepRef (punto vs tramo).
+ *
+ * Endpoints/libs: cargarCapas, detectarPunto, detectarTramo, geolocalizarCalle/cargarCalles,
+ *                 guiaTour (correrTour/detenerTour), leaflet, react-leaflet.
+ * Props: onConfirm(data: MapaCombinadoResult), onClose, initialLat/Lng, inline?, onPaso1? (tour).
+ * Estado clave: step, marker, detection, hasPicado, manualCalle/Entre, tramoPoints/Done/Error/Confirmed.
+ * Inline: data-tour atributos para tour, header con pasos 1/2 y botón Help.
+ * Decisiones: debounce 150ms evita recalcular Turf en cada click rápido; límite 500m/5km evita
+ * tramos irreales; pinDataRef evita re-renders; paso1TourFired ref dispara tour solo una vez.
+ */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
@@ -10,6 +48,7 @@ import { geolocalizarCalle, cargarCalles } from '../lib/geolocalizarCalle'
 import type { CalleInfo } from '../lib/geolocalizarCalle'
 import logoSrc from '../assets/Logo_Semovinfra.jpg'
 
+// --- Centro Puebla y estilos de capas GeoJSON ---
 const DEFAULT_CENTER: [number, number] = [19.043702, -98.198194]
 const DEFAULT_ZOOM = 13
 
@@ -29,8 +68,10 @@ const icon = L.divIcon({
   popupAnchor: [0, -42],
 })
 
+/** Pasos del wizard: punto (pin) y tramo (polilínea). */
 type Step = 'punto' | 'tramo'
 
+/** Datos resueltos del pin: coords + colonia/junta + calle/entre + ZAP/cobertura. */
 interface PinData {
   lat: number; lng: number; colonia: string; junta_auxiliar: string
   calle: string; entre_calles: string; zona_zap: boolean; cobertura_agua: boolean
@@ -57,6 +98,7 @@ interface MapaCombinadoProps {
   onPaso1?: () => void
 }
 
+/** Marker numerado para puntos del tramo (1..n). */
 function TramoMarker({ position, label }: { position: L.LatLngExpression; label: number }) {
   const map = useMap()
   useEffect(() => {
@@ -73,6 +115,7 @@ function TramoMarker({ position, label }: { position: L.LatLngExpression; label:
   return null
 }
 
+/** Invalida tamaño del mapa al redimensionar contenedor; maneja inline con múltiples timeouts. */
 function ResizeHandler({ inline }: { inline?: boolean }) {
   const map = useMap()
   const firstValid = useRef(true)
@@ -110,6 +153,7 @@ function ResizeHandler({ inline }: { inline?: boolean }) {
   return null
 }
 
+/** Reporta nivel de zoom para mostrar círculos de referencia 500m/5km. */
 function ZoomTracker({ onZoom }: { onZoom: (zoom: number) => void }) {
   const map = useMap()
   useEffect(() => {
@@ -123,6 +167,7 @@ function ZoomTracker({ onZoom }: { onZoom: (zoom: number) => void }) {
   return null
 }
 
+/** Gestiona geolocalización nativa con marker azul, fallback highAccuracy y manejo de errores silencioso vs user-requested. */
 function LocateOnMount({
   onLocated,
   onLocateError,
@@ -214,7 +259,9 @@ function ClickHandler({
   return null
 }
 
+// --- Componente principal combinado: estados punto/tramo, geolocalización, validaciones y confirmación ---
 export default function MapaCombinado({ onConfirm, onClose, initialLat, initialLng, inline, onPaso1 }: MapaCombinadoProps) {
+  // capas cargadas (colonias/juntas/ZAP/escuelas/iglesias/STV/agua); loading; step ref
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState<Step>(initialLat && initialLng ? 'tramo' : 'punto')
@@ -223,10 +270,12 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const paso1TourFired = useRef(false)
   const mapRef = useRef<L.Map | null>(null)
   const userRequestedLocate = useRef(false)
+  // locating/locateMsg para UX de geolocalización
   const [locating, setLocating] = useState(false)
   const [locateMsg, setLocateMsg] = useState<string | null>(null)
 
-  const localizar = useCallback(() => {
+    /** Solicita ubicación del dispositivo vía map.locate; maneja soporte y estados locating/msg. */
+const localizar = useCallback(() => {
     const map = mapRef.current
     if (!map || locating) return
     if (!('geolocation' in navigator)) {
@@ -244,7 +293,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     setLocateMsg(msg)
   }, [])
 
-  useEffect(() => {
+    // Dispara tour guiado una sola vez tras cargar capas
+useEffect(() => {
     if (loading || paso1TourFired.current) return
     paso1TourFired.current = true
     if (onPaso1) onPaso1()
@@ -252,10 +302,12 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
 
   useEffect(() => () => detenerTour(), [])
 
+  // Toggles de capas y satélite + mapZoom para círculos
   const [showLayers, setShowLayers] = useState(false)
   const [satellite, setSatellite] = useState(false)
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM)
 
+  // marker pin (inicial con initialLat/Lng); detection DeteccionPunto; hasPicado; manual inputs
   const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
     initialLat && initialLng ? { lat: parseFloat(initialLat), lng: parseFloat(initialLng) } : null
   )
@@ -270,6 +322,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const lastClick = useRef<{ lat: number; lng: number } | null>(null)
   const pinDataRef = useRef<PinData | null>(null)
 
+  // Estado tramo: puntos, detection, done/error/confirmed, info card, timer debounce
   const [tramoPoints, setTramoPoints] = useState<{ lat: number; lng: number }[]>([])
   const [tramoDetection, setTramoDetection] = useState<DeteccionTramo | null>(null)
   const [tramoDone, setTramoDone] = useState(false)
@@ -278,13 +331,15 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const [showTramoInfoCard, setShowTramoInfoCard] = useState(false)
   const tramoCalcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Limpia timer de tramo al desmontar
   useEffect(() => {
     return () => {
       if (tramoCalcTimer.current) clearTimeout(tramoCalcTimer.current)
     }
   }, [])
 
-  const programarDeteccionTramo = (puntos: { lat: number; lng: number }[]) => {
+    // Debounce 150ms para detectarTramo (evita recalcular Turf en ráfaga)
+const programarDeteccionTramo = (puntos: { lat: number; lng: number }[]) => {
     if (tramoCalcTimer.current) clearTimeout(tramoCalcTimer.current)
     if (puntos.length < 2 || !capas) {
       setTramoDetection(null)
@@ -296,6 +351,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     }, 150)
   }
 
+  // Carga todas las capas necesarias para punto+tramo; delay 1.5s si inline
   useEffect(() => {
     cargarCapas(['colonias', 'juntas', 'zonasZap', 'escuelas', 'iglesias', 'stv', 'coberturaAgua']).then(c => {
       setCapas(c)
@@ -307,7 +363,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     })
   }, [inline])
 
-  const handlePuntoClick = useCallback((latlng: { lat: number; lng: number }) => {
+    // Guarda click de punto sin resolver
+const handlePuntoClick = useCallback((latlng: { lat: number; lng: number }) => {
     setMarker(latlng)
     lastClick.current = latlng
     setHasPicado(false)
@@ -322,7 +379,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     }
   }, [handlePuntoClick])
 
-  const handleTramoClick = useCallback((latlng: { lat: number; lng: number }) => {
+    // Valida distancia (500m/5km) y añade punto de tramo con debounce
+const handleTramoClick = useCallback((latlng: { lat: number; lng: number }) => {
     if (tramoDone) return
     if (!marker) return
 
@@ -344,6 +402,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     programarDeteccionTramo(next)
   }, [tramoPoints, tramoDone, capas, marker])
 
+  /** Resuelve colonia/junta + calle para punto actual. */
   const handlePicar = async () => {
     if (!lastClick.current || !capas) return
     setBuscandoCalle(true)
@@ -358,7 +417,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     })
   }
 
-  const handleConfirmarPunto = () => {
+    // Construye PinData resolviendo entreCalles según entreCallesDetected y avanza a tramo
+const handleConfirmarPunto = () => {
     if (!detection) return
     const isOutside = detection?.fuera_alcance
     if (isOutside && (!manualColonia.trim() || !manualJunta.trim())) return
@@ -387,6 +447,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     setStep('tramo')
   }
 
+  // Elimina último punto de tramo y reprograma detección
   const handleUndoLast = () => {
     if (tramoPoints.length === 0) return
     const next = tramoPoints.slice(0, -1)
@@ -394,6 +455,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     programarDeteccionTramo(next)
   }
 
+  // Reinicia tramo completo cancelando timer
   const handleResetTramo = () => {
     if (tramoCalcTimer.current) clearTimeout(tramoCalcTimer.current)
     setTramoPoints([])
@@ -402,6 +464,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
     setTramoConfirmed(false)
   }
 
+  /** Construye MapaCombinadoResult con pin+tramo y llama onConfirm. */
   const handleConfirmarTramo = () => {
     if (!pinDataRef.current) return
     if (tramoDetection) {
@@ -429,6 +492,7 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
   const isOutside = d?.fuera_alcance
   const td = tramoDetection
 
+  // --- JSX: header con pasos y Help, mapa con capas/markers/círculos, controles y panel inferior ---
   return (
     <div data-tour="mapa-completo" className={inline ? 'flex h-full w-full flex-col bg-white' : 'fixed inset-0 z-50 flex flex-col bg-black/60'}>
       <div className="flex items-center justify-between bg-white px-4 py-3 shadow-md">
@@ -442,7 +506,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
           {inline ? 'Cerrar' : 'Cancelar'}
         </button>
         <h2 className="text-sm font-semibold text-guinda">
-          {step === 'punto' ? 'Seleccionar ubicación' : 'Dibujar tramo'}
+                    {/* Panel punto: instrucciones según marker/hasPicado/detection */}
+  {step === 'punto' ? 'Seleccionar ubicación' : 'Dibujar tramo'}
         </h2>
         <div className="flex items-center gap-1.5 text-xs text-gray-institutional/60" data-tour="pasos">
           <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 'punto' ? 'bg-guinda text-white' : 'bg-green-100 text-green-700'}`}>
@@ -823,7 +888,8 @@ export default function MapaCombinado({ onConfirm, onClose, initialLat, initialL
         </div>
       </div>
 
-      {showTramoInfoCard && pinDataRef.current && (
+              {/* --- Modal resumen tras confirmar tramo: muestra punto, tramo y colonia/junta/calle --- */}
+{showTramoInfoCard && pinDataRef.current && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowTramoInfoCard(false)}>
           <div data-tour="resumen-obra" className="relative mx-auto max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="rounded-t-2xl bg-guinda px-6 pb-6 pt-4" />

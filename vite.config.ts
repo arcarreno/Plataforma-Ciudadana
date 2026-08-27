@@ -1,3 +1,19 @@
+/**
+ * vite.config.ts — Configuración de Vite + 2 middlewares dev (SIGED y Email)
+ *
+ * Qué hace:
+ *  1) Plugins base: react() y tailwindcss() para la SPA.
+ *  2) sigedPlugin(): middleware dev que proxea GET /api/consultar-siged?cct=...&turno=...
+ *     -> https.get a https://api.siged.sep.gob.mx con headers spoof (Origin/Referer)
+ *     -> normaliza datos + estadística -> responde {cct, nombre, nivel, totalAlumnos...}
+ *     Solo en dev (npm run dev). En prod lo hace api/consultar-siged.ts (Vercel).
+ *  3) emailPlugin(): middleware dev que proxea POST /api/enviar-documentacion {correo, folio, oficioPdf, fichaPdf}
+ *     -> nodemailer.createTransport(smtp.gmail.com:587) -> sendMail con HTML guinda + 2 PDFs + 2 logos CID
+ *     Solo en dev. En prod lo hace api/enviar-documentacion.ts.
+ *  4) proxy /api -> http://10.4.3.154:4920 (FastAPI en intranet, vía Tailscale/Cloudflare).
+ *     En prod el /api lo resuelve Vercel (rewrites en vercel.json).
+ */
+
 import https from 'node:https'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -7,11 +23,14 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import dotenv from 'dotenv'
 
+// Cargamos .env (VITE_API_URL, SMTP_*, etc.) antes de definir plugins
 dotenv.config()
 
+// Logos para CID en el correo (se leen en frío al iniciar Vite, no en cada request)
 const LOGO_PUEBLA = fs.readFileSync(path.resolve(__dirname, 'src/assets/Puebla.png'))
 const LOGO_SEMOVINFRA = fs.readFileSync(path.resolve(__dirname, 'src/assets/Logo_Semovinfra.jpg'))
 
+// Headers para engañar a SIGED (valida Origin/Referer y User-Agent)
 const SIGED_HEADERS = {
   Accept: 'application/json',
   'Content-Type': 'application/json',
@@ -20,29 +39,45 @@ const SIGED_HEADERS = {
   Referer: 'https://siged.sep.gob.mx/SIGED/escuelas.html',
 }
 
+/**
+ * Helper dev: GET https a SIGED con headers spoof, timeout 10s, rejectUnauthorized:false.
+ * Usa node:https nativo para controlar headers y timeout fino.
+ */
 function sigedGet(url: string): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
+    // https.get con headers y rejectUnauthorized:false por si el cert de SIGED falla
     const req = https.get(url, { headers: SIGED_HEADERS, rejectUnauthorized: false }, (res) => {
       let data = ''
+      // Acumulamos chunks
       res.on('data', (chunk: string) => { data += chunk })
+      // Al terminar, resolvemos con status y body
       res.on('end', () => resolve({ status: res.statusCode || 0, body: data }))
     })
     req.on('error', reject)
+    // Timeout 10s -> destruimos y rechazamos
     req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout SIGED')) })
   })
 }
 
+/**
+ * Plugin Vite dev: GET /api/consultar-siged?cct=21DPR0000A&turno=1
+ * Replica la lógica de api/consultar-siged.ts pero como middleware de Vite (solo dev).
+ */
 function sigedPlugin() {
   return {
     name: 'siged-proxy',
     configureServer(server: any) {
+      // Registramos middleware en /api/consultar-siged (Vite dev server)
       server.middlewares.use('/api/consultar-siged', async (req: any, res: any) => {
+        // CORS para que el frontend (localhost:5173) pueda llamar
         res.setHeader('Access-Control-Allow-Origin', '*')
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
+        // Preflight CORS
         if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return }
 
+        // Extraemos query params de la URL (req.url es relativo, lo completamos con host)
         let cct: string | null = null
         let turno = '1'
         try {
@@ -55,6 +90,7 @@ function sigedPlugin() {
           return
         }
 
+        // Validación CCT 10 chars
         if (!cct || cct.toUpperCase().trim().length !== 10) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: 'CCT requerido (10 caracteres)' }))
@@ -62,6 +98,7 @@ function sigedPlugin() {
         }
 
         const cctUp = cct.toUpperCase().trim()
+        // URL SIGED: CoreServices/servicios/escuela/detalleCT/cct={CCT}&idTurno={turno}
         const sigedUrl = `https://api.siged.sep.gob.mx/CoreServices/servicios/escuela/detalleCT/cct=${cctUp}&idTurno=${turno}`
         console.log('[SIGED] Request:', cctUp, 'turno:', turno)
         let rawStatus = 0
@@ -77,6 +114,7 @@ function sigedPlugin() {
           return
         }
 
+        // SIGED respondió con error HTTP
         if (rawStatus < 200 || rawStatus >= 300) {
           console.log('[SIGED] Upstream error:', rawStatus)
           res.writeHead(502, { 'Content-Type': 'application/json' })
@@ -84,6 +122,7 @@ function sigedPlugin() {
           return
         }
 
+        // Parseamos JSON de SIGED
         let data: any = null
         try { data = JSON.parse(rawText) } catch {
           console.error('[SIGED] JSON parse error. Body:', rawText.substring(0, 300))
@@ -92,6 +131,7 @@ function sigedPlugin() {
           return
         }
 
+        // Validamos que trae escuela válida (claveCct existe y idTurno !== 0)
         const d = data?.datos
         if (!d || !d.claveCct || d.idTurno === 0) {
           console.log('[SIGED] Not found:', cctUp)
@@ -101,10 +141,12 @@ function sigedPlugin() {
         }
 
         try {
+          // Estadística puede ser array o objeto según el turno
           const rawEst = data?.estadistica
           const e = Array.isArray(rawEst) ? (rawEst.length > 0 ? rawEst[0] : {}) : (rawEst || {})
           const num = (v: any) => parseInt(v, 10) || 0
           const total = num(e.alumnosH) + num(e.alumnosM)
+          // Normalizamos a nuestro formato interno
           const result = {
             cct: d.claveCct || cctUp,
             nombre: d.nombreCT || '',
@@ -141,6 +183,10 @@ function sigedPlugin() {
   }
 }
 
+/**
+ * Plugin Vite dev: POST /api/enviar-documentacion {correo, folio, oficioPdf, fichaPdf}
+ * Replica la lógica de api/enviar-documentacion.ts pero como middleware de Vite (solo dev).
+ */
 function emailPlugin() {
   return {
     name: 'email-proxy',
@@ -157,6 +203,7 @@ function emailPlugin() {
           return
         }
 
+        // Leemos body como string (Vite no lo parsea, es stream)
         let body = ''
         for await (const chunk of req) body += chunk
 
@@ -168,12 +215,14 @@ function emailPlugin() {
         }
 
         const { correo, folio, oficioPdf, fichaPdf, oficioNombre, fichaNombre } = parsed || {}
+        // Validación de campos requeridos
         if (!correo || !folio || !oficioPdf || !fichaPdf) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: 'correo, folio, oficioPdf y fichaPdf son requeridos' }))
           return
         }
 
+        // Config SMTP desde .env (dotenv.config() arriba)
         const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com'
         const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10)
         const smtpUser = process.env.SMTP_USER
@@ -186,6 +235,7 @@ function emailPlugin() {
           return
         }
 
+        // Transporter nodemailer (cliente SMTP)
         const transporter = nodemailer.createTransport({
           host: smtpHost, port: smtpPort, secure: smtpPort === 465,
           auth: { user: smtpUser, pass: smtpPass },
@@ -198,8 +248,10 @@ function emailPlugin() {
             subject: `Documentación solicitud ${folio} — Atención Ciudadana Puebla`,
             html: buildEmailHtml(folio), text: buildEmailText(folio),
             attachments: [
+              // Logos CID (inline en HTML)
               { filename: 'puebla.png', content: LOGO_PUEBLA, contentType: 'image/png', cid: 'puebla-logo' },
               { filename: 'semovinfra.jpg', content: LOGO_SEMOVINFRA, contentType: 'image/jpeg', cid: 'semov-logo' },
+              // PDFs en base64 -> Buffer
               { filename: oficioNombre || `Oficio_${folio}.pdf`, content: Buffer.from(oficioPdf, 'base64'), contentType: 'application/pdf' },
               { filename: fichaNombre || `Ficha_${folio}.pdf`, content: Buffer.from(fichaPdf, 'base64'), contentType: 'application/pdf' },
             ],
@@ -217,6 +269,10 @@ function emailPlugin() {
   }
 }
 
+/**
+ * Construye el HTML del correo (tablas para compatibilidad Gmail/Outlook).
+ * Logos CID: cid:puebla-logo y cid:semov-logo. Guinda #7b1a3a.
+ */
 function buildEmailHtml(folio: string): string {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -261,16 +317,18 @@ function buildEmailHtml(folio: string): string {
 </html>`
 }
 
+/** Versión texto plano del correo (fallback si el cliente no renderiza HTML) */
 function buildEmailText(folio: string): string {
   return `Atención Ciudadana — Puebla\n\nEstimado(a) ciudadano(a),\n\nSe adjuntan los documentos correspondientes a su solicitud ${folio}:\n- Oficio de respuesta (PDF)\n- Ficha técnica (PDF)\n\nLe recomendamos conservar estos documentos para su referencia.\n\n---\nSecretaría de Movilidad e Infraestructura de la ciudad de Puebla`
 }
 
+// Configuración final de Vite: plugins + proxy /api -> FastAPI intranet
 export default defineConfig({
   plugins: [react(), tailwindcss(), sigedPlugin(), emailPlugin()],
   server: {
     proxy: {
       '/api': {
-        target: 'http://10.4.3.154:4920',
+        target: 'http://10.4.3.154:4920', // FastAPI en 10.4.3.154:4920 (Tailscale). En prod lo resuelve Vercel.
         changeOrigin: true,
       },
     },

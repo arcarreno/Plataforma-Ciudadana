@@ -1,7 +1,24 @@
+/**
+ * @file TarjetaSolicitud.tsx
+ * @description Tarjeta resumida de una Solicitud para listados de consulta y dashboard.
+ *              Muestra folio, solicitante, tipo/colonia, estatus, fecha, fotos de visita y
+ *              comentarios.
+ *
+ * Componentes:
+ *  - FormatoEstatus: badge con color según estatus (verde Concluido favorable, rojo no favorable,
+ *    guinda por defecto).
+ *  - TarjetaSolicitud: layout en alabaster/50, divide secciones con h-px, grid 3-4 fotos con
+ *    lazy loading y enlaces a urlFotoVisita, comentarios en bg blanco/60.
+ *
+ * Props: solicitud: Solicitud (tipado en types/solicitud)
+ * Helpers: urlFotoVisita (lib/api) resuelve URL absoluta de foto.
+ * Uso: Consultar.tsx, ConsultarFolio.tsx, AdminDashboard (grid de cards).
+ */
 import { Camera, MessageSquare } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import { urlFotoVisita } from '../lib/api'
 
+/** Badge de estatus con color condicional (verde/rojo/guinda). */
 export function FormatoEstatus({ estatus }: { estatus?: string }) {
   const color =
     estatus === 'Concluido favorable'
@@ -16,6 +33,7 @@ export function FormatoEstatus({ estatus }: { estatus?: string }) {
   )
 }
 
+/** Tarjeta resumida: folio, solicitante, tipo, colonia, estatus, fecha + fotos/ comentarios de visita. */
 export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitud }) {
   const fotos = s.visita_fotos ?? []
   const comentario = s.visita_comentarios?.trim()
@@ -54,7 +72,8 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
         </span>
       </div>
 
-      {fotos.length > 0 && (
+            {/* --- Sección fotos de visita: grid 3-4 con enlaces a urlFotoVisita --- */}
+{fotos.length > 0 && (
         <>
           <div className="h-px bg-alabaster-dark" />
           <div>
@@ -84,7 +103,8 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
         </>
       )}
 
-      {comentario && (
+            {/* --- Comentarios de visita si existen --- */}
+{comentario && (
         <>
           <div className="h-px bg-alabaster-dark" />
           <div>

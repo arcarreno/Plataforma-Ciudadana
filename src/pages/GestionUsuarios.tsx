@@ -1,3 +1,23 @@
+/**
+ * @file GestionUsuarios.tsx
+ * @description CRUD de usuarios internos (solo admin). Lista usuarios, crea nuevos con validación
+ *              y elimina con confirmación.
+ *
+ * Roles: ROL_OPTS con iconos (revisor Shield, admin ShieldCheck, diputado Users, senador User).
+ * Flujo:
+ *  - Guardia: si !user o rol!=='admin' -> navigate('/admin') y no carga.
+ *  - cargarUsuarios(): listarUsuarios() -> setUsuarios o warn. loading spinner.
+ *  - Crear: showForm toggle, inputs nombres/apellidos/username/password/rol (botones select).
+ *    handleCrear valida campos no vacíos y password >=6, setFormLoading, crearUsuario(user.id,
+ *    username, password, rol, nombres, apellidos) -> maneja error, resetea form, cierra y recarga.
+ *  - Eliminar: deleteTarget + DeleteConfirmModal, handleEliminar -> eliminarUsuario(user.id,
+ *    target.id) -> warn en error, recarga lista. Botón Trash deshabilitado para propio id.
+ *  - Tabla: cabeceras Nombre/Usuario/Rol/ID/Acciones; rol badge con color (admin guinda, revisor
+ *    azul, otros ámbar) e icono; hover bg gray-50.
+ *
+ * Endpoints: lib/auth - listarUsuarios, crearUsuario, eliminarUsuario.
+ * UI: Card wrapper, Button UserPlus, inputs Tailwind, modal confirm.
+ */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,6 +28,7 @@ import Card from '../shared/Card'
 import Button from '../shared/Button'
 import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 
+// Opciones de rol con iconos: revisor, admin, diputado, senador
 const ROL_OPTS = [
   { value: 'revisor', label: 'Revisor', icon: Shield },
   { value: 'admin', label: 'Administrador', icon: ShieldCheck },
@@ -15,9 +36,11 @@ const ROL_OPTS = [
   { value: 'senador', label: 'Senador', icon: User },
 ] as const
 
+/** Gestión de usuarios (solo admin): lista, crea con validación y elimina con confirmación. */
 export default function GestionUsuarios() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  // usuarios lista; loading/showForm + campos new* y formError/loading/delete
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -31,12 +54,14 @@ export default function GestionUsuarios() {
   const [deleteTarget, setDeleteTarget] = useState<Usuario | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
+  // Guardia admin: si no es admin navega a /admin, sino carga
   useEffect(() => {
     if (!user || user.rol !== 'admin') { navigate('/admin'); return }
     cargarUsuarios()
   }, [user])
 
-  async function cargarUsuarios() {
+    // Carga inicial y refresh tras mutaciones
+async function cargarUsuarios() {
     setLoading(true)
     const res = await listarUsuarios()
     if (res.data) {
@@ -47,7 +72,8 @@ export default function GestionUsuarios() {
     setLoading(false)
   }
 
-  const handleCrear = async (e: React.FormEvent) => {
+    // Valida campos + password>=6 y llama crearUsuario(user.id, ...)
+const handleCrear = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newUsername.trim() || !newPassword.trim() || !newNombres.trim() || !newApellidos.trim()) {
       setFormError('Completa todos los campos')
@@ -75,7 +101,8 @@ export default function GestionUsuarios() {
     cargarUsuarios()
   }
 
-  const handleEliminar = async () => {
+    // Elimina via eliminarUsuario y recarga
+const handleEliminar = async () => {
     if (!deleteTarget || !user) return
     setDeleteLoading(true)
     const res = await eliminarUsuario(user.id, deleteTarget.id)
@@ -90,6 +117,7 @@ export default function GestionUsuarios() {
     cargarUsuarios()
   }
 
+  // --- JSX: header con volver + contador + nuevo usuario, form condicional, tabla y modal delete ---
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -115,7 +143,8 @@ export default function GestionUsuarios() {
         </Button>
       </div>
 
-      {showForm && (
+            {/* Form nuevo usuario con grid nombres/apellidos, user/pass y selector de rol */}
+  {showForm && (
         <Card title="Nuevo usuario">
           <form onSubmit={handleCrear} className="flex flex-col gap-4">
             <div className="grid gap-4 md:grid-cols-2">

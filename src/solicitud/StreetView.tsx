@@ -1,16 +1,42 @@
+/**
+ * @file StreetView.tsx
+ * @description Integración de vista a nivel de calle con Mapillary (street-level imagery).
+ *              Permite navegar fotos panorámicas cercanas al punto seleccionado en el mapa.
+ *
+ * Componentes:
+ *  - MonitoMarker: marcador draggable (monitoIcon divIcon morado) que reposiciona punto de
+ *    búsqueda; usa useMap + L.marker draggable, sincroniza con initial lat/lng.
+ *  - MapillaryViewer: portal a body con Viewer de mapillary-js (import dinámico + CSS).
+ *    Crea Viewer con accessToken (VITE_MAPILLARY_TOKEN), imageId y cover:false; maneja resize
+ *    y errores (error emitter). Muestra header con PersonStanding y footer con atribución.
+ *  - StreetView (default): orquesta búsqueda de imagen. Estado point, imageId, status
+ *    (idle/searching/found/notfound/error) y msg. buscarImagen(lat,lng) consulta
+ *    https://graph.mapillary.com/images con params lat/lng/radius 50m limit1; fallback con bbox
+ *    0.003deg si no hay resultado. Valida MAPILLARY_TOKEN y muestra mensajes contextuales.
+ *    Click en mapa activo mueve punto y busca; MonitoMarker drag también dispara búsqueda.
+ *    Overlay de estado (Loader2, PersonStanding) cuando no es found/idle.
+ *
+ * Props: active (bool para habilitar listeners/marker), initialPoint [lat,lng].
+ * Env: VITE_MAPILLARY_TOKEN (obligatorio).
+ * Dependencias: leaflet, react-leaflet useMap/useMapEvents, mapillary-js (lazy), lucide-react.
+ * Uso: SolicitudDetail (para ubicación y tramo, con toggle streetViewUbicacion/Tramo).
+ */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { X, PersonStanding, Loader2 } from 'lucide-react'
 
+// Token Mapillary desde env VITE_MAPILLARY_TOKEN (requerido para API).
 const MAPILLARY_TOKEN = import.meta.env.VITE_MAPILLARY_TOKEN ?? ''
 
+/** Props: active habilita listeners, initialPoint lat/lng inicial para búsqueda. */
 interface StreetViewProps {
   active: boolean
   initialPoint: [number, number]
 }
 
+/** Punto simple lat/lng. */
 interface Point {
   lat: number
   lng: number
@@ -23,6 +49,7 @@ interface MlyErrorEmitter {
   on(type: string, handler: (event: unknown) => void): void
 }
 
+// Icono morado del muñeco draggable (monito) para StreetView.
 const monitoIcon = L.divIcon({
   className: '',
   html: `<div style="display:flex;align-items:center;justify-content:center;width:26px;height:34px;background:#7d2447;border-radius:9px;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.35);border:2px solid #fff"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></div>`,
@@ -30,6 +57,7 @@ const monitoIcon = L.divIcon({
   iconAnchor: [13, 30],
 })
 
+/** Marker draggable que notifica onDrop al soltar; sincroniza con initial point. */
 function MonitoMarker({ initial, onDrop }: { initial: Point; onDrop: (p: Point) => void }) {
   const map = useMap()
   const markerRef = useRef<L.Marker | null>(null)
@@ -62,6 +90,7 @@ function MonitoMarker({ initial, onDrop }: { initial: Point; onDrop: (p: Point) 
   return null
 }
 
+/** Portal con Viewer de mapillary-js: crea Viewer con imageId, maneja resize y errores. */
 function MapillaryViewer({ imageId, onClose }: { imageId: string; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewerError, setViewerError] = useState<string | null>(null)
@@ -134,13 +163,16 @@ function MapillaryViewer({ imageId, onClose }: { imageId: string; onClose: () =>
   )
 }
 
+// --- StreetView: busca imagen Mapillary cercana (50m + fallback bbox) y muestra viewer ---
 export default function StreetView({ active, initialPoint }: StreetViewProps) {
+  // point actual draggable; imageId de Mapillary encontrada; status/msg para UI
   const [point, setPoint] = useState<Point>({ lat: initialPoint[0], lng: initialPoint[1] })
   const [imageId, setImageId] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'searching' | 'found' | 'notfound' | 'error'>('idle')
   const [msg, setMsg] = useState('')
 
-  const buscarImagen = useCallback(async (lat: number, lng: number) => {
+    /** Consulta graph.mapillary.com/images con radius 50m, fallback bbox 0.003deg, y actualiza status. */
+const buscarImagen = useCallback(async (lat: number, lng: number) => {
     if (!MAPILLARY_TOKEN) {
       setStatus('error')
       setMsg('Mapillary no configurado (VITE_MAPILLARY_TOKEN)')
@@ -193,6 +225,7 @@ export default function StreetView({ active, initialPoint }: StreetViewProps) {
     [buscarImagen]
   )
 
+  // Click en mapa activo reposiciona punto y busca imagen
   useMapEvents({
     click(e) {
       if (active) {
@@ -203,6 +236,7 @@ export default function StreetView({ active, initialPoint }: StreetViewProps) {
     },
   })
 
+  // --- Render: MonitoMarker draggable, overlay de status y portal MapillaryViewer si found ---
   return (
     <>
       {active && <MonitoMarker initial={point} onDrop={handlePoint} />}

@@ -1,3 +1,26 @@
+/**
+ * @file MapaPin.tsx
+ * @description Modal de mapa para seleccionar un único punto georreferenciado (pin).
+ *              Permite colocar marcador, picar ubicación para resolver colonia/junta/ZAP/cobertura
+ *              y calle/entre calles vía geolocalización inversa.
+ *
+ * Flujo:
+ *  1. Carga capas GeoJSON (cargarCapas -> colonias, juntas, zonasZap, escuelas, iglesias, stv,
+ *     coberturaAgua) y muestra loader. Centro por defecto Puebla [19.0414,-98.2063] zoom 13.
+ *  2. Click en mapa: setMarker + lastClickRef (sin resolver aún). Botón "Picar ubicación" dispara
+ *     detectarPunto(lat,lng,capas) -> DeteccionPunto (colonia, junta, zona_zap, cobertura_agua,
+ *     fuera_alcance). Luego geolocalizarCalle para calle/entreCalles (async, spinner).
+ *  3. Si fuera_alcance: muestra alerta azul e inputs manuales para colonia/junta (obligatorios).
+ *     Si dentro: muestra colonia/junta/ZAP/cobertura + calle/entreCalles.
+ *  4. Confirmar: onConfirm({lat,lng,colonia,junta,calle,entre_calles,zona_zap,cobertura_agua})
+ *     con validación de manuales si fuera_alcance.
+ *
+ * Controles: satélite (Esri vs OSM), capas (GeoJSON), marcador SVG guinda divIcon.
+ * Dependencias: react-leaflet (MapContainer, TileLayer, Marker, GeoJSON, useMapEvents),
+ *               Leaflet, detectar-ubicacion, geolocalizarCalle.
+ * Props: onConfirm, onClose, initialLat/Lng (re-edición).
+ * Estilos: COLONIA_STYLE (guinda 0.08), JUNTA_STYLE (verde 0.05), ZONA_ZAP_STYLE (dorado 0.06).
+ */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
@@ -9,6 +32,7 @@ import type { CapasGeoJSON, DeteccionPunto } from './detectar-ubicacion'
 import { geolocalizarCalle } from '../lib/geolocalizarCalle'
 import type { CalleInfo } from '../lib/geolocalizarCalle'
 
+// --- Configuración inicial del mapa Puebla y estilos de capas ---
 const DEFAULT_CENTER: [number, number] = [19.0414, -98.2063]
 const DEFAULT_ZOOM = 13
 
@@ -33,6 +57,7 @@ const ZONA_ZAP_STYLE = {
   fillOpacity: 0.06,
 }
 
+// Icono SVG guinda para el pin único
 const icon = L.divIcon({
   className: '',
   html: `<svg viewBox="0 0 32 48" width="28" height="42" xmlns="http://www.w3.org/2000/svg">
@@ -45,6 +70,7 @@ const icon = L.divIcon({
   popupAnchor: [0, -42],
 })
 
+/** Props: onConfirm con datos resueltos, onClose, coords iniciales opcionales. */
 interface MapaPinProps {
   onConfirm: (data: { lat: number; lng: number; colonia: string; junta_auxiliar: string; calle: string; entre_calles: string; zona_zap: boolean; cobertura_agua: boolean }) => void
   onClose: () => void
@@ -52,6 +78,7 @@ interface MapaPinProps {
   initialLng?: string
 }
 
+/** Captura click en mapa y delega a onMapClick. */
 function ClickHandler({ onMapClick }: { onMapClick: (latlng: { lat: number; lng: number }) => void }) {
   useMapEvents({
     click(e) {
@@ -61,30 +88,38 @@ function ClickHandler({ onMapClick }: { onMapClick: (latlng: { lat: number; lng:
   return null
 }
 
+// --- Componente MapaPin: estados marker, detection, loading, capas, calleInfo ---
 export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: MapaPinProps) {
+  // capas GeoJSON cargadas; detection DeteccionPunto resuelta tras Picar
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [detection, setDetection] = useState<DeteccionPunto | null>(null)
+  // marker: lat/lng del pin colocado (inicializa con initialLat/Lng si existen)
   const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
     initialLat && initialLng ? { lat: parseFloat(initialLat), lng: parseFloat(initialLng) } : null
   )
   const [loading, setLoading] = useState(true)
+  // Toggles UI: capas GeoJSON y satélite
   const [showLayers, setShowLayers] = useState(false)
   const [satellite, setSatellite] = useState(false)
+  // hasPicado indica si ya se resolvió detección (para mostrar botón Confirmar)
   const [hasPicado, setHasPicado] = useState(false)
   const [manualColonia, setManualColonia] = useState('')
   const [manualJunta, setManualJunta] = useState('')
+  // calleInfo resuelta por geolocalizarCalle con spinner buscandoCalle
   const [calleInfo, setCalleInfo] = useState<CalleInfo | null>(null)
   const [buscandoCalle, setBuscandoCalle] = useState(false)
   const lastClick = useRef<{ lat: number; lng: number } | null>(null)
 
-  useEffect(() => {
+    // Carga capas GeoJSON al montar
+useEffect(() => {
     cargarCapas().then(c => {
       setCapas(c)
       setLoading(false)
     })
   }, [])
 
-  const handleMapClick = useCallback(
+    // Guarda click sin resolver; espera a Picar para detectar
+const handleMapClick = useCallback(
     (latlng: { lat: number; lng: number }) => {
       setMarker(latlng)
       lastClick.current = latlng
@@ -94,7 +129,8 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
     []
   )
 
-  const handlePicar = () => {
+    /** Resuelve colonia/junta/ZAP/cobertura con detectarPunto y calle con geolocalizarCalle. */
+const handlePicar = () => {
     if (!lastClick.current || !capas) return
     const { lat, lng } = lastClick.current
     const d = detectarPunto(lat, lng, capas)
@@ -110,6 +146,7 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
   const d = detection
   const isOutside = d?.fuera_alcance
 
+  // --- JSX modal fullscreen: header, mapa + controles, panel inferior con estados ---
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/60">
       <div className="flex items-center justify-between bg-white px-4 py-3 shadow-md">
@@ -164,7 +201,8 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
           {marker && <Marker position={[marker.lat, marker.lng]} icon={icon} />}
         </MapContainer>
 
-        <div className="pointer-events-auto absolute right-3 top-3 z-[999] flex flex-col gap-1.5">
+              {/* Controles flotantes satélite/capas */}
+  <div className="pointer-events-auto absolute right-3 top-3 z-[999] flex flex-col gap-1.5">
           <button
             type="button"
             onClick={() => setSatellite(prev => !prev)}
@@ -186,7 +224,8 @@ export default function MapaPin({ onConfirm, onClose, initialLat, initialLng }: 
           </button>
         </div>
 
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[999] bg-gradient-to-t from-black/60 to-transparent p-4 pt-8">
+              {/* Panel inferior con estados: sin marker, con marker sin picar, con detection */}
+  <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[999] bg-gradient-to-t from-black/60 to-transparent p-4 pt-8">
           <div className="pointer-events-auto mx-auto max-w-md space-y-2 rounded-2xl bg-white p-4 shadow-card">
             {!marker && (
               <div className="flex items-center gap-3 text-sm text-gray-institutional/70">

@@ -1,3 +1,30 @@
+/**
+ * @file generarFicha.ts
+ * @description
+ * Generación de la ficha técnica de obra en PDF (960×720 px, horizontal).
+ * Combina datos de la `Solicitud`, geocodificación de calle y una captura
+ * del mapa Leaflet para producir un PDF vía `html2canvas` + `jspdf`.
+ *
+ * Algoritmos / flujo:
+ * 1. `esc` / `fmtMoney`: helpers de escape HTML y formato monetario es-MX.
+ * 2. `captureMap()`: captura manual del mapa Leaflet dibujando cada tile
+ *    (`leaflet-tile-pane img`) en un `<canvas>` según su `translate3d` CSS.
+ *    Se prefiere canvas manual sobre `html2canvas` directo del mapa para evitar
+ *    problemas de CORS/transform y controlar calidad JPEG 0.85. Si no hay tiles,
+ *    retorna null y el HTML muestra un placeholder SVG.
+ * 3. `buildFichaHTML()`: construye el HTML de la ficha con layout absoluto
+ *    (banner, calle 30px, colonia/junta, entrecalles, mapa, leyenda, panel
+ *    derecho con datos técnicos/entorno/inversión). Usa `solicitud.calle` si
+ *    existe, si no el `calleParam` geocodificado.
+ * 4. `getFichaCSS()`: CSS absoluto 960×720 con fuentes Poppins/Calibri, colores
+ *    SEMOVINFRA, banner/footer como background-image desde assets importados.
+ * 5. `generarFichaPDF()`: orquesta — geolocaliza calle (con fallback vacío),
+ *    captura mapa, crea contenedor off-screen `ficha-gen`, espera `document.fonts`,
+ *    renderiza con `html2canvas` (scale 1, allowTaint, bg #F5F0EB), crea `jsPDF`
+ *    landscape con formato `[canvas.width/2, canvas.height/2]` (px_scaling) y
+ *    añade la imagen. Retorna `blob:` URL del PDF.
+ */
+
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import type { Solicitud } from '../types/solicitud'
@@ -6,6 +33,11 @@ import { geolocalizarCalle } from './geolocalizarCalle'
 import bannerImg from '../assets/ficha-banner.png'
 import footerImg from '../assets/ficha-footer.png'
 
+/**
+ * Escapa caracteres HTML para inserción segura en el template.
+ * @param text - Texto original.
+ * @returns Texto con &, <, >, " escapados.
+ */
 function esc(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -14,16 +46,28 @@ function esc(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/**
+ * Formatea un número como moneda MXN sin decimales.
+ * @param n - Cantidad numérica.
+ * @returns String tipo "$1,234".
+ */
 function fmtMoney(n: number): string {
   return '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+/**
+ * Captura el mapa Leaflet visible en un dataURL JPEG.
+ * Itera los tiles, lee su `transform: translate3d(x,y)` y los dibuja en un canvas
+ * del tamaño del contenedor. Retorna null si no hay mapa/tiles/contexto.
+ * @returns DataURL JPEG 0.85 o null si no se pudo capturar.
+ */
 async function captureMap(): Promise<string | null> {
   const mapContainer = document.querySelector('.leaflet-container') as HTMLElement | null
   if (!mapContainer) return null
   try {
     const tiles = mapContainer.querySelectorAll('.leaflet-tile-pane img')
     if (tiles.length === 0) return null
+    // Canvas del tamaño exacto del contenedor Leaflet.
     const canvas = document.createElement('canvas')
     const rect = mapContainer.getBoundingClientRect()
     canvas.width = rect.width
@@ -34,6 +78,7 @@ async function captureMap(): Promise<string | null> {
       const img = tile as HTMLImageElement
       const style = window.getComputedStyle(img)
       const transform = style.transform || (style as any).webkitTransform
+      // Leaflet posiciona tiles con translate3d; se extraen x,y para drawImage.
       const match = transform?.match(/translate3d\(([^,]+)px,\s*([^,]+)px/)
       if (match) {
         ctx.drawImage(img, parseFloat(match[1]), parseFloat(match[2]))
@@ -45,6 +90,15 @@ async function captureMap(): Promise<string | null> {
   }
 }
 
+/**
+ * Construye el HTML interno de la ficha (sin CSS), con todos los datos de la solicitud.
+ * Calcula `intervencion = largo*ancho` e `inversion = costoM2*intervencion`.
+ * @param solicitud - Datos de la solicitud.
+ * @param mapDataUrl - DataURL del mapa capturado (o null para placeholder).
+ * @param calleParam - Calle geocodificada (usada si `solicitud.calle` está vacía).
+ * @param entreCallesParam - Entrecalles geocodificadas (idem).
+ * @returns String HTML del contenido de la ficha.
+ */
 function buildFichaHTML(
   solicitud: Solicitud,
   mapDataUrl: string | null,
@@ -191,6 +245,11 @@ function buildFichaHTML(
   `
 }
 
+/**
+ * Retorna el CSS completo de la ficha (layout absoluto 960×720, tipografía, colores).
+ * Incluye banner/footer como imágenes de fondo y estilos de panel, mapa, tabla e inversión.
+ * @returns String CSS para inyectar en `<style>` del contenedor off-screen.
+ */
 function getFichaCSS(): string {
   return `
     .ficha-gen *, .ficha-gen *::before, .ficha-gen *::after {
@@ -430,7 +489,15 @@ function getFichaCSS(): string {
   `
 }
 
+/**
+ * Genera el PDF de la ficha técnica y retorna una URL `blob:` para previsualizar/descargar.
+ * Flujo: geolocaliza calle (si no está en la solicitud) → captura mapa → monta DOM
+ * off-screen → `html2canvas` → `jsPDF` landscape → `URL.createObjectURL`.
+ * @param solicitud - Solicitud con datos territoriales y de tramo.
+ * @returns URL de objeto (blob) del PDF; el llamador debe revocarla con `URL.revokeObjectURL` cuando ya no se use.
+ */
 export async function generarFichaPDF(solicitud: Solicitud): Promise<string> {
+  // Si la solicitud ya trae calle, se usa; si no, se geolocaliza bajo demanda (con catch para no romper).
   const calleInfo = solicitud.calle
     ? { calle: solicitud.calle, entreCalles: solicitud.entre_calles || '' }
     : await geolocalizarCalle(solicitud.latitud, solicitud.longitud)
@@ -438,6 +505,7 @@ export async function generarFichaPDF(solicitud: Solicitud): Promise<string> {
   const [mapDataUrl] = await Promise.all([captureMap()])
   const html = buildFichaHTML(solicitud, mapDataUrl, calleInfo.calle, calleInfo.entreCalles)
 
+  // Contenedor oculto fuera de viewport para renderizar el HTML y capturarlo con html2canvas.
   const container = document.createElement('div')
   container.className = 'ficha-gen'
   container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;'
@@ -445,6 +513,7 @@ export async function generarFichaPDF(solicitud: Solicitud): Promise<string> {
 
   container.innerHTML = `<style>${getFichaCSS()}</style>${html}`
 
+  // Espera a que las fuentes web carguen y da un tick extra para que el layout se asiente.
   await document.fonts.ready
   await new Promise(r => setTimeout(r, 300))
 
@@ -457,6 +526,7 @@ export async function generarFichaPDF(solicitud: Solicitud): Promise<string> {
   })
 
   // PDF = container size exactly (960×720 px)
+  // Se divide entre 2 por el hotfix px_scaling de jsPDF (convierte px CSS a pt internos).
   const imgData = canvas.toDataURL('image/jpeg', 0.85)
   const pdfW = canvas.width / 2
   const pdfH = canvas.height / 2

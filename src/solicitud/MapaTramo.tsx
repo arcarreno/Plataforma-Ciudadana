@@ -1,3 +1,23 @@
+/**
+ * @file MapaTramo.tsx
+ * @description Modal de mapa para dibujar un tramo multipunto (polilínea) sobre la red vial.
+ *              Calcula distancia, ancho estimado y POIs cercanos (escuelas/iglesias/rutas).
+ *
+ * Flujo:
+ *  1. Carga capas y muestra mapa centrado DEFAULT_CENTER zoom 15. Click añade puntos a array
+ *     points; cada adición recalcula detectarTramo(points, capas) si >=2 puntos (usa Turf
+ *     internamente para longitud y buffers).
+ *  2. Visualiza markers numerados (divIcon guinda con número) y Polyline guinda 4px.
+ *  3. Panel inferior: estados vacío (0 puntos), 1 punto, >=2 puntos con botones Reiniciar,
+ *     Terminar tramo (setDone true bloquea más clicks), Deshacer último (Undo2).
+ *  4. Al terminar, muestra resumen distancia_m, ancho_calle_m, conteo puntos y top 3 de
+ *     escuelas/iglesias/transportes con iconos. Botón Confirmar tramo dispara
+ *     onConfirm({lat_ini,lng_ini,lat_fin,lng_fin,puntos,distancia_m,ancho_calle_m,escuelas...}).
+ *
+ * Controles: satélite, capas, TramoMarker (useMap para marker nativo).
+ * Props: onConfirm, onClose. Sin initial points (siempre nuevo).
+ * Helpers: detectarTramo usa Turf length, buffer y proximidad a capas STV/colonia.
+ */
 import { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
@@ -30,6 +50,7 @@ const ZONA_ZAP_STYLE = {
   fillOpacity: 0.06,
 }
 
+/** Props: onConfirm con puntos+distancia+ancho+POIs, onClose. */
 interface MapaTramoProps {
   onConfirm: (data: {
     lat_ini: number; lng_ini: number; lat_fin: number; lng_fin: number
@@ -40,6 +61,7 @@ interface MapaTramoProps {
   onClose: () => void
 }
 
+/** Marker numerado para cada punto del tramo. */
 function TramoMarker({ position, icon }: { position: L.LatLngExpression; icon: L.DivIcon }) {
   const map = useMap()
   useEffect(() => {
@@ -64,7 +86,9 @@ function ClickHandler({
   return null
 }
 
+// --- MapaTramo: dibuja polilínea, calcula DeteccionTramo y confirma ---
 export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
+  // capas GeoJSON; points array de lat/lng; detection DeteccionTramo; loading
   const [capas, setCapas] = useState<CapasGeoJSON | null>(null)
   const [points, setPoints] = useState<{ lat: number; lng: number }[]>([])
   const [detection, setDetection] = useState<DeteccionTramo | null>(null)
@@ -79,9 +103,11 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
     })
   }, [])
 
+  // done bloquea más clicks tras Terminar tramo
   const [done, setDone] = useState(false)
 
-  const handleMapClick = (latlng: { lat: number; lng: number }) => {
+    // Añade punto y recalcula detectarTramo si >=2
+const handleMapClick = (latlng: { lat: number; lng: number }) => {
     const next = [...points, latlng]
     setPoints(next)
     if (next.length >= 2 && capas) {
@@ -91,7 +117,8 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
     }
   }
 
-  const handleUndoLast = () => {
+    // Deshace último punto y recalcula
+const handleUndoLast = () => {
     if (points.length === 0) return
     const next = points.slice(0, -1)
     setPoints(next)
@@ -102,6 +129,7 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
     }
   }
 
+  // Reinicia puntos y detección a estado inicial
   const handleReset = () => {
     setPoints([])
     setDetection(null)
@@ -110,6 +138,7 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
 
   const d = detection
 
+  // --- Modal fullscreen con header, mapa y panel de tramo ---
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/60">
       <div className="flex items-center justify-between bg-white px-4 py-3 shadow-md">
@@ -163,7 +192,8 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
           {showLayers && capas?.zonasZap && (
             <GeoJSON key="zonasZap" data={capas.zonasZap} style={ZONA_ZAP_STYLE} interactive={false} />
           )}
-          {points.map((p, i) => (
+                  {/* Markers numerados para cada punto */}
+  {points.map((p, i) => (
             <TramoMarker
               key={i}
               position={[p.lat, p.lng]}
@@ -175,7 +205,8 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
               })}
             />
           ))}
-          {points.length >= 2 && (
+                  {/* Polilínea guinda entre puntos */}
+  {points.length >= 2 && (
             <Polyline
               positions={points.map(p => [p.lat, p.lng])}
               pathOptions={{ color: '#7d2447', weight: 4 }}
@@ -205,7 +236,8 @@ export default function MapaTramo({ onConfirm, onClose }: MapaTramoProps) {
           </button>
         </div>
 
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[999] bg-gradient-to-t from-black/60 to-transparent p-4 pt-8">
+              {/* Panel con mensajes contextuales según points.length y detection */}
+  <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[999] bg-gradient-to-t from-black/60 to-transparent p-4 pt-8">
           <div className="pointer-events-auto mx-auto max-w-md rounded-2xl bg-white p-4 shadow-card">
             {!d ? (
               <>

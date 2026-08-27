@@ -1,3 +1,25 @@
+/**
+ * @file ConsultarFolio.tsx (export default ConsultarCurp)
+ * @description Página pública para consultar por CURP o por folio (?folio=) sin necesidad de login.
+ *              Dos modos de búsqueda con estado separado: por CURP (lista) y por folio (single).
+ *
+ * Flujo CURP:
+ *  - Input CURP uppercase, max 18, botón Buscar disabled si vacío/loading.
+ *  - consultarCurp(curpRaw): normalizarCurp -> valida 18, loading true, buscarPorCurp(curpNorm)
+ *    -> setResultados (Solicitud[]). Maneja error catch genérico.
+ * Flujo Folio:
+ *  - Effect si folioParam en URL -> consultarFolio(folioRaw): consultarSolicitud -> setResultadoFolio
+ *    o error "No se encontró...".
+ *  - handleSubmit: preventDefault, limpia resultadoFolio, llama consultarCurp.
+ * Render:
+ *  - Form con Input label CURP + Button Search.
+ *  - Mensajes: error rojo, resultadoFolio Tarjeta, resultados vacío "No encontramos...", o listado
+ *    con conteo y TarjetaSolicitud por id.
+ *
+ * Endpoints: lib/solicitud - consultarSolicitud, buscarPorCurp, normalizarCurp.
+ * Const: CURP_LEN=18.
+ * Nota: nombre de archivo ConsultarFolio.tsx pero componente se llama ConsultarCurp (legacy).
+ */
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
@@ -8,9 +30,12 @@ import TarjetaSolicitud from '../solicitud/TarjetaSolicitud'
 import { consultarSolicitud, buscarPorCurp, normalizarCurp } from '../lib/solicitud'
 import type { Solicitud } from '../types/solicitud'
 
+// Longitud CURP 18 caracteres
 const CURP_LEN = 18
 
+/** ConsultarFolio (ConsultarCurp): búsqueda pública por CURP (lista) o folio (?folio=) con estados separados. */
 export default function ConsultarCurp() {
+  // curp input uppercase; loading/resultados/resultadoFolio/error + folioParam
   const [curp, setCurp] = useState('')
   const [loading, setLoading] = useState(false)
   const [resultados, setResultados] = useState<Solicitud[] | undefined>(undefined)
@@ -19,7 +44,8 @@ export default function ConsultarCurp() {
   const [searchParams] = useSearchParams()
   const folioParam = searchParams.get('folio')
 
-  const consultarCurp = async (curpRaw: string) => {
+    // Valida 18 chars, normaliza y llama buscarPorCurp
+const consultarCurp = async (curpRaw: string) => {
     const curpNorm = normalizarCurp(curpRaw)
     if (curpNorm.length !== CURP_LEN) {
       setError('La CURP debe tener 18 caracteres.')
@@ -39,7 +65,8 @@ export default function ConsultarCurp() {
     }
   }
 
-  const consultarFolio = async (folioRaw: string) => {
+    // Consulta puntual por folio para deep-link
+const consultarFolio = async (folioRaw: string) => {
     setLoading(true)
     setError('')
     setResultadoFolio(undefined)
@@ -52,11 +79,13 @@ export default function ConsultarCurp() {
     setLoading(false)
   }
 
+  // Si ?folio= en URL, auto-consulta detalle al montar
   useEffect(() => {
     if (!folioParam) return
     consultarFolio(folioParam)
   }, [folioParam])
 
+  // Previene default, limpia folio y busca por CURP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!curp.trim()) return
@@ -64,6 +93,7 @@ export default function ConsultarCurp() {
     await consultarCurp(curp.trim())
   }
 
+  // --- JSX: form CURP + botón Search + estados de resultado ---
   return (
     <div className="mx-auto max-w-lg py-4">
       <Card title="Consultar por CURP">
