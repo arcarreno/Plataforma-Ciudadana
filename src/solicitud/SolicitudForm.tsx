@@ -39,8 +39,9 @@
  *  - iniciarIA?: boolean — arranca con AsistenteIA visible.
  */
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Upload, MapPin, Check, Navigation, ChevronRight, Eye, Trash2 } from 'lucide-react'
+import { Upload, MapPin, Check, Navigation, ChevronRight, Eye, Trash2, Info } from 'lucide-react'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 import { sileo } from 'sileo'
 import lottie from 'lottie-web'
@@ -235,6 +236,18 @@ const [submittedOnce, setSubmittedOnce] = useState(false)
   const [esDesktop, setEsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
   // mostrarAsistente: toggle del chat AsistenteIA (inicia visible si iniciarIA=true)
   const [mostrarAsistente, setMostrarAsistente] = useState(() => iniciarIA === true)
+  // Modal CURP: explica por qué solo 3 peticiones al mes por CURP (solo primera vez que se toca el campo)
+  const CURP_INFO_KEY = 'semovinfra_curp_info_vista'
+  const [showCurpInfo, setShowCurpInfo] = useState(false)
+  const handleCurpFocus = () => {
+    if (typeof window !== 'undefined' && !localStorage.getItem(CURP_INFO_KEY)) {
+      setShowCurpInfo(true)
+    }
+  }
+  const cerrarCurpInfo = () => {
+    localStorage.setItem(CURP_INFO_KEY, 'true')
+    setShowCurpInfo(false)
+  }
 
     // --- Responsive: suscripción a matchMedia para detectar desktop vs móvil ---
 useEffect(() => {
@@ -255,6 +268,19 @@ useEffect(() => {
     })
     return () => anim.destroy()
   }, [showLottie])
+
+  // Bloquea scroll del fondo mientras el modal CURP está visible
+  useEffect(() => {
+    if (!showCurpInfo) return
+    const prevBody = document.body.style.overflow
+    const prevHtml = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevBody
+      document.documentElement.style.overflow = prevHtml
+    }
+  }, [showCurpInfo])
 
     /** Aplica datos resueltos por MapaCombinado al estado form (pin + tramo). Normaliza coordenadas a string. */
 const setMapData = (data: import('./MapaCombinado').MapaCombinadoResult) => {
@@ -805,6 +831,7 @@ return (
                     label="CURP"
                     value={form.curp}
                     onChange={(e) => set('curp', e.target.value.toUpperCase())}
+                    onFocus={handleCurpFocus}
                     error={errors.curp}
                     placeholder="PEGJ900101HDFRRN01"
                     maxLength={18}
@@ -1136,6 +1163,77 @@ return (
       )}
 
       {showAviso && <AvisoPrivacidad onClose={() => setShowAviso(false)} />}
+
+      {/* Modal CURP: explica por qué solo 3 peticiones al mes por CURP (solo primera vez que se toca el campo) */}
+      {showCurpInfo &&
+        createPortal(
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4" onClick={cerrarCurpInfo}>
+            <div
+              className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header guinda con logo */}
+              <div className="flex items-center gap-3 bg-guinda px-6 py-4">
+                <img src={logoSemovinfra} alt="SEMOVINFRA" className="h-10 w-10 rounded-full bg-white object-cover p-0.5" />
+                <div className="flex flex-col">
+                  <h2 className="text-sm font-bold tracking-wide text-white">Límite por CURP</h2>
+                  <span className="text-xs text-white/80">3 solicitudes al mes</span>
+                </div>
+                <Info className="ml-auto h-5 w-5 text-white/80" />
+              </div>
+
+              {/* Contenido scrolleable con indicador oculto */}
+              <div className="max-h-[60vh] overflow-y-auto px-6 py-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-guinda">
+                    <Info className="h-5 w-5" />
+                    <h3 className="text-sm font-semibold">¿Por qué solo 3 peticiones al mes por CURP?</h3>
+                  </div>
+                  <p className="text-sm leading-relaxed text-gray-institutional/80">
+                    Para garantizar una atención equitativa y evitar el acaparamiento, cada CURP puede registrar
+                    <span className="font-semibold text-gray-institutional"> hasta 3 solicitudes al mes</span>. Así
+                    aseguramos que todas las colonias y familias tengan oportunidad de ser atendidas.
+                  </p>
+                  <ul className="list-disc space-y-2 pl-5 text-sm text-gray-institutional/70">
+                    <li>
+                      <span className="font-medium text-gray-institutional">Equidad:</span> distribuimos los recursos
+                      entre más personas y evitamos que una sola CURP bloquee la fila.
+                    </li>
+                    <li>
+                      <span className="font-medium text-gray-institutional">Planeación:</span> nos permite programar
+                      visitas y obras con orden y transparencia.
+                    </li>
+                    <li>
+                      <span className="font-medium text-gray-institutional">Transparencia:</span> el conteo se
+                      reinicia cada mes natural. Si alcanzas el límite, podrás registrar de nuevo el próximo mes.
+                    </li>
+                    <li>
+                      <span className="font-medium text-gray-institutional">Excepción:</span> el sistema valida tu
+                      CURP (formato, dígito y coincidencia con tu nombre) para evitar suplantaciones.
+                    </li>
+                  </ul>
+                  <p className="rounded-xl bg-alabaster/50 p-3 text-xs leading-relaxed text-gray-institutional/60">
+                    Tip: si necesitas reportar más de 3 puntos distintos en el mismo mes, puedes hacerlo con la CURP
+                    de otro integrante del hogar. Cada folio se atiende de forma independiente.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end border-t border-alabaster-dark/30 bg-alabaster/30 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={cerrarCurpInfo}
+                  className="inline-flex items-center gap-2 rounded-xl bg-guinda px-5 py-2.5 text-sm font-semibold text-white shadow-button transition-colors hover:bg-guinda/90"
+                >
+                  Entendido
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   )
 }

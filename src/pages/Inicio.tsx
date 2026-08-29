@@ -29,6 +29,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { nombreCompleto, esCargoPublico } from '../types/auth'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 import mosaico from '../assets/elemento-Mosaico.svg'
+import ConsentModals from '../shared/ConsentModals'
 
 // --- Features de landing: 4 cards con icon y descripción ---
 const features = [
@@ -129,6 +130,9 @@ useEffect(() => {
   // --- JSX: hero con bienvenida condicional, hero principal, mosaico con ripple SVG, steps ---
   return (
     <div className="flex flex-col gap-12 py-4 md:py-8">
+      {/* Modales de consentimiento por pasos (cookies → términos) con cache en localStorage.
+          En móvil aparece después del modal de descarga de mapas; en desktop directo. */}
+      <ConsentModals />
       {esCargo && (
         <section className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-guinda md:text-4xl">

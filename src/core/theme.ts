@@ -65,10 +65,10 @@ export const fontLabels: Record<FontSize, string> = {
 }
 
 /**
- * Modos de contraste disponibles (claro/oscuro).
- * `light` = tema institucional claro, `dark` = alto contraste oscuro.
+ * Modos de contraste disponibles.
+ * `light` = tema institucional claro (día), `high` = alto contraste real (WCAG AAA, negro/blanco/amarillo).
  */
-export const contrastOptions = ['light', 'dark'] as const
+export const contrastOptions = ['light', 'high'] as const
 
 /**
  * Tipo unión para el modo de contraste.

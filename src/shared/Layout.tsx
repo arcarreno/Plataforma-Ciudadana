@@ -48,7 +48,7 @@ export default function Layout() {
   })
 
   /**
-   * Estado de contraste (light/dark). Mismo patrón de inicialización que fontSize.
+   * Estado de contraste (light/high). Mismo patrón de inicialización que fontSize.
    */
   const [contrast, setContrast] = useState<Contrast>(() => {
     return (typeof document !== 'undefined'

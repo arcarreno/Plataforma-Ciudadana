@@ -1,14 +1,14 @@
 /**
  * @file ContrastToggle.tsx
- * @description Toggle visual para alternar entre contraste claro y oscuro.
+ * @description Toggle visual para alternar entre contraste claro y alto contraste.
  * Renderiza un `<label>` con un `<input type="checkbox">` oculto (`sr-only` + `peer`)
  * y un `<span>` circular estilizado que actúa como botón. Muestra icono de Sol
- * en modo claro y Luna en modo oscuro, con gradientes y sombras neumórficas
- * (inset + outer shadow) que cambian según el estado `dark`.
- * Usa `onChange` para alternar entre 'light' y 'dark' (tipo `Contrast`).
+ * en modo claro y Luna en modo alto contraste, con gradientes y sombras neumórficas
+ * (inset + outer shadow) que cambian según el estado `high`.
+ * Usa `onChange` para alternar entre 'light' y 'high' (tipo `Contrast`).
  *
  * @props Props
- * @prop {Contrast} contrast - Valor actual ('light' | 'dark'); determina icono y estilos.
+ * @prop {Contrast} contrast - Valor actual ('light' | 'high'); determina icono y estilos.
  * @prop {(c: Contrast) => void} onChange - Callback al alternar; recibe el nuevo valor.
  *
  * @uso
@@ -18,13 +18,13 @@
  * Normalmente embebido en `AccessibilityPanel`.
  *
  * @accesibilidad El input oculto tiene `aria-label` y el label es clickeable;
- * el estado visual refleja `checked={dark}`.
+ * el estado visual refleja `checked={high}`.
  */
 import type { Contrast } from '../core/theme'
 
 /** Props del toggle de contraste. */
 interface Props {
-  /** Contraste actual — 'light' muestra sol, 'dark' muestra luna. */
+  /** Contraste actual — 'light' muestra sol, 'high' muestra luna. */
   contrast: Contrast
   /** Callback al cambiar; recibe el nuevo valor de contraste. */
   onChange: (c: Contrast) => void
@@ -45,40 +45,40 @@ const SunIcon = () => (
 )
 
 /**
- * Toggle circular de contraste claro/oscuro con iconos animados y efecto neumórfico.
+ * Toggle circular de contraste claro/alto contraste con iconos animados y efecto neumórfico.
  */
 export default function ContrastToggle({ contrast, onChange }: Props) {
-  /** True si el contraste actual es oscuro. */
-  const dark = contrast === 'dark'
+  /** True si el contraste actual es alto contraste. */
+  const high = contrast === 'high'
 
   return (
     // Label clickeable que envuelve el input oculto y el span visual
     <label className="relative inline-flex cursor-pointer items-center">
-      {/* Input checkbox oculto — su estado checked refleja `dark`; onChange alterna el valor */}
+      {/* Input checkbox oculto — su estado checked refleja `high`; onChange alterna el valor */}
       <input
         type="checkbox"
-        checked={dark}
-        onChange={() => onChange(dark ? 'light' : 'dark')}
+        checked={high}
+        onChange={() => onChange(high ? 'light' : 'high')}
         className="peer sr-only" // sr-only lo oculta visualmente pero mantiene accesibilidad
-        aria-label="Alternar contraste oscuro/claro"
+        aria-label="Alternar alto contraste"
       />
       {/* Círculo visual del toggle — gradiente, sombra inset y outer shadow según modo */}
       <span
         className={`flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300
-          ${dark
-            ? 'bg-gradient-to-br from-[#1a1a2e] to-[#16213e] text-[#4d7cff] shadow-[inset_2px_2px_0_#2a2a4a,inset_-2px_-2px_0_#0a0a1e]'
+          ${high
+            ? 'bg-gradient-to-br from-[#000000] to-[#1a1a1a] text-[#ffcc00] shadow-[inset_2px_2px_0_#333,inset_-2px_-2px_0_#000]'
             : 'bg-gradient-to-br from-[#fef9e7] to-[#fdebd0] text-[#f39c12] shadow-[inset_2px_2px_0_#fff,inset_-2px_-2px_0_#d4c5a0]'
           }
           before:absolute before:inset-0 before:rounded-full before:transition-all before:duration-300
-          ${dark
-            ? 'before:shadow-[11px_11px_22px_#0a0a1e,-11px_-11px_22px_#2a2a4a]'
+          ${high
+            ? 'before:shadow-[11px_11px_22px_#000,-11px_-11px_22px_#333]'
             : 'before:shadow-[11px_11px_22px_#d4c5a0,-11px_-11px_22px_#fff]'
           }
         `}
       >
-        {/* Icono centrado — luna si dark, sol si light */}
+        {/* Icono centrado — luna si high, sol si light */}
         <span className="relative z-10 h-7 w-7">
-          {dark ? <MoonIcon /> : <SunIcon />}
+          {high ? <MoonIcon /> : <SunIcon />}
         </span>
       </span>
     </label>

@@ -44,71 +44,150 @@ html[data-font-size="xlarge"] {
   font-size: 200%;
 }
 
-html[data-contrast="dark"] {
-  /* Surface hierarchy — near-black base, elevated surfaces lighter */
-  --color-alabaster: #121212;
-  --color-alabaster-dark: #2a2a2e;
-  --color-surface: #1a1a1e;
-  --color-surface-hover: #222226;
+html[data-contrast="high"] {
+  /* High contrast AAA — pure black base, white text, yellow accent (7:1+) */
+  --color-alabaster: #000000;
+  --color-alabaster-dark: #222222;
+  --color-surface: #000000;
+  --color-surface-hover: #111111;
 
-  /* Guinda → softer warm rose for dark mode (desaturated ~20%, lightened) */
-  --color-guinda: #c46a8d;
-  --color-guinda-light: #d485a3;
-  --color-guinda-dark: #aa5577;
+  /* Guinda → yellow for max contrast on black (21:1 vs #000) */
+  --color-guinda: #ffcc00;
+  --color-guinda-light: #ffdd44;
+  --color-guinda-dark: #e6b800;
 
-  /* Text — off-white to reduce halation vs pure white on black */
-  --color-gray-institutional: #e2e2e6;
+  /* Text — pure white for 21:1 on black */
+  --color-gray-institutional: #ffffff;
 
-  /* Shadows — deeper, with guinda accent tinted slightly warmer */
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.6), 0 8px 24px rgba(0,0,0,0.4);
-  --shadow-button: 0 2px 8px rgba(196,106,141,0.25);
-  --shadow-button-hover: 0 4px 14px rgba(196,106,141,0.35);
-  --shadow-header: 0 1px 8px rgba(0,0,0,0.4);
+  /* Shadows — removed for high contrast (borders instead) */
+  --shadow-card: 0 0 0 2px #ffffff;
+  --shadow-card-hover: 0 0 0 3px #ffcc00;
+  --shadow-button: 0 0 0 2px #ffcc00;
+  --shadow-button-hover: 0 0 0 3px #ffffff;
+  --shadow-header: 0 2px 0 #ffffff;
 
-  /* Map the default white token to dark surface so bg-white adapts */
-  --color-white: #1a1a1e;
+  /* White token → black so bg-white becomes black */
+  --color-white: #000000;
 
-  /* Mosaico ripple composable invert (applied alongside the inline ripple filter) */
-  --mosaico-invert: invert(1);
+  /* Mosaico hidden in high contrast (decorative) */
+  --mosaico-invert: invert(0);
 }
 :root {
   --mosaico-invert: invert(0);
 }
-html[data-contrast="dark"] body {
-  background-color: var(--color-alabaster);
-  color: var(--color-gray-institutional);
+html[data-contrast="high"] body {
+  background-color: #000000 !important;
+  color: #ffffff !important;
 }
 
-/* Restore white text on guinda buttons / surfaces (also covers hover:bg-guinda etc.) */
-html[data-contrast="dark"] [class*="bg-guinda"] {
-  --color-white: #fff;
+/* High contrast: guinda becomes yellow on black with black text (21:1) */
+html[data-contrast="high"] [class*="bg-guinda"] {
+  background-color: #ffcc00 !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+  --color-white: #000000;
+}
+html[data-contrast="high"] [class*="bg-guinda"] * {
+  color: #000000 !important;
 }
 
-/* Border grays → dark borders */
-html[data-contrast="dark"] .border-gray-100 { border-color: #2a2a2e !important; }
-html[data-contrast="dark"] .border-gray-200 { border-color: #333338 !important; }
+/* Borders → white 2px for visibility */
+html[data-contrast="high"] .border-gray-100 { border-color: #ffffff !important; border-width: 2px !important; }
+html[data-contrast="high"] .border-gray-200 { border-color: #ffffff !important; border-width: 2px !important; }
+html[data-contrast="high"] .border-alabaster-dark\/50 { border-color: #ffffff !important; }
 
-/* Hover grays → dark hover surfaces */
-html[data-contrast="dark"] .hover\:bg-gray-50:hover { background-color: #2a2a2e !important; }
+/* Hover → white bg black text */
+html[data-contrast="high"] .hover\:bg-gray-50:hover { background-color: #ffffff !important; color: #000000 !important; }
+html[data-contrast="high"] .hover\:bg-guinda\/10:hover { background-color: #ffcc00 !important; color: #000000 !important; }
 
-/* Alabaster translucent backgrounds in dark mode */
-html[data-contrast="dark"] .bg-alabaster\/30 { background-color: rgba(18,18,18,0.5) !important; }
-html[data-contrast="dark"] .bg-alabaster\/50 { background-color: rgba(18,18,18,0.6) !important; }
+/* Alabaster translucent → solid black with white border */
+html[data-contrast="high"] .bg-alabaster\/30 { background-color: #000000 !important; border: 1px solid #ffffff !important; }
+html[data-contrast="high"] .bg-alabaster\/50 { background-color: #000000 !important; border: 1px solid #ffffff !important; }
+html[data-contrast="high"] .bg-white { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #ffffff !important; }
+html[data-contrast="high"] .bg-alabaster { background-color: #000000 !important; }
 
-/* Leaflet map dark mode — softer invert for less eye strain */
-html[data-contrast="dark"] .leaflet-control-zoom { background: #2a2a2e !important; border-color: #3a3a3e !important; }
-html[data-contrast="dark"] .leaflet-control-zoom a { color: #e2e2e6 !important; }
-html[data-contrast="dark"] .leaflet-control-zoom a.leaflet-control-zoom-in { border-bottom-color: #3a3a3e !important; }
-html[data-contrast="dark"] .leaflet-control-layers,
-html[data-contrast="dark"] .leaflet-control-layers-expanded { background: #2a2a2e !important; border-color: #3a3a3e !important; }
-html[data-contrast="dark"] .leaflet-layer { filter: invert(0.75) hue-rotate(180deg) saturate(0.7); }
-html[data-contrast="dark"] .leaflet-popup-content-wrapper { background: #2a2a2e !important; color: #e2e2e6 !important; }
-html[data-contrast="dark"] .leaflet-popup-tip { background: #2a2a2e !important; }
+/* Leaflet high contrast — grayscale + white borders, yellow markers */
+html[data-contrast="high"] .leaflet-control-zoom { background: #000000 !important; border: 2px solid #ffffff !important; }
+html[data-contrast="high"] .leaflet-control-zoom a { color: #ffffff !important; background: #000000 !important; }
+html[data-contrast="high"] .leaflet-control-zoom a:hover { background: #ffcc00 !important; color: #000000 !important; }
+html[data-contrast="high"] .leaflet-control-zoom a.leaflet-control-zoom-in { border-bottom-color: #ffffff !important; border-bottom-width: 2px !important; }
+html[data-contrast="high"] .leaflet-control-layers,
+html[data-contrast="high"] .leaflet-control-layers-expanded { background: #000000 !important; border: 2px solid #ffffff !important; color: #ffffff !important; }
+html[data-contrast="high"] .leaflet-layer { filter: grayscale(1) contrast(1.4) brightness(1.1) !important; }
+html[data-contrast="high"] .leaflet-popup-content-wrapper { background: #000000 !important; color: #ffffff !important; border: 2px solid #ffffff !important; }
+html[data-contrast="high"] .leaflet-popup-tip { background: #000000 !important; border: 1px solid #ffffff !important; }
+html[data-contrast="high"] .leaflet-marker-icon { filter: drop-shadow(0 0 2px #ffffff) !important; }
 
-/* Mosaico SVGs — invert so guinda becomes visible on dark backgrounds */
-html[data-contrast="dark"] .contrast-mosaico { filter: invert(1); }
-html[data-contrast="dark"] .contrast-mosaico-bg { filter: invert(1); }
+/* Mosaico decorativo → oculto en alto contraste (ruido visual, no informativo) */
+html[data-contrast="high"] .contrast-mosaico { display: none !important; }
+html[data-contrast="high"] .contrast-mosaico-bg { display: none !important; }
+
+/* Focus visible → yellow 3px for keyboard navigation (WCAG 2.4.7) */
+html[data-contrast="high"] :focus-visible { outline: 3px solid #ffcc00 !important; outline-offset: 2px !important; }
+html[data-contrast="high"] ::selection { background: #ffcc00 !important; color: #000000 !important; }
+
+/* Logos header/footer — conserva guinda original pero con fondo blanco y borde negro para contraste en negro */
+html[data-contrast="high"] header img,
+html[data-contrast="high"] footer img,
+html[data-contrast="high"] img[src*="Logo"]:not([alt="Semovinfra"]),
+html[data-contrast="high"] img[src*="logo"]:not([alt="Semovinfra"]),
+html[data-contrast="high"] img[src*="Puebla"],
+html[data-contrast="high"] img[src*="slogan"] {
+  filter: none !important;
+  background: #ffffff !important;
+  border: 2px solid #000000 !important;
+  padding: 4px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 0 0 2px #ffffff !important;
+}
+/* Logo centro Inicio — circular, sin parche blanco extraño: solo borde amarillo grueso y fondo negro */
+html[data-contrast="high"] img[alt="Semovinfra"] {
+  filter: none !important;
+  background: #ffffff !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 9999px !important;
+  box-shadow: none !important;
+}
+html[data-contrast="high"] .mx-auto.mb-6.h-20.w-20 {
+  background: #ffffff !important;
+  border: 3px solid #ffcc00 !important;
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px #000000 !important;
+}
+
+/* Pasos Inicio — guinda → amarillo alto contraste */
+html[data-contrast="high"] .step-active {
+  background-color: #ffcc00 !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 0 0 2px #ffffff !important;
+}
+html[data-contrast="high"] .step-num {
+  border: 2px solid #ffffff !important;
+  color: #ffffff !important;
+}
+html[data-contrast="high"] .step-num.step-active {
+  color: #000000 !important;
+}
+html[data-contrast="high"] .dot-base {
+  background-color: #ffffff !important;
+  border: 1px solid #000 !important;
+}
+html[data-contrast="high"] .dot-active {
+  background-color: #ffcc00 !important;
+  box-shadow: 0 0 0 2px #ffffff !important;
+  border: 1px solid #000 !important;
+}
+@keyframes step-bounce-high {
+  0% { transform: scale(1); }
+  15% { transform: scale(1.25); box-shadow: 0 0 0 3px #ffffff; }
+  30% { transform: scale(0.9); }
+  45% { transform: scale(1.1); }
+  60% { transform: scale(1); box-shadow: 0 0 0 2px #ffffff; }
+}
+html[data-contrast="high"] .step-bounce {
+  animation-name: step-bounce-high !important;
+}
 
 ::selection {
   background-color: var(--color-guinda);

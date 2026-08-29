@@ -41,7 +41,7 @@ interface AccessibilityPanelProps {
   fontSize: FontSize
   /** Callback al seleccionar un tamaño de fuente. */
   onFontSizeChange: (size: FontSize) => void
-  /** Contraste activo (light/dark). */
+  /** Contraste activo (light/high). */
   contrast: Contrast
   /** Callback al cambiar contraste. */
   onContrastChange: (c: Contrast) => void
@@ -162,10 +162,10 @@ export default function AccessibilityPanel({
 
           <div className="h-px bg-alabaster-dark/50" />
 
-          {/* Sección: Contraste — icono dinámico (Sun/Moon) + toggle */}
+          {/* Sección: Contraste — icono dinámico (Sun/Moon) + toggle alto contraste */}
           <section>
             <div className="mb-3 flex items-center gap-2">
-              {contrast === 'dark' ? (
+              {contrast === 'high' ? (
                 <Moon size={18} className="text-guinda" />
               ) : (
                 <Sun size={18} className="text-guinda" />
@@ -174,7 +174,7 @@ export default function AccessibilityPanel({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-institutional">
-                {contrast === 'dark' ? 'Oscuro' : 'Claro'}
+                {contrast === 'high' ? 'Alto contraste' : 'Claro'}
               </span>
               {/* Toggle visual de contraste (componente dedicado con animación sol/luna) */}
               <ContrastToggle contrast={contrast} onChange={onContrastChange} />
