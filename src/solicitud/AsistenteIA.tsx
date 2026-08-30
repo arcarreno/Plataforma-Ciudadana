@@ -34,13 +34,15 @@
  * UI: header guinda con Sparkles y botones repeat/close, lista scrollable, input + mic + send.
  */
 ﻿import { useEffect, useRef, useState } from 'react'
-import { Sparkles, Send, X, Mic, MicOff } from 'lucide-react'
+import { Sparkles, Send, X, Mic, MicOff, Phone } from 'lucide-react'
 import Button from '../shared/Button'
 import type { IaLlenarResultado } from '../lib/servidor'
 import { extraerCampo, extraerTodo } from '../lib/iaLocal'
 import { hablar, crearReconocedor, ultimoTranscripcion, fusionarTranscripcion, precargarVoces } from '../lib/speech'
 import type { SpeechRecognitionLike } from '../lib/speech'
 import { TIPOS_OBRA_NOMBRES } from '../core/constants'
+import { validarFormatoCURP, validarDigitoVerificador } from '../lib/curp'
+import { MicVAD } from '@ricky0123/vad-web'
 
 /** Mensaje de chat: autor ia/user y texto. */
 interface Msg {
@@ -56,6 +58,7 @@ interface AsistenteIAProps {
   onClose?: () => void
   onAbrirMapa?: () => void
   mapaConfirmado?: number
+  onResaltarCampo?: (campo: string | null) => void
 }
 
 // --- Cuestionario secuencial de 11 campos con textos de pregunta ---
@@ -129,7 +132,7 @@ function valorDeCampo(campo: string, texto: string): Partial<IaLlenarResultado> 
 }
 
 // --- AsistenteIA: orquesta flujo de preguntas, validación sí/no, voz y mapa ---
-export default function AsistenteIA({ esLleno, onAplicar, onLimpiar, onClose, onAbrirMapa, mapaConfirmado }: AsistenteIAProps) {
+export default function AsistenteIA({ esLleno, onAplicar, onLimpiar, onClose, onAbrirMapa, mapaConfirmado, onResaltarCampo }: AsistenteIAProps) {
   // completadosRef Set de campos ya confirmados; mapaPendienteRef evita reabrir mapa en loop
   const completadosRef = useRef<Set<string>>(new Set())
   const mapaPendienteRef = useRef(false)
@@ -141,7 +144,11 @@ export default function AsistenteIA({ esLleno, onAplicar, onLimpiar, onClose, on
   }
 
 const preguntaActivaRef = useRef('')
+  const vadRef = useRef<MicVAD | null>(null)
+  const [modoLlamada, setModoLlamada] = useState(false)
   const pendientesRef = useRef<{ campo: string; etiqueta: string; valor: string }[]>([])
+  const historialRef = useRef<string[]>([])
+  const [, forceUpdate] = useState(0)
 
   // estadoInicial calcula saludo + primera pregunta según siguientePregunta()
   const [estadoInicial] = useState(() => {
@@ -176,9 +183,15 @@ const esSi = (t: string): boolean => {
     return /(^|\s)(no|noa|non|n[oó]po|nel|ni modo|negativo|nada|jam[aá]s|cambi|repite|otra vez|no es)/.test(x) || /\sno\s/.test(x)
   }
 
-  /** Genera texto de confirmación para campo pendiente. */
-  const preguntaConfirmacion = (p: { campo: string; etiqueta: string; valor: string }): string =>
-    `Capturé "${p.valor}" como ${p.etiqueta.toLocaleLowerCase()}. ¿Es correcto? Responde sí o no.`
+  /** Genera texto de confirmación natural y variado para campo pendiente. */
+  const preguntaConfirmacion = (p: { campo: string; etiqueta: string; valor: string }): string => {
+    const variantes = [
+      `¡Perfecto! Entendí "${p.valor}" para ${p.etiqueta.toLocaleLowerCase()}. ¿Lo dejamos así?`,
+      `Genial, anoté "${p.valor}" como ${p.etiqueta.toLocaleLowerCase()}. ¿Es correcto?`,
+      `Entendido — "${p.valor}" para ${p.etiqueta.toLocaleLowerCase()}. ¿Lo confirmamos?`,
+    ]
+    return variantes[Math.floor(Math.random() * variantes.length)]
+  }
 
     // Auto-scroll del chat al añadir mensajes
 useEffect(() => {
@@ -199,8 +212,73 @@ useEffect(() => {
       recRef.current?.abort()
       recRef.current = null
       window.speechSynthesis?.cancel()
+      vadRef.current?.destroy()
+      vadRef.current = null
     }
   }, [])
+
+  // Modo llamada continua con VAD (sin botón, sin LLM) — Silero VAD via @ricky0123/vad-web
+  useEffect(() => {
+    if (!modoLlamada) {
+      vadRef.current?.pause()
+      return
+    }
+    let mounted = true
+    ;(async () => {
+      try {
+        const vad = await MicVAD.new({
+          onSpeechStart: () => {
+            if (!escuchando && !terminado) {
+              // @ts-ignore — iniciar escucha si no estamos ya escuchando
+              iniciarEscucha()
+            }
+          },
+          onSpeechEnd: () => {
+            if (escuchando && textoRef.current.trim()) {
+              terminarEscucha()
+            }
+          },
+          // CDN con versiones exactas instaladas (0.0.30 + 1.29.0) para evitar 404 en Vite
+          baseAssetPath: 'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.30/dist/',
+          onnxWASMBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.29.0/dist/',
+          model: 'v5',
+          positiveSpeechThreshold: 0.85,
+          negativeSpeechThreshold: 0.7,
+          minSpeechMs: 400,
+          redemptionMs: 800,
+          preSpeechPadMs: 200,
+        })
+        if (!mounted) {
+          vad.destroy()
+          return
+        }
+        vadRef.current = vad
+        vad.start()
+        setEstadoVoz('Modo llamada activo — habla cuando quieras')
+      } catch (e) {
+        console.error('VAD init failed', e)
+        setModoLlamada(false)
+        setEstadoVoz('No se pudo iniciar modo llamada, usa el botón de micrófono')
+      }
+    })()
+    return () => {
+      mounted = false
+      vadRef.current?.destroy()
+      vadRef.current = null
+    }
+  }, [modoLlamada, escuchando, terminado])
+
+  // Pausa VAD mientras habla para no auto-escucharse
+  useEffect(() => {
+    const synth = window.speechSynthesis
+    if (!synth) return
+    const check = () => {
+      if (synth.speaking && modoLlamada) vadRef.current?.pause()
+      else if (!synth.speaking && modoLlamada && !escuchando) vadRef.current?.start()
+    }
+    const id = window.setInterval(check, 400)
+    return () => window.clearInterval(id)
+  }, [modoLlamada, escuchando])
 
     // Reacciona a confirmación de mapa: valida punto/calle y decide siguiente pregunta
 useEffect(() => {
@@ -256,12 +334,44 @@ if (faltanDireccion) {
 
   const hacerPregunta = (sig: { campo: string; texto: string }) => {
     preguntaActivaRef.current = sig.campo
+    if (!historialRef.current.includes(sig.campo)) historialRef.current.push(sig.campo)
+    onResaltarCampo?.(sig.campo)
     setMensajes(m => [...m, { autor: 'ia', texto: sig.texto }])
+    forceUpdate(v => v + 1)
   }
 
   const hacerPreguntaDeCampo = (campo: string) => {
     const p = PREGUNTAS.find(x => x.campo === campo)
     if (p) hacerPregunta({ campo: p.campo, texto: p.pregunta })
+  }
+
+  const handleAtras = () => {
+    const hist = historialRef.current
+    if (hist.length < 2) return
+    const actual = hist.pop()
+    if (actual) completadosRef.current.delete(actual)
+    pendientesRef.current = []
+    onResaltarCampo?.(null)
+    const anterior = hist[hist.length - 1]
+    if (anterior) {
+      completadosRef.current.delete(anterior)
+      const p = PREGUNTAS.find(x => x.campo === anterior)
+      if (p) {
+        preguntaActivaRef.current = p.campo
+        setMensajes(m => [...m, { autor: 'ia', texto: `Volvamos: ${p.pregunta}` }])
+        forceUpdate(v => v + 1)
+      }
+    }
+  }
+
+  const handleOmitir = () => {
+    const campo = preguntaActivaRef.current
+    if (!campo) return
+    pendientesRef.current = []
+    completadosRef.current.add(campo)
+    onResaltarCampo?.(null)
+    setMensajes(m => [...m, { autor: 'ia', texto: `Entendido, dejamos eso para después. Sigamos.` }])
+    continuar()
   }
 
   /** Avanza al siguiente campo; caso especial ubicacion abre mapa con mensaje guiado. */
@@ -298,6 +408,8 @@ const enviar = (texto = input.trim()) => {
         onLimpiar?.(pendiente.campo)
         completadosRef.current.delete(pendiente.campo)
         pendientesRef.current = []
+        onResaltarCampo?.(null)
+        forceUpdate(v => v + 1)
         if (pendiente.campo) {
           hacerPreguntaDeCampo(pendiente.campo)
         } else {
@@ -310,19 +422,36 @@ const enviar = (texto = input.trim()) => {
         if (pendiente.campo) completadosRef.current.add(pendiente.campo)
         const mas = pendientesRef.current.length ? pendientesRef.current[0] : null
         if (mas) {
+          onResaltarCampo?.(mas.campo)
           setMensajes(m => [...m, { autor: 'ia', texto: preguntaConfirmacion(mas) }])
           return
         }
+        onResaltarCampo?.(null)
+        forceUpdate(v => v + 1)
         continuar()
         return
       }
-      setMensajes(m => [...m, { autor: 'ia', texto: `No te entendí. ${preguntaConfirmacion(pendiente)}` }])
+      setMensajes(m => [...m, { autor: 'ia', texto: `Uy, no te entendí bien. ${preguntaConfirmacion(pendiente)}` }])
       return
     }
 
     // Campo objetivo = el que se está preguntando en pantalla (no saltar al "siguiente")
     const campo = preguntaActivaRef.current || siguientePregunta()?.campo || ''
     const data = valorDeCampo(campo, texto)
+
+    // Validación en caliente para CURP (antes de guardar) — tono conversacional
+    if (campo === 'curp' && data.curp) {
+      const curpU = data.curp.toUpperCase().trim()
+      if (!validarFormatoCURP(curpU)) {
+        setMensajes(m => [...m, { autor: 'ia', texto: `Mmm, esa CURP se ve corta. Debe tener 18 caracteres, como PEGJ900101HDFRRN01. ¿Me la deletreas letra por letra?` }])
+        return
+      }
+      if (!validarDigitoVerificador(curpU)) {
+        setMensajes(m => [...m, { autor: 'ia', texto: `Casi, pero el último dígito no cuadra. ¿La revisamos de nuevo?` }])
+        return
+      }
+    }
+
     const llenados = onAplicar(data)
     const nuevosPendientes: { campo: string; etiqueta: string; valor: string }[] = []
     for (const c of llenados) {
@@ -334,21 +463,23 @@ const enviar = (texto = input.trim()) => {
     }
     if (nuevosPendientes.length > 0) {
       pendientesRef.current = nuevosPendientes
+      onResaltarCampo?.(nuevosPendientes[0].campo)
       setMensajes(m => [...m, { autor: 'ia', texto: preguntaConfirmacion(nuevosPendientes[0]) }])
       return
     }
+    onResaltarCampo?.(null)
 
     if (llenados.length === 0) {
       if (preguntaActivaRef.current) {
         const activa = PREGUNTAS.find(p => p.campo === preguntaActivaRef.current)
         if (activa) {
-          setMensajes(m => [...m, { autor: 'ia', texto: `No pude capturar eso. ${activa.pregunta}` }])
+          setMensajes(m => [...m, { autor: 'ia', texto: `No alcanc� a captar eso, �me lo repites? ${activa.pregunta}` }])
           return
         }
       }
       const sig = siguientePregunta()
       if (sig && sig.campo !== 'ubicacion') {
-        setMensajes(m => [...m, { autor: 'ia', texto: `No pude capturar eso. ${sig.texto}` }])
+        setMensajes(m => [...m, { autor: 'ia', texto: `No alcanc� a captar eso, �me lo repites? ${sig.texto}` }])
         return
       }
     }
@@ -490,6 +621,24 @@ const arrancar = (reintento: boolean) => {
         </div>
       </div>
 
+      {/* Barra de progreso */}
+      {!terminado && (
+        <>
+          <div className="h-1.5 bg-alabaster-dark/20">
+            <div
+              className="h-full bg-guinda transition-all duration-500"
+              style={{ width: `${Math.round((PREGUNTAS.filter(p => completadosRef.current.has(p.campo) || esLleno(p.campo)).length / PREGUNTAS.length) * 100)}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between px-4 py-1 text-xs text-gray-institutional/60">
+            <span>
+              Paso {Math.min(PREGUNTAS.filter(p => completadosRef.current.has(p.campo) || esLleno(p.campo)).length + 1, PREGUNTAS.length)}/{PREGUNTAS.length}
+            </span>
+            <span>{Math.round((PREGUNTAS.filter(p => completadosRef.current.has(p.campo) || esLleno(p.campo)).length / PREGUNTAS.length) * 100)}%</span>
+          </div>
+        </>
+      )}
+
       <div ref={listaRef} className="flex max-h-72 flex-col gap-3 overflow-y-auto bg-alabaster/40 p-4">
         {mensajes.map((m, i) => (
           <div key={i} className={`flex ${m.autor === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -526,7 +675,28 @@ const arrancar = (reintento: boolean) => {
             ¡Gracias! El formulario quedó con tus datos. Revisa, complementa los faltantes y marca la ubicación en el mapa.
           </p>
         ) : (
-          <div className="flex items-end gap-2">
+          <>
+            <div className="mb-2 flex gap-2">
+              <button
+                type="button"
+                onClick={handleAtras}
+                disabled={historialRef.current.length < 2}
+                className="rounded-lg border border-alabaster-dark px-3 py-1.5 text-xs font-medium text-gray-institutional transition hover:border-guinda/30 hover:text-guinda disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Atrás
+              </button>
+              <button
+                type="button"
+                onClick={handleOmitir}
+                className="rounded-lg border border-alabaster-dark px-3 py-1.5 text-xs font-medium text-gray-institutional transition hover:border-guinda/30 hover:text-guinda"
+              >
+                Omitir
+              </button>
+              <span className="ml-auto text-xs text-gray-institutional/50">
+                {PREGUNTAS.filter(p => completadosRef.current.has(p.campo) || esLleno(p.campo)).length}/{PREGUNTAS.length} completados
+              </span>
+            </div>
+            <div className="flex items-end gap-2">
             <button
               type="button"
               onClick={escuchando ? terminarEscucha : iniciarEscucha}
@@ -538,6 +708,19 @@ const arrancar = (reintento: boolean) => {
               }`}
             >
               {escuchando ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setModoLlamada(v => !v)}
+              aria-label={modoLlamada ? 'Desactivar modo llamada' : 'Activar modo llamada'}
+              title={modoLlamada ? 'Modo llamada activo (sin botón)' : 'Activar modo llamada continua'}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${
+                modoLlamada
+                  ? 'bg-emerald-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+              }`}
+            >
+              <Phone className="h-5 w-5" />
             </button>
             <textarea
               value={input}
@@ -556,7 +739,8 @@ const arrancar = (reintento: boolean) => {
             >
               <Send className="h-4 w-4" />
             </Button>
-          </div>
+            </div>
+          </>
         )}
         {estadoVoz && (
           <p className="mt-2 text-center text-xs" aria-live="polite">

@@ -236,6 +236,8 @@ const [submittedOnce, setSubmittedOnce] = useState(false)
   const [esDesktop, setEsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
   // mostrarAsistente: toggle del chat AsistenteIA (inicia visible si iniciarIA=true)
   const [mostrarAsistente, setMostrarAsistente] = useState(() => iniciarIA === true)
+  // Resaltado visual para confirmación de AsistenteIA (campo pendiente)
+  const [campoResaltado, setCampoResaltado] = useState<string | null>(null)
   // Modal CURP: explica por qué solo 3 peticiones al mes por CURP (solo primera vez que se toca el campo)
   const CURP_INFO_KEY = 'semovinfra_curp_info_vista'
   const [showCurpInfo, setShowCurpInfo] = useState(false)
@@ -781,6 +783,7 @@ return (
               onClose={() => setMostrarAsistente(false)}
               onAbrirMapa={() => { setShowMapaCombinado(true); setMapKey(k => k + 1) }}
               mapaConfirmado={conteoMapa}
+              onResaltarCampo={setCampoResaltado}
             />
           </div>
         )}
@@ -797,6 +800,7 @@ return (
                     onChange={(e) => setApellidoPaterno(e.target.value)}
                     error={errors.apellido_paterno}
                     placeholder="García"
+                    className={campoResaltado === 'apellido_paterno' ? 'ring-2 ring-emerald-500 bg-emerald-50 !border-emerald-500' : undefined}
                   />
                   <Input
                     label="Apellido materno"
@@ -804,6 +808,7 @@ return (
                     onChange={(e) => setApellidoMaterno(e.target.value)}
                     error={errors.apellido_materno}
                     placeholder="González"
+                    className={campoResaltado === 'apellido_materno' ? 'ring-2 ring-emerald-500 bg-emerald-50 !border-emerald-500' : undefined}
                   />
                   <Input
                     label="Nombre(s)"
@@ -811,6 +816,7 @@ return (
                     onChange={(e) => setNombres(e.target.value)}
                     error={errors.nombres}
                     placeholder="Juan Carlos"
+                    className={campoResaltado === 'nombres' ? 'ring-2 ring-emerald-500 bg-emerald-50 !border-emerald-500' : undefined}
                   />
                 </div>
               ) : (
@@ -835,6 +841,7 @@ return (
                     error={errors.curp}
                     placeholder="PEGJ900101HDFRRN01"
                     maxLength={18}
+                    className={campoResaltado === 'curp' ? 'ring-2 ring-emerald-500 bg-emerald-50 !border-emerald-500' : undefined}
                   />
                 )}
                 <Input
@@ -845,6 +852,7 @@ return (
                   error={errors.telefono}
                   placeholder="2221234567"
                   maxLength={10}
+                  className={campoResaltado === 'telefono' ? 'ring-2 ring-emerald-500 bg-emerald-50 !border-emerald-500' : undefined}
                 />
               </div>
               <Input
@@ -854,6 +862,7 @@ return (
                 onChange={(e) => set('correo', e.target.value)}
                 error={errors.correo}
                 placeholder="correo@ejemplo.com"
+                className={campoResaltado === 'correo' ? 'ring-2 ring-emerald-500 bg-emerald-50 !border-emerald-500' : undefined}
               />
             </div>
           </Card>
@@ -888,20 +897,22 @@ return (
           >
             <Card title="Datos de la obra">
               <div className="flex flex-col gap-4">
-                <Select
-                  label="Tipo de obra"
-                  options={TIPOS_OBRA_NOMBRES}
-                  value={form.tipo_solicitud}
-                  onChange={(e) => set('tipo_solicitud', e.target.value)}
-                  error={errors.tipo_solicitud}
-                />
+                <div className={campoResaltado === 'tipo' ? 'rounded-xl ring-2 ring-emerald-500' : undefined}>
+                  <Select
+                    label="Tipo de obra"
+                    options={TIPOS_OBRA_NOMBRES}
+                    value={form.tipo_solicitud}
+                    onChange={(e) => set('tipo_solicitud', e.target.value)}
+                    error={errors.tipo_solicitud}
+                  />
+                </div>
 
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-institutional">
                     Ubicación
                   </label>
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 p-4">
+                    <div className={`flex items-center gap-3 rounded-xl border-2 p-4 ${campoResaltado === 'ubicacion' ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500' : 'border-alabaster-dark/30 bg-alabaster/30'}`}>
                       <MapPin className="h-5 w-5 shrink-0 text-guinda" />
                       <span className="text-sm text-gray-institutional/70">
                         {form.latitud && form.longitud
@@ -981,13 +992,15 @@ return (
                   </div>
                 )}
 
-                <Textarea
-                  label="Descripción del problema"
-                  value={form.descripcion}
-                  onChange={(e) => set('descripcion', e.target.value)}
-                  placeholder="Describe el problema o la necesidad de la obra..."
-                  rows={3}
-                />
+                <div className={campoResaltado === 'descripcion' ? 'rounded-xl ring-2 ring-emerald-500 bg-emerald-50' : undefined}>
+                  <Textarea
+                    label="Descripción del problema"
+                    value={form.descripcion}
+                    onChange={(e) => set('descripcion', e.target.value)}
+                    placeholder="Describe el problema o la necesidad de la obra..."
+                    rows={3}
+                  />
+                </div>
               </div>
             </Card>
           </div>
