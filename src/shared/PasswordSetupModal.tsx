@@ -134,27 +134,17 @@ export default function PasswordSetupModal({
           <X className="h-5 w-5" />
         </button>
 
-        {/* Encabezado guinda con corte entrecortado */}
-        <div className="bg-guinda px-6 pb-10 pt-6 text-center">
-          <h2 className="text-lg font-semibold text-white">Crea tu contraseña</h2>
-          <p className="mt-1 text-xs text-white/70">{email}</p>
-        </div>
-        {/* Zigzag blanco sobre el guinda (efecto entrecortado) */}
-        <div
-          aria-hidden="true"
-          className="-mt-5 h-6 bg-white"
-          style={{
-            clipPath:
-              'polygon(0 100%, 0 60%, 4% 20%, 8% 60%, 12% 20%, 16% 60%, 20% 20%, 24% 60%, 28% 20%, 32% 60%, 36% 20%, 40% 60%, 44% 20%, 48% 60%, 52% 20%, 56% 60%, 60% 20%, 64% 60%, 68% 20%, 72% 60%, 76% 20%, 80% 60%, 84% 20%, 88% 60%, 92% 20%, 96% 60%, 100% 20%, 100% 100%)',
-          }}
-        />
-        {/* Logo a caballo del corte */}
-        <div className="-mt-9 mb-2 flex justify-center">
+        {/* Encabezado guinda con logo (mismo patrón que cookies/privacidad) */}
+        <div className="flex items-center gap-3 bg-guinda px-6 py-4">
           <img
             src={logoSemovinfra}
-            alt="Semovinfra"
-            className="h-16 w-16 rounded-full border-4 border-white object-cover shadow-lg"
+            alt="SEMOVINFRA"
+            className="h-10 w-10 rounded-full bg-white object-cover p-0.5"
           />
+          <div className="flex flex-col">
+            <h2 className="text-sm font-bold tracking-wide text-white">Crea tu contraseña</h2>
+            <span className="text-xs text-white/80">{email}</span>
+          </div>
         </div>
 
         <form onSubmit={guardar} className="flex flex-col gap-4 px-6 pb-6">
