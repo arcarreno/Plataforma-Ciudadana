@@ -20,7 +20,8 @@
  * Usuario operador autenticado del sistema.
  * Proviene del backend (`loginServidor` o `login_operador` en Supabase).
  * @property id - PK del usuario.
- * @property username - Nombre de usuario único para login.
+ * @property username - Nombre de usuario único para login (en cuentas nuevas es el correo).
+ * @property email - Correo institucional (solo cuentas creadas por auto-registro).
  * @property nombres - Nombre(s) de pila.
  * @property apellidos - Apellidos.
  * @property rol - Rol asignado; determina permisos y bonificación de ranking.
@@ -28,9 +29,10 @@
 export interface Usuario {
   id: number
   username: string
+  email?: string
   nombres: string
   apellidos: string
-  rol: 'admin' | 'revisor' | 'diputado' | 'senador'
+  rol: 'admin' | 'revisor' | 'diputado' | 'senador' | 'legislador'
 }
 
 /**
@@ -45,13 +47,10 @@ export function nombreCompleto(u: Usuario): string {
 
 /**
  * Determina si un rol corresponde a cargo público con privilegios.
- * Actualmente todos los roles definidos son considerados cargo público,
- * pero la función aísla la regla para futuros cambios (ej. agregar "ciudadano").
- * Se usa para bonificación de ranking (`RANKING_PUNTOS_CARGO_PUBLICO`) y
- * para mostrar badges/etiquetas en UI.
+ * Incluye `legislador` (auto-registro del Congreso local).
  * @param rol - String del rol a evaluar (puede venir de BD o contexto).
- * @returns `true` si es admin, revisor, diputado o senador.
+ * @returns `true` si es admin, revisor, diputado, senador o legislador.
  */
 export function esCargoPublico(rol: string): boolean {
-  return rol === 'admin' || rol === 'revisor' || rol === 'diputado' || rol === 'senador'
+  return rol === 'admin' || rol === 'revisor' || rol === 'diputado' || rol === 'senador' || rol === 'legislador'
 }

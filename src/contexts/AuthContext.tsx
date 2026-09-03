@@ -22,17 +22,19 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import type { Usuario } from '../types/auth'
-import { login as apiLogin, logout as apiLogout, getSession } from '../lib/auth'
+import { login as apiLogin, logout as apiLogout, getSession, persistirSesion } from '../lib/auth'
 
 /**
  * Forma del valor expuesto por el contexto de autenticación.
  * @property user - Usuario autenticado o null si no hay sesión.
  * @property iniciarSesion - Intenta login; retorna string con mensaje de error o null si éxito.
+ * @property establecerSesion - Persiste una sesión ya autenticada (auto-login tras registro).
  * @property cerrarSesion - Limpia storage y estado local.
  */
 interface AuthContextType {
   user: Usuario | null
   iniciarSesion: (username: string, password: string) => Promise<string | null>
+  establecerSesion: (user: Usuario, token: string) => void
   cerrarSesion: () => void
 }
 
@@ -74,6 +76,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   /**
+   * Persiste una sesión ya autenticada (auto-login tras completar registro).
+   */
+  const establecerSesion = useCallback((u: Usuario, token: string) => {
+    persistirSesion(u, token)
+    setUser(u)
+  }, [])
+
+  /**
    * Cierra sesión: limpia localStorage (token + usuario) y resetea estado a null.
    * No navega; el caller decide redirigir si es necesario.
    */
@@ -83,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, iniciarSesion, cerrarSesion }}>
+    <AuthContext.Provider value={{ user, iniciarSesion, establecerSesion, cerrarSesion }}>
       {children}
     </AuthContext.Provider>
   )

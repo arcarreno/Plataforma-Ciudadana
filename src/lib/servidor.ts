@@ -416,7 +416,8 @@ export interface LoginResult {
     token: string
     id: number
     username: string
-    rol: Usuario['rol'] // 'admin' | 'revisor' | 'diputado' | 'senador'
+    email?: string
+    rol: Usuario['rol'] // 'admin' | 'revisor' | 'diputado' | 'senador' | 'legislador'
     nombres: string
     apellidos: string
   }

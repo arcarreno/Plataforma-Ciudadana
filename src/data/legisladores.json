@@ -1,0 +1,377 @@
+{
+  "fuente": "https://www.congresopuebla.gob.mx/index.php?option=com_content&view=article&id=10972",
+  "legislatura": "LXII",
+  "actualizado": "2026-09-03",
+  "total": 41,
+  "registros": [
+    {
+      "nombre": "Laura Guadalupe Vargas Vargas",
+      "email": "dip.lupita.vargas@congresodepuebla.mx",
+      "distrito": 1,
+      "municipio": "Xicotepec de Juárez",
+      "partido": "Partido Verde Ecologista de México",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Miguel Márquez Ríos",
+      "email": "dip.miguel.marquez@congresodepuebla.mx",
+      "distrito": 2,
+      "municipio": "Huauchinango de Degollado",
+      "partido": "Partido Verde Ecologista de México",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Kathya Sánchez Rodríguez",
+      "email": "dip.kathya.sanchez@congresodepuebla.mx",
+      "distrito": 3,
+      "municipio": "Chignahuapan",
+      "partido": "Partido Verde Ecologista de México",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Esther Martínez Romano",
+      "email": "dip.esther.martinez@congresodepuebla.mx",
+      "distrito": 4,
+      "municipio": "Zacapoaxtla",
+      "partido": "Partido del Trabajo",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Elpidio Díaz Escobar",
+      "email": "dip.elpidio.diaz@congresodepuebla.mx",
+      "distrito": 5,
+      "municipio": "Libres",
+      "partido": "Partido Fuerza por México",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Floricel González Méndez",
+      "email": "dip.floricel.gonzalez@congresodepuebla.mx",
+      "distrito": 6,
+      "municipio": "Teziutlán",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Guadalupe Yamak Taja",
+      "email": "dip.guadalupe.yamak@congresodepuebla.mx",
+      "distrito": 7,
+      "municipio": "San Martín Texmelucan",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Angélica Patricia Alvarado Juárez",
+      "email": "dip.angelica.alvarado@congresodepuebla.mx",
+      "distrito": 8,
+      "municipio": "Huejotzingo",
+      "partido": "Partido del Trabajo",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Norma Estela Pimentel Méndez",
+      "email": "dip.norma.pimentel@congresodepuebla.mx",
+      "distrito": 9,
+      "municipio": "Heroica Puebla de Zaragoza",
+      "partido": "Partido Verde Ecologista de México",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Jaime Natale Uranga",
+      "email": "dip.jaime.natale@congresodepuebla.mx",
+      "distrito": 10,
+      "municipio": "Heroica Puebla de Zaragoza",
+      "partido": "Partido Verde Ecologista de México",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Xel Arianna Hernández García",
+      "email": "dip.xelarianna.hernandezg@congresodepuebla.mx",
+      "distrito": 11,
+      "municipio": "Heroica Puebla de Zaragoza",
+      "partido": "Partido del Trabajo",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "José Miguel Trujillo de Ita",
+      "email": "dip.miguel.trujillo@congresodepuebla.mx",
+      "distrito": 12,
+      "municipio": "Amozoc de Mota",
+      "partido": "MORENA",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Óscar Mauricio Céspedes Peregrina",
+      "email": "dip.mauricio.cespedes@congresodepuebla.mx",
+      "distrito": 13,
+      "municipio": "Tepeaca",
+      "partido": "Partido del Trabajo",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Elías Lozada Ortega",
+      "email": "dip.elias.lozada@congresodepuebla.mx",
+      "distrito": 14,
+      "municipio": "Ciudad Serdán",
+      "partido": "Partido Nueva Alianza",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Andrés Iván Villegas Mendoza",
+      "email": "dip.andres.villegas@congresodepuebla.mx",
+      "distrito": 15,
+      "municipio": "Tecamachalco",
+      "partido": "MORENA",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Elvia Graciela Palomares Ramírez",
+      "email": "dip.graciela.palomares@congresodepuebla.mx",
+      "distrito": 16,
+      "municipio": "Heroica Puebla de Zaragoza",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "María Fernanda De la Barreda Angon",
+      "email": "dip.fernanda.delabarreda@congresodepuebla.mx",
+      "distrito": 17,
+      "municipio": "Heroica Puebla de Zaragoza",
+      "partido": "Partido Verde Ecologista de México",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Nayeli Salvatori Bojalil",
+      "email": "dip.nayeli.salvatori@congresodepuebla.mx",
+      "distrito": 18,
+      "municipio": "Cholula de Rivadavia",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Roberto Zataráin Leal",
+      "email": "dip.roberto.zatarain@congresodepuebla.mx",
+      "distrito": 19,
+      "municipio": "Heroica Puebla de Zaragoza",
+      "partido": "MORENA",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "José Luis Figueroa Cortés",
+      "email": "dip.luis.figueroa@congresodepuebla.mx",
+      "distrito": 20,
+      "municipio": "Heroica Puebla de Zaragoza",
+      "partido": "Partido del Trabajo",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Modesta Delgado Juárez",
+      "email": "dip.modesta.delgado@congresodepuebla.mx",
+      "distrito": 21,
+      "municipio": "Atlixco",
+      "partido": "Partido Fuerza por México",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Azucena Rosas Tapia",
+      "email": "dip.azucena.rosas@congresodepuebla.mx",
+      "distrito": 22,
+      "municipio": "Izúcar de Matamoros",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Pável Gaspar Ramírez",
+      "email": "dip.pavel.gaspar@congresodepuebla.mx",
+      "distrito": 23,
+      "municipio": "Acatlán de Osorio",
+      "partido": "MORENA",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Leonela Jazmín Martínez Ayala",
+      "email": "dip.leonela.martinez@congresodepuebla.mx",
+      "distrito": 24,
+      "municipio": "Tehuacán",
+      "partido": "Partido Nueva Alianza",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Araceli Celestino Rosas",
+      "email": "dip.araceli.celestino@congresodepuebla.mx",
+      "distrito": 25,
+      "municipio": "Tehuacán",
+      "partido": "Partido del Trabajo",
+      "genero": "mujer",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Rosalío Zanatta Vidaurri",
+      "email": "dip.rosalio.zanatta@congresodepuebla.mx",
+      "distrito": 26,
+      "municipio": "Ajalpan",
+      "partido": "MORENA",
+      "genero": "hombre",
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Julio Miguel Huerta Gómez",
+      "email": "dip.julio.huerta@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "MORENA",
+      "genero": "hombre",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Ana Laura Gómez Ramírez",
+      "email": "dip.ana.gomez@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Jaime Alejandro Aurioles Barroeta",
+      "email": "dip.jaime.aurioles@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "MORENA",
+      "genero": "hombre",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Ana Lilia Tepole Armenta",
+      "email": "dip.ana.tepole@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "María Soledad Amieva Zamora",
+      "email": "dip.soledad.amieva@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Cinthya Gabriela Chumacero Rodríguez",
+      "email": "dip.gabriela.chumacero@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Beatriz Manrique Guevara",
+      "email": "dip.beatriz.manrique@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Verde Ecologista de México",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Celia Bonaga Ruíz",
+      "email": "dip.celia.bonaga@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Acción Nacional",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Marcos Castro Martínez",
+      "email": "dip.marcos.castro@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Acción Nacional",
+      "genero": "hombre",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Susana del Carmen Riestra Piña",
+      "email": "dip.susana.riestra@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Acción Nacional",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Rafael Alejandro Micalco Méndez",
+      "email": "dip.rafaelalejandro.micalco@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Acción Nacional",
+      "genero": "hombre",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Luana Armida Amador Vallejo",
+      "email": "dip.luana.amador@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Acción Nacional",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Delfina Pozos Vergara",
+      "email": "dip.delfina.pozos@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Revolucionario Institucional",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Fedrha Isabel Suriano Corrales",
+      "email": "dip.fedrha.suriano@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "Partido Movimiento Ciudadano",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Elisa Limon Balderrabano",
+      "email": "dip.elisa.limon@congresodepuebla.mx",
+      "distrito": 0,
+      "municipio": "",
+      "partido": "MORENA",
+      "genero": "mujer",
+      "tipo": "plurinominal"
+    }
+  ]
+}

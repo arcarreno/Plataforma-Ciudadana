@@ -224,7 +224,7 @@ export default function Header({
               <div className="flex items-center gap-2 border-r border-gray-200 pr-3">
                 {/* Badge de rol — visible solo en desktop */}
                 <span className="hidden text-xs text-gray-institutional/60 md:inline">
-                  {user.rol === 'admin' ? 'Admin' : user.rol === 'diputado' ? 'Diputado' : user.rol === 'senador' ? 'Senador' : 'Revisor'}
+                  {user.rol === 'admin' ? 'Admin' : user.rol === 'diputado' ? 'Diputado' : user.rol === 'senador' ? 'Senador' : user.rol === 'legislador' ? 'Legislador' : 'Revisor'}
                 </span>
                 <button
                   type="button"

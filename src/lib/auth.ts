@@ -83,6 +83,15 @@ function leerStorage(): Usuario | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Persiste una sesión ya autenticada (usado por auto-login tras completar registro).
+ * @param user - Usuario a guardar.
+ * @param token - Token de sesión.
+ */
+export function persistirSesion(user: Usuario, token: string) {
+  guardarStorage(user, token)
+}
+
+/**
  * Obtiene el token actual desde `localStorage`.
  * @returns Token string o `null` si no hay sesión.
  */
@@ -128,6 +137,7 @@ export async function login(
     const user: Usuario = {
       id: row.id,
       username: row.username,
+      email: (row as { email?: string }).email ?? '',
       rol: row.rol,
       nombres: row.nombres ?? '',
       apellidos: row.apellidos ?? '',

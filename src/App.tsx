@@ -33,6 +33,7 @@ import Inicio from './pages/Inicio'
 import NuevaSolicitud from './pages/NuevaSolicitud'
 import ConsultarFolio from './pages/ConsultarFolio'
 import Consultar from './pages/Consultar'
+import Verificar from './pages/Verificar'
 import AdminDashboard from './pages/AdminDashboard'
 import GestionUsuarios from './pages/GestionUsuarios'
 
@@ -66,6 +67,8 @@ export default function App() {
             <Route path="/consultar-curp" element={<ConsultarFolio />} />
             {/* Vista de consulta/listado general de solicitudes. */}
             <Route path="/consultar" element={<Consultar />} />
+            {/* Verificación de correo para auto-registro (muestra PasswordSetupModal). */}
+            <Route path="/verificar" element={<Verificar />} />
             {/* Panel de administración (requiere rol autorizado). */}
             <Route path="/admin" element={<AdminDashboard />} />
             {/* Gestión de usuarios operadores (solo admin). */}

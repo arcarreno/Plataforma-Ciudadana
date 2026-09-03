@@ -1,0 +1,175 @@
+{
+  "fuente": "https://www.quienmerepresenta.com.mx/estado/puebla (fuente primaria: Camara de Diputados)",
+  "actualizado": "2026-09-03",
+  "total": 23,
+  "registros": [
+    {
+      "nombre": "Gissel Santander Soto",
+      "email": "gissel.santander@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 1,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Fatima Almendra Cruz Peláez",
+      "email": "fatima.cruz@diputados.gob.mx",
+      "partido": "PVEM",
+      "distrito_federal": 2,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "María de los Ángeles Ballesteros García",
+      "email": "maria.ballesteros@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 3,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Juan Antonio González Hernández",
+      "email": "juanantonio.gonzalez@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 4,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Rafaela Vianey García Romero",
+      "email": "vianey.garcia@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 5,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Alejandro Carvajal Hidalgo",
+      "email": "alejandro.carvajal@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 6,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Claudia Rivera Vivanco",
+      "email": "claudia.rivera@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 7,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Carlos Ignacio Mier Bañuelos",
+      "email": "carlos.mier@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 8,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "José Antonio Gali López",
+      "email": "jose.gali@diputados.gob.mx",
+      "partido": "PVEM",
+      "distrito_federal": 9,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "María Fabiola Karina Pérez Popoca",
+      "email": "karina.perez@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 10,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "José Antonio López Ruíz",
+      "email": "antonio.lopez@diputados.gob.mx",
+      "partido": "PT",
+      "distrito_federal": 11,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Nora Yessica Merino Escamilla",
+      "email": "nora.escamilla@diputados.gob.mx",
+      "partido": "PT",
+      "distrito_federal": 12,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Mario Miguel Carrillo Cubillas",
+      "email": "mario.carrillo@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 13,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Eduardo Castillo López",
+      "email": "eduardo.castillo@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 14,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "María del Rosario Orozco Caballero",
+      "email": "maria.orozco@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": 15,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Adolfo Alatriste Cantú",
+      "email": "adolfo.alatriste@diputados.gob.mx",
+      "partido": "PVEM",
+      "distrito_federal": 16,
+      "tipo": "mayoria"
+    },
+    {
+      "nombre": "Maiella Martha Gabriela Gómez Maldonado",
+      "email": "maiella.gomez@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": null,
+      "circunscripcion": 4,
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Julieta Kristal Vences Valencia",
+      "email": "julieta.vences@diputados.gob.mx",
+      "partido": "Morena",
+      "distrito_federal": null,
+      "circunscripcion": 4,
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Xitlalic Ceja García",
+      "email": "xitlalic.ceja@diputados.gob.mx",
+      "partido": "PRI",
+      "distrito_federal": null,
+      "circunscripcion": 4,
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Nadia Navarro Acevedo",
+      "email": "nadia.navarro@diputados.gob.mx",
+      "partido": "PRI",
+      "distrito_federal": null,
+      "circunscripcion": 4,
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Genoveva Huerta Villegas",
+      "email": "genoveva.huerta@diputados.gob.mx",
+      "partido": "PAN",
+      "distrito_federal": null,
+      "circunscripcion": 4,
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Liliana Ortiz Pérez",
+      "email": "liliana.ortiz@diputados.gob.mx",
+      "partido": "PAN",
+      "distrito_federal": null,
+      "circunscripcion": 4,
+      "tipo": "plurinominal"
+    },
+    {
+      "nombre": "Amancay González Franco",
+      "email": "amancay.gonzalez@diputados.gob.mx",
+      "partido": "MC",
+      "distrito_federal": null,
+      "circunscripcion": 4,
+      "tipo": "plurinominal"
+    }
+  ]
+}

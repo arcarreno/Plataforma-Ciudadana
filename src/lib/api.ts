@@ -7,8 +7,21 @@
  * este archivo. Usa fetch nativo (sin axios) y genéricos <T> para tipar.
  */
 
-// URL base del backend FastAPI (Vite la incrusta en BUILD-TIME desde .env)
-export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+// URL base del backend FastAPI (Vite la incrusta en BUILD-TIME desde .env).
+// Override en runtime: si existe `localStorage['semovinfra_api_url']` se usa
+// esa (útil cuando el túnel Quick Tunnel rota y Vercel aún sirve el bundle
+// viejo; evita esperar al redeploy). Se limpia con `localStorage.removeItem`.
+function resolverApiUrl(): string {
+  try {
+    const override = localStorage.getItem('semovinfra_api_url')
+    if (override && /^https?:\/\//.test(override)) return override.replace(/\/$/, '')
+  } catch {
+    /* storage no disponible */
+  }
+  return import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+}
+
+export const API_URL = resolverApiUrl()
 
 /**
  * Error personalizado para distinguir en los catch:

@@ -1,0 +1,25 @@
+{
+  "fuente": "https://www.quienmerepresenta.com.mx/estado/puebla (fuente primaria: Senado de la Republica)",
+  "actualizado": "2026-09-03",
+  "total": 3,
+  "registros": [
+    {
+      "nombre": "Ignacio Mier Velazco",
+      "email": "ignacio.mier@senado.gob.mx",
+      "partido": "Morena",
+      "principio": "mayoria"
+    },
+    {
+      "nombre": "Lizeth Sánchez García",
+      "email": "liz.sanchez@senado.gob.mx",
+      "partido": "PT",
+      "principio": "mayoria"
+    },
+    {
+      "nombre": "Néstor Camarillo Medina",
+      "email": "nestor.camarillo@senado.gob.mx",
+      "partido": "Movimiento Ciudadano",
+      "principio": "primera_minoria"
+    }
+  ]
+}

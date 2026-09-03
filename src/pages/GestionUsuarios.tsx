@@ -23,16 +23,17 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { listarUsuarios, crearUsuario, eliminarUsuario } from '../lib/auth'
 import type { Usuario } from '../types/auth'
-import { UserPlus, Shield, ShieldCheck, User, Users, ArrowLeft, Trash2 } from 'lucide-react'
+import { UserPlus, Shield, ShieldCheck, User, Users, ArrowLeft, Trash2, Landmark } from 'lucide-react'
 import Card from '../shared/Card'
 import Button from '../shared/Button'
 import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 
-// Opciones de rol con iconos: revisor, admin, diputado, senador
+// Opciones de rol con iconos: revisor, admin, diputado, legislador (Congreso local), senador
 const ROL_OPTS = [
   { value: 'revisor', label: 'Revisor', icon: Shield },
   { value: 'admin', label: 'Administrador', icon: ShieldCheck },
   { value: 'diputado', label: 'Diputado', icon: Users },
+  { value: 'legislador', label: 'Legislador', icon: Landmark },
   { value: 'senador', label: 'Senador', icon: User },
 ] as const
 
@@ -43,6 +44,7 @@ export default function GestionUsuarios() {
   // usuarios lista; loading/showForm + campos new* y formError/loading/delete
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [newUsername, setNewUsername] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -63,11 +65,12 @@ export default function GestionUsuarios() {
     // Carga inicial y refresh tras mutaciones
 async function cargarUsuarios() {
     setLoading(true)
+    setLoadError('')
     const res = await listarUsuarios()
     if (res.data) {
       setUsuarios(res.data)
     } else if (res.error) {
-      console.warn('Error al cargar usuarios:', res.error)
+      setLoadError(res.error)
     }
     setLoading(false)
   }
@@ -228,6 +231,11 @@ const handleEliminar = async () => {
       )}
 
       <Card>
+        {loadError && (
+          <p className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-xs text-red-600">
+            No se pudieron cargar los usuarios: {loadError}
+          </p>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-guinda/20 border-t-guinda" />
