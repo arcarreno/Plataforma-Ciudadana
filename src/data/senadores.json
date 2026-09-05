@@ -7,19 +7,22 @@
       "nombre": "Ignacio Mier Velazco",
       "email": "ignacio.mier@senado.gob.mx",
       "partido": "Morena",
-      "principio": "mayoria"
+      "principio": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "Lizeth Sánchez García",
       "email": "liz.sanchez@senado.gob.mx",
       "partido": "PT",
-      "principio": "mayoria"
+      "principio": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "Néstor Camarillo Medina",
       "email": "nestor.camarillo@senado.gob.mx",
       "partido": "Movimiento Ciudadano",
-      "principio": "primera_minoria"
+      "principio": "primera_minoria",
+      "genero": "hombre"
     }
   ]
 }

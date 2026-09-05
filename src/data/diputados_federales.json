@@ -8,112 +8,128 @@
       "email": "gissel.santander@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 1,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "Fatima Almendra Cruz Peláez",
       "email": "fatima.cruz@diputados.gob.mx",
       "partido": "PVEM",
       "distrito_federal": 2,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "María de los Ángeles Ballesteros García",
       "email": "maria.ballesteros@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 3,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "Juan Antonio González Hernández",
       "email": "juanantonio.gonzalez@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 4,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "Rafaela Vianey García Romero",
       "email": "vianey.garcia@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 5,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "Alejandro Carvajal Hidalgo",
       "email": "alejandro.carvajal@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 6,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "Claudia Rivera Vivanco",
       "email": "claudia.rivera@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 7,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "Carlos Ignacio Mier Bañuelos",
       "email": "carlos.mier@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 8,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "José Antonio Gali López",
       "email": "jose.gali@diputados.gob.mx",
       "partido": "PVEM",
       "distrito_federal": 9,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "María Fabiola Karina Pérez Popoca",
       "email": "karina.perez@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 10,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "José Antonio López Ruíz",
       "email": "antonio.lopez@diputados.gob.mx",
       "partido": "PT",
       "distrito_federal": 11,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "Nora Yessica Merino Escamilla",
       "email": "nora.escamilla@diputados.gob.mx",
       "partido": "PT",
       "distrito_federal": 12,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "Mario Miguel Carrillo Cubillas",
       "email": "mario.carrillo@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 13,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "Eduardo Castillo López",
       "email": "eduardo.castillo@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 14,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "María del Rosario Orozco Caballero",
       "email": "maria.orozco@diputados.gob.mx",
       "partido": "Morena",
       "distrito_federal": 15,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "mujer"
     },
     {
       "nombre": "Adolfo Alatriste Cantú",
       "email": "adolfo.alatriste@diputados.gob.mx",
       "partido": "PVEM",
       "distrito_federal": 16,
-      "tipo": "mayoria"
+      "tipo": "mayoria",
+      "genero": "hombre"
     },
     {
       "nombre": "Maiella Martha Gabriela Gómez Maldonado",
@@ -121,7 +137,8 @@
       "partido": "Morena",
       "distrito_federal": null,
       "circunscripcion": 4,
-      "tipo": "plurinominal"
+      "tipo": "plurinominal",
+      "genero": "mujer"
     },
     {
       "nombre": "Julieta Kristal Vences Valencia",
@@ -129,7 +146,8 @@
       "partido": "Morena",
       "distrito_federal": null,
       "circunscripcion": 4,
-      "tipo": "plurinominal"
+      "tipo": "plurinominal",
+      "genero": "mujer"
     },
     {
       "nombre": "Xitlalic Ceja García",
@@ -137,7 +155,8 @@
       "partido": "PRI",
       "distrito_federal": null,
       "circunscripcion": 4,
-      "tipo": "plurinominal"
+      "tipo": "plurinominal",
+      "genero": "mujer"
     },
     {
       "nombre": "Nadia Navarro Acevedo",
@@ -145,7 +164,8 @@
       "partido": "PRI",
       "distrito_federal": null,
       "circunscripcion": 4,
-      "tipo": "plurinominal"
+      "tipo": "plurinominal",
+      "genero": "mujer"
     },
     {
       "nombre": "Genoveva Huerta Villegas",
@@ -153,7 +173,8 @@
       "partido": "PAN",
       "distrito_federal": null,
       "circunscripcion": 4,
-      "tipo": "plurinominal"
+      "tipo": "plurinominal",
+      "genero": "mujer"
     },
     {
       "nombre": "Liliana Ortiz Pérez",
@@ -161,7 +182,8 @@
       "partido": "PAN",
       "distrito_federal": null,
       "circunscripcion": 4,
-      "tipo": "plurinominal"
+      "tipo": "plurinominal",
+      "genero": "mujer"
     },
     {
       "nombre": "Amancay González Franco",
@@ -169,7 +191,8 @@
       "partido": "MC",
       "distrito_federal": null,
       "circunscripcion": 4,
-      "tipo": "plurinominal"
+      "tipo": "plurinominal",
+      "genero": "mujer"
     }
   ]
 }
