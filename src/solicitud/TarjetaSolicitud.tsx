@@ -15,7 +15,7 @@
  * Helpers: urlFotoVisita (lib/api) resuelve URL absoluta de foto.
  * Uso: Consultar.tsx, ConsultarFolio.tsx, AdminDashboard (grid de cards).
  */
-import { Camera, Check, ClipboardCheck, X } from 'lucide-react'
+import { Camera, Check, ClipboardCheck, FileWarning, X } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import { urlFotoVisita } from '../lib/api'
 
@@ -37,7 +37,8 @@ export function FormatoEstatus({ estatus }: { estatus?: string }) {
 /** Tarjeta resumida: folio, solicitante, tipo, colonia, estatus, fecha + fotos/checklist de visita. */
 export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitud }) {
   const fotos = s.visita_fotos ?? []
-  // Checklist de campo (true/false por rubro). Solo se muestra si hubo visita.
+  // Motivo de conclusión no favorable (sí se muestra, a diferencia de comentarios).
+  const motivo = s.motivo_no_favorable?.trim()
   const checklist: { etiqueta: string; valor: boolean }[] = [
     { etiqueta: 'Luz', valor: !!s.visita_check_luz },
     { etiqueta: 'Drenaje', valor: !!s.visita_check_drenaje },
@@ -134,6 +135,22 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
                 </li>
               ))}
             </ul>
+          </div>
+        </>
+      )}
+
+      {/* --- Motivo de concluido no favorable (sí se muestra, con aviso) --- */}
+      {motivo && (
+        <>
+          <div className="h-px bg-alabaster-dark" />
+          <div>
+            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-institutional/70">
+              <FileWarning className="h-3.5 w-3.5" />
+              Motivo de concluido no favorable
+            </p>
+            <p className="whitespace-pre-wrap rounded-lg bg-white/60 px-3 py-2 text-sm text-gray-institutional">
+              {motivo}
+            </p>
           </div>
         </>
       )}

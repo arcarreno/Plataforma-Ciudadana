@@ -109,6 +109,8 @@ export interface Solicitud {
   visita_fotos?: string[]
   /** Comentarios del verificador en campo (nullable, ya no se muestran en UI). */
   visita_comentarios?: string | null
+  /** Motivo por el que se concluyó como no favorable (se muestra en consulta). */
+  motivo_no_favorable?: string | null
   /** Checklist de campo: hay alumbrado público. */
   visita_check_luz?: boolean
   /** Checklist de campo: hay drenaje. */
