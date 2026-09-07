@@ -15,7 +15,7 @@
  * Helpers: urlFotoVisita (lib/api) resuelve URL absoluta de foto.
  * Uso: Consultar.tsx, ConsultarFolio.tsx, AdminDashboard (grid de cards).
  */
-import { Camera, Check, ClipboardCheck, FileWarning, X } from 'lucide-react'
+import { Camera, Check, ClipboardCheck, FileWarning, ShoppingCart, X } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import { urlFotoVisita } from '../lib/api'
 
@@ -41,6 +41,8 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
   const motivo = s.motivo_no_favorable?.trim()
   // Supervisor asignado a la visita (nombres + apellidos del visitador).
   const supervisor = [s.visita_usuario_nombres, s.visita_usuario_apellidos].filter(Boolean).join(' ')
+  /** Visita finalizada (estado completada): solo entonces se muestra el checklist. */
+  const visitaFinalizada = s.visita_id != null && s.visita_estado === 'completada'
   const checklist: { etiqueta: string; valor: boolean }[] = [
     { etiqueta: 'Luz', valor: !!s.visita_check_luz },
     { etiqueta: 'Drenaje', valor: !!s.visita_check_drenaje },
@@ -113,8 +115,8 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
         </>
       )}
 
-            {/* --- Checklist de campo si hubo visita (true/false por rubro) --- */}
-{s.visita_id != null && (
+            {/* --- Checklist de campo (solo cuando la visita ya finalizó) --- */}
+{visitaFinalizada && (
         <>
           <div className="h-px bg-alabaster-dark" />
           <div>
@@ -150,6 +152,17 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
             <span className="font-medium text-guinda">{supervisor}</span>
           </div>
         </>
+      )}
+
+      {/* --- Supervisor en camino (visita agendada pero no finalizada) --- */}
+      {s.visita_id != null && !visitaFinalizada && (
+        <div
+          className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold"
+          style={{ backgroundColor: '#7d2447', color: '#ffffff' }}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          Supervisor en camino
+        </div>
       )}
 
       {/* --- Motivo de concluido no favorable (sí se muestra, con aviso) --- */}
