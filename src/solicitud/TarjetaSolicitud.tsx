@@ -15,7 +15,7 @@
  * Helpers: urlFotoVisita (lib/api) resuelve URL absoluta de foto.
  * Uso: Consultar.tsx, ConsultarFolio.tsx, AdminDashboard (grid de cards).
  */
-import { Camera, Check, ClipboardCheck, FileWarning, ShoppingCart, X } from 'lucide-react'
+import { Camera, Car, Check, ClipboardCheck, FileWarning, X } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import { urlFotoVisita } from '../lib/api'
 
@@ -160,7 +160,7 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
           className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold"
           style={{ backgroundColor: '#7d2447', color: '#ffffff' }}
         >
-          <ShoppingCart className="h-4 w-4" />
+          <Car className="h-4 w-4" />
           Supervisor en camino
         </div>
       )}
