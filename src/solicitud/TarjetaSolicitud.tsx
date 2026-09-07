@@ -39,6 +39,8 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
   const fotos = s.visita_fotos ?? []
   // Motivo de conclusión no favorable (sí se muestra, a diferencia de comentarios).
   const motivo = s.motivo_no_favorable?.trim()
+  // Supervisor asignado a la visita (nombres + apellidos del visitador).
+  const supervisor = [s.visita_usuario_nombres, s.visita_usuario_apellidos].filter(Boolean).join(' ')
   const checklist: { etiqueta: string; valor: boolean }[] = [
     { etiqueta: 'Luz', valor: !!s.visita_check_luz },
     { etiqueta: 'Drenaje', valor: !!s.visita_check_drenaje },
@@ -135,6 +137,17 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
                 </li>
               ))}
             </ul>
+          </div>
+        </>
+      )}
+
+      {/* --- Supervisor asignado a la visita --- */}
+      {s.visita_id != null && supervisor && (
+        <>
+          <div className="h-px bg-alabaster-dark" />
+          <div className="flex justify-between">
+            <span className="text-gray-institutional/60">Supervisor asignado</span>
+            <span className="font-medium text-guinda">{supervisor}</span>
           </div>
         </>
       )}
