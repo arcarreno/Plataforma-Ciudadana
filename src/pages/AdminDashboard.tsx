@@ -275,11 +275,11 @@ const handleExportarExcel = async () => {
           >
             <ArrowUpDown className={`h-4 w-4 transition-transform ${sortAsc ? 'rotate-180' : ''}`} />
           </button>
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-none">
             <button
               type="button"
               onClick={() => setOpcionesAbierto(p => !p)}
-              className="inline-flex items-center gap-2 rounded-xl bg-guinda px-4 py-2 text-sm font-medium text-white shadow-button transition-all duration-200 hover:brightness-110 active:scale-[0.97]"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-guinda px-4 py-2 text-sm font-medium text-white shadow-button transition-all duration-200 hover:brightness-110 active:scale-[0.97] sm:w-auto"
             >
               <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${opcionesAbierto ? 'rotate-180' : ''}`} />
               Opciones
@@ -292,7 +292,7 @@ const handleExportarExcel = async () => {
                   animate={{ opacity: 1, height: 'auto', y: 0 }}
                   exit={{ opacity: 0, height: 0, y: -6 }}
                   transition={{ duration: 0.22, ease: 'easeOut' }}
-                  className="absolute right-0 top-full z-30 mt-2 w-56 origin-top-right overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl"
+                  className="absolute left-0 right-0 top-full z-30 mt-2 origin-top overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl sm:left-auto sm:w-56 sm:origin-top-right"
                 >
                   {/* Tablas y Excel cargan el universo completo: ocultos en "Mis peticiones" */}
                   {!soloMias && (
