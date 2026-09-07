@@ -26,6 +26,7 @@ import {
   pideNombreManual,
   rolParaEmail,
   DOMINIO_DIRECTORIO,
+  DOMINIOS_INFO,
   type RegistroVerificado,
 } from '../lib/registro'
 import {
@@ -44,8 +45,6 @@ interface LoginModalProps {
 }
 
 type Modo = 'login' | 'registro' | 'revisa'
-
-const DOMINIOS_TXT = '@diputados.gob.mx, @congresodepuebla.mx, @ayuntamientopuebla.gob.mx o @senado.gob.mx'
 
 /**
  * Polling del estado del token (modo `revisa`).
@@ -104,6 +103,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
   const [rolNuevo, setRolNuevo] = useState('')
   const [hallazgo, setHallazgo] = useState<EntradaDirectorioLocal | null>(null)
   const [dirBuscado, setDirBuscado] = useState(false)
+  const [verDominios, setVerDominios] = useState(false)
 
   // --- modal de contraseña (abierto aquí por polling o en /verificar) ---
   const [pwdOpen, setPwdOpen] = useState(false)
@@ -125,6 +125,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
     setRolNuevo('')
     setHallazgo(null)
     setDirBuscado(false)
+    setVerDominios(false)
     setPwdOpen(false)
     setPwdDatos(null)
     setModo('login')
@@ -172,7 +173,8 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
       return
     }
     if (!esDominioPermitido(correo)) {
-      setRegError(`Solo aceptamos correos ${DOMINIOS_TXT}`)
+      setRegError('Únicamente aceptamos correos institucionales. Revisa abajo la lista de dominios.')
+      setVerDominios(true)
       return
     }
     if (pideNombreManual(correo) && nombre.trim().length < 3) {
@@ -333,7 +335,35 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
             </div>
 
             {email.trim() && !esDominioPermitido(email) && (
-              <p className="text-xs text-red-500">Solo aceptamos correos {DOMINIOS_TXT}</p>
+              <div className="rounded-xl bg-alabaster/30 px-4 py-3 text-xs text-gray-institutional">
+                <p>
+                  Únicamente aceptamos <strong className="text-guinda">correos institucionales</strong>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setVerDominios((v) => !v)}
+                  className="mt-1 font-medium text-guinda hover:underline"
+                >
+                  {verDominios
+                    ? 'Ocultar lista de dominios'
+                    : 'Presiona aquí para ver la lista de dominios con los que te podrías registrar'}
+                </button>
+                {verDominios && (
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {DOMINIOS_INFO.map((d) => (
+                      <li
+                        key={d.dominio}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2"
+                      >
+                        <span className="font-mono text-[11px] text-gray-institutional">@{d.dominio}</span>
+                        <span className="rounded-md bg-guinda/10 px-2 py-0.5 text-[11px] font-semibold text-guinda">
+                          {etiquetaRol(d.rol)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
             {email.trim() && esDominioPermitido(email) && (
               <p className="rounded-xl bg-guinda/5 px-4 py-2 text-xs text-guinda">

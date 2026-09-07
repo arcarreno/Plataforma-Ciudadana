@@ -81,6 +81,14 @@ export function rolParaEmail(email: string): string {
   return DOMINIO_ROL[dominioDe(correo)] ?? ''
 }
 
+/** Lista de dominios aceptados con su rol (para mostrar en UI). */
+export const DOMINIOS_INFO: { dominio: string; rol: string }[] = [
+  { dominio: 'senado.gob.mx', rol: 'senador' },
+  { dominio: 'diputados.gob.mx', rol: 'diputado' },
+  { dominio: 'congresodepuebla.mx', rol: 'legislador' },
+  { dominio: 'ayuntamientopuebla.gob.mx', rol: 'revisor' },
+]
+
 /** ¿Este correo pide nombre manual (sin directorio)? Ayuntamiento + excepciones. */
 export function pideNombreManual(email: string): boolean {
   const correo = normalizarEmail(email)
