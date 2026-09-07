@@ -15,7 +15,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, MailWarning, Loader2 } from 'lucide-react'
 import PasswordSetupModal from '../shared/PasswordSetupModal'
-import { verificarRegistro, obtenerDirectorio, type RegistroVerificado } from '../lib/registro'
+import { verificarRegistro, type RegistroVerificado } from '../lib/registro'
+import { buscarEnDirectorioLocal } from '../data/directorios'
 import { useAuth } from '../contexts/AuthContext'
 
 type Estado = 'cargando' | 'listo' | 'error'
@@ -55,16 +56,12 @@ export default function Verificar() {
       setDatos(res.data)
       setEstado('listo')
       setModalAbierto(true)
-      // Género para el saludo (solo legisladores traen el campo; best-effort)
+      // Género para el saludo desde el directorio embebido (sin red)
       const tipo = res.data.rol === 'legislador' ? 'legisladores'
         : res.data.rol === 'diputado' ? 'diputados'
         : res.data.rol === 'senador' ? 'senadores' : null
       if (tipo) {
-        const dir = await obtenerDirectorio(tipo)
-        if (!vivo) return
-        const hit = dir.data?.find(
-          (e) => String(e.email || '').trim().toLowerCase() === res.data!.email.trim().toLowerCase(),
-        )
+        const hit = buscarEnDirectorioLocal(tipo, res.data.email)
         const g = hit?.genero
         if (typeof g === 'string') setGenero(g)
       }

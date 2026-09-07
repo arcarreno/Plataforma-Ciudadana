@@ -21,16 +21,17 @@ import {
   iniciarRegistro,
   estadoRegistro,
   verificarRegistro,
-  obtenerDirectorio,
-  buscarEnDirectorio,
   dominioDe,
   esDominioPermitido,
   pideNombreManual,
   rolParaEmail,
   DOMINIO_DIRECTORIO,
-  type EntradaDirectorio,
   type RegistroVerificado,
 } from '../lib/registro'
+import {
+  buscarEnDirectorioLocal,
+  type EntradaDirectorioLocal,
+} from '../data/directorios'
 import PasswordSetupModal, { etiquetaRol } from './PasswordSetupModal'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
 
@@ -101,9 +102,8 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
   const [regLoading, setRegLoading] = useState(false)
   const [token, setToken] = useState('')
   const [rolNuevo, setRolNuevo] = useState('')
-  const [hallazgo, setHallazgo] = useState<EntradaDirectorio | null>(null)
+  const [hallazgo, setHallazgo] = useState<EntradaDirectorioLocal | null>(null)
   const [dirBuscado, setDirBuscado] = useState(false)
-  const dirCache = useRef<Partial<Record<string, EntradaDirectorio[]>>>({})
 
   // --- modal de contraseña (abierto aquí por polling o en /verificar) ---
   const [pwdOpen, setPwdOpen] = useState(false)
@@ -153,22 +153,14 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
     }
   }
 
-  /** Búsqueda best-effort en el directorio para mostrar el nombre encontrado. */
-  const buscarDirectorio = async (correo: string) => {
+  /** Búsqueda local instantánea en el directorio embebido (sin red). */
+  const buscarDirectorio = (correo: string) => {
     const dom = dominioDe(correo)
     const tipo = DOMINIO_DIRECTORIO[dom]
     setHallazgo(null)
     setDirBuscado(false)
     if (!tipo) return
-    try {
-      if (!dirCache.current[tipo]) {
-        const res = await obtenerDirectorio(tipo)
-        dirCache.current[tipo] = res.data ?? []
-      }
-      setHallazgo(buscarEnDirectorio(dirCache.current[tipo] ?? [], correo))
-    } catch {
-      /* sin directorio: el flujo sigue, el nombre se pide al verificar */
-    }
+    setHallazgo(buscarEnDirectorioLocal(tipo, correo))
     setDirBuscado(true)
   }
 
@@ -209,11 +201,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
       : res.data.rol === 'diputado' ? 'diputados'
       : res.data.rol === 'senador' ? 'senadores' : null
     if (tipo) {
-      if (!dirCache.current[tipo]) {
-        const d = await obtenerDirectorio(tipo)
-        dirCache.current[tipo] = d.data ?? []
-      }
-      const hit = buscarEnDirectorio(dirCache.current[tipo] ?? [], res.data.email)
+      const hit = buscarEnDirectorioLocal(tipo, res.data.email)
       const g = hit?.genero
       if (typeof g === 'string') setPwdGenero(g)
     }
@@ -326,12 +314,15 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
                 type="email"
                 value={email}
                 onChange={(e) => {
-                  setEmail(e.target.value)
+                  const v = e.target.value
+                  setEmail(v)
                   setRegError('')
-                }}
-                onBlur={() => {
-                  if (esDominioPermitido(email) && DOMINIO_DIRECTORIO[dominioDe(email)]) {
-                    void buscarDirectorio(email.trim().toLowerCase())
+                  // Búsqueda local instantánea mientras escribe (sin red)
+                  if (esDominioPermitido(v) && DOMINIO_DIRECTORIO[dominioDe(v)]) {
+                    buscarDirectorio(v.trim().toLowerCase())
+                  } else {
+                    setHallazgo(null)
+                    setDirBuscado(false)
                   }
                 }}
                 placeholder="correo@institucion.gob.mx"
