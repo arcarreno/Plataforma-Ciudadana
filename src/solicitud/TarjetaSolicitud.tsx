@@ -2,19 +2,20 @@
  * @file TarjetaSolicitud.tsx
  * @description Tarjeta resumida de una Solicitud para listados de consulta y dashboard.
  *              Muestra folio, solicitante, tipo/colonia, estatus, fecha, fotos de visita y
- *              comentarios.
+ *              checklist de campo (luz, drenaje, banquetas, naturaleza).
+ *              Los comentarios de visita ya NO se muestran (decisión de producto).
  *
  * Componentes:
  *  - FormatoEstatus: badge con color según estatus (verde Concluido favorable, rojo no favorable,
  *    guinda por defecto).
  *  - TarjetaSolicitud: layout en alabaster/50, divide secciones con h-px, grid 3-4 fotos con
- *    lazy loading y enlaces a urlFotoVisita, comentarios en bg blanco/60.
+ *    lazy loading y enlaces a urlFotoVisita, checklist con ✓/✗ por rubro.
  *
  * Props: solicitud: Solicitud (tipado en types/solicitud)
  * Helpers: urlFotoVisita (lib/api) resuelve URL absoluta de foto.
  * Uso: Consultar.tsx, ConsultarFolio.tsx, AdminDashboard (grid de cards).
  */
-import { Camera, MessageSquare } from 'lucide-react'
+import { Camera, Check, ClipboardCheck, X } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import { urlFotoVisita } from '../lib/api'
 
@@ -33,10 +34,16 @@ export function FormatoEstatus({ estatus }: { estatus?: string }) {
   )
 }
 
-/** Tarjeta resumida: folio, solicitante, tipo, colonia, estatus, fecha + fotos/ comentarios de visita. */
+/** Tarjeta resumida: folio, solicitante, tipo, colonia, estatus, fecha + fotos/checklist de visita. */
 export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitud }) {
   const fotos = s.visita_fotos ?? []
-  const comentario = s.visita_comentarios?.trim()
+  // Checklist de campo (true/false por rubro). Solo se muestra si hubo visita.
+  const checklist: { etiqueta: string; valor: boolean }[] = [
+    { etiqueta: 'Luz', valor: !!s.visita_check_luz },
+    { etiqueta: 'Drenaje', valor: !!s.visita_check_drenaje },
+    { etiqueta: 'Banquetas', valor: !!s.visita_check_banquetas },
+    { etiqueta: 'Naturaleza (árboles grandes)', valor: !!s.visita_check_naturaleza },
+  ]
 
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-alabaster/50 p-4 text-sm">
@@ -103,18 +110,30 @@ export default function TarjetaSolicitud({ solicitud: s }: { solicitud: Solicitu
         </>
       )}
 
-            {/* --- Comentarios de visita si existen --- */}
-{comentario && (
+            {/* --- Checklist de campo si hubo visita (true/false por rubro) --- */}
+{s.visita_id != null && (
         <>
           <div className="h-px bg-alabaster-dark" />
           <div>
             <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-institutional/70">
-              <MessageSquare className="h-3.5 w-3.5" />
-              Comentarios de la visita
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              Checklist de la visita
             </p>
-            <p className="whitespace-pre-wrap rounded-lg bg-white/60 px-3 py-2 text-sm text-gray-institutional">
-              {comentario}
-            </p>
+            <ul className="grid grid-cols-2 gap-1.5">
+              {checklist.map((c) => (
+                <li
+                  key={c.etiqueta}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium"
+                  style={{
+                    backgroundColor: c.valor ? '#41504D' : '#f3f0ea',
+                    color: c.valor ? '#ffffff' : '#6f1728',
+                  }}
+                >
+                  {c.valor ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                  {c.etiqueta}
+                </li>
+              ))}
+            </ul>
           </div>
         </>
       )}

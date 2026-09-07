@@ -107,8 +107,16 @@ export interface Solicitud {
   visita_estado?: string
   /** Fotos tomadas durante la visita. */
   visita_fotos?: string[]
-  /** Comentarios del verificador en campo (nullable). */
+  /** Comentarios del verificador en campo (nullable, ya no se muestran en UI). */
   visita_comentarios?: string | null
+  /** Checklist de campo: hay alumbrado público. */
+  visita_check_luz?: boolean
+  /** Checklist de campo: hay drenaje. */
+  visita_check_drenaje?: boolean
+  /** Checklist de campo: hay banquetas. */
+  visita_check_banquetas?: boolean
+  /** Checklist de campo: hay árboles grandes/naturaleza. */
+  visita_check_naturaleza?: boolean
   /** Nombres del usuario que realizó la visita. */
   visita_usuario_nombres?: string
   /** Apellidos del usuario que realizó la visita. */
