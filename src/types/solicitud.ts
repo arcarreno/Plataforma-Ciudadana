@@ -97,6 +97,8 @@ export interface Solicitud {
   estatus_fase?: EstatusFase
   /** ISO string de creación (generado por BD). */
   fecha_creacion?: string
+  /** ID del usuario que creó la solicitud (solo si había sesión al crearla). */
+  id_usuario?: number | null
 
   // --- Visita de validación (si existe) ---
   /** ID de la visita de campo asociada. */

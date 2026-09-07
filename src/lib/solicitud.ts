@@ -29,6 +29,7 @@
 import { supabase } from './supabase'
 import { consultarFolio, crearSolicitud as crearSolicitudServidor, listarSolicitudes, esErrorRed } from './servidor'
 import { ApiError } from './api'
+import { getToken } from './auth'
 import { invalidarModo } from './backend'
 import type { Solicitud, SolicitudFormData } from '../types/solicitud'
 import {
@@ -421,7 +422,13 @@ export async function crearSolicitud(
   archivos.forEach(f => form.append('archivos', f))
 
   try {
-    const res = await crearSolicitudServidor(form)
+    // Si hay sesión, se envía el token para vincular la autoría (id_usuario).
+    // Sin token la solicitud queda anónima (id_usuario NULL) como antes.
+    const token = getToken()
+    const res = await crearSolicitudServidor(
+      form,
+      token ? { Authorization: `Bearer ${token}` } : undefined,
+    )
     const solicitud = res.data
     if (solicitud?.folio_unico) {
       escribirCache(solicitud.folio_unico, solicitud)

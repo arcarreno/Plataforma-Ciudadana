@@ -97,8 +97,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
  * Wrapper especial para multipart/form-data (subida de archivos).
  * NO manda 'Content-Type': el navegador genera el boundary automáticamente.
  * Usado solo en lib/solicitud.ts -> crearSolicitud() con FormData + fotos.
+ * @param headers - Headers extra opcionales (ej. Authorization para vincular autor).
  */
-export async function postForm<T>(path: string, form: FormData): Promise<T> {
+export async function postForm<T>(path: string, form: FormData, headers?: HeadersInit): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_URL}${path}`, {
@@ -106,6 +107,7 @@ export async function postForm<T>(path: string, form: FormData): Promise<T> {
       body: form, // FormData con campos + archivos
       headers: {
         'ngrok-skip-browser-warning': 'true', // Solo ngrok, sin Content-Type
+        ...headers,
       },
     })
   } catch {

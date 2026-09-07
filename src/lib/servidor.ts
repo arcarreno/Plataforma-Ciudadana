@@ -76,6 +76,12 @@ export async function listarSolicitudes(params: {
   page?: number
   pageSize?: number
   asc?: boolean
+  /** Solo las del usuario del token (diputado/senador/legislador). Requiere token. */
+  mias?: boolean
+  /** Bearer para `mias` (el backend resuelve el usuario del JWT, nunca del parámetro). */
+  token?: string
+  /** Fallback Supabase (sin columna id_usuario allá): filtra por correo. */
+  correo?: string
 }): Promise<ListadoSolicitudes> {
   // Si ya sabemos que el servidor está caído, ni lo intentamos -> directo a Supabase
   if (await modoEsSupabase()) {
@@ -90,11 +96,13 @@ export async function listarSolicitudes(params: {
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('page_size', String(params.pageSize))
   if (params.asc) query.set('asc', 'true')
+  if (params.mias) query.set('mias', 'true')
   const qs = query.toString()
+  const headers = params.token ? { Authorization: `Bearer ${params.token}` } : undefined
 
   try {
     // Intento principal: FastAPI
-    return await api.get<ListadoSolicitudes>(`/api/solicitudes${qs ? `?${qs}` : ''}`)
+    return await api.get<ListadoSolicitudes>(`/api/solicitudes${qs ? `?${qs}` : ''}`, headers ? { headers } : undefined)
   } catch (err) {
     // Solo hacemos fallback si fue caída de red (isNetwork=true), no si fue 400/404/422
     if (!esErrorRed(err)) throw err
@@ -118,6 +126,8 @@ async function listarSolicitudesSupabase(params: {
   page?: number
   pageSize?: number
   asc?: boolean
+  mias?: boolean
+  correo?: string
 }): Promise<ListadoSolicitudes> {
   // Paginación: Supabase usa range(from, to) inclusivo, no page/pageSize
   const page = params.page ?? 1
@@ -142,6 +152,11 @@ async function listarSolicitudesSupabase(params: {
   // Filtro por prioridad (peso_ranking es integer en BD)
   if (params.prioridad) {
     query = query.eq('peso_ranking', Number(params.prioridad))
+  }
+  // "Mis peticiones": la tabla Supabase no tiene id_usuario, se filtra por
+  // correo como mejor esfuerzo (el servidor sí filtra por autoría real).
+  if (params.mias && params.correo) {
+    query = query.ilike('correo', params.correo)
   }
   // Aplicamos rango de paginación
   query = query.range(from, to)
@@ -352,9 +367,10 @@ export interface CrearSolicitudResult {
  * No tiene fallback aquí: el fallback Supabase lo hace lib/solicitud.ts si esto falla por red.
  */
 export function crearSolicitud(
-  form: FormData
+  form: FormData,
+  headers?: HeadersInit
 ): Promise<CrearSolicitudResult> {
-  return postForm<CrearSolicitudResult>('/api/solicitudes', form)
+  return postForm<CrearSolicitudResult>('/api/solicitudes', form, headers)
 }
 
 // ---------------------------------------------------------------------------

@@ -171,9 +171,10 @@ export default function MapasEstadisticas() {
   const [showLayers, setShowLayers] = useState(false)
   const [showHeatmap, setShowHeatmap] = useState(false)
 
-  // Carga solicitudes y capas al montar si autenticado
+  // Carga solicitudes y capas al montar si el rol puede ver mapas (admin/revisor).
+  // Otros roles (diputado/senador/legislador) se redirigen: la URL directa también queda cerrada.
   useEffect(() => {
-    if (!user) { navigate('/'); return }
+    if (!user || (user.rol !== 'admin' && user.rol !== 'revisor')) { navigate('/'); return }
     cargarSolicitudes()
   }, [user])
 

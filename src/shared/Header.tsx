@@ -168,11 +168,13 @@ export default function Header({
                       : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
                   }`}
                 >
-                  Peticiones
+                  {user.rol === 'diputado' || user.rol === 'senador' || user.rol === 'legislador'
+                    ? 'Mis peticiones'
+                    : 'Peticiones'}
                 </Link>
               )}
-              {/* Link de mapas y estadísticas — solo con sesión */}
-              {user && (
+              {/* Link de mapas y estadísticas — solo admin y revisor */}
+              {(user?.rol === 'admin' || user?.rol === 'revisor') && (
                 <Link
                   to="/admin/mapas"
                   data-active={isActive('/admin/mapas')}
