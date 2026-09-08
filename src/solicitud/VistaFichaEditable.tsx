@@ -11,10 +11,12 @@
  *    removeEscuelaRow/clearEscuelas. Valores derivados: intervencion = largo*ancho,
  *    iglesiasList/transportesList (split, slice 3), coloniaUpper/juntaUpper, googleMapsUrl.
  *  - Mapa: tramoPuntos (tramo_puntos o lat_ini/fin), mapCenter promedio, tramoBounds para fit,
- *    Polyline dash guinda y Markers 1/2 (divIcon). TileLayer OSM estático (no drag/zoom).
+ *    Polyline dash guinda y Markers 1/2 (divIcon). TileLayer OSM interactivo (drag/zoom/
+ *    rueda/doble-clic/táctil) para encuadrar la vista; el +/- se oculta en exporting para
+ *    que no salga en el PDF (html2canvas captura los pixeles actuales del mapa).
  *  - Siged: sigedData opcional para mostrar nivel/alumnos por CCT; match por cct upper.
  *  - Panel derecho DATOS TÉCNICOS: longitud/ancho editables (contentEditable con cleanText),
- *    intervención calculada, escuelas tabla (thead CLAVE/NIVEL/ALUMNOS) con botones de borrado
+ *    intervención calculada + beneficiarios debajo (redondeado a entero), escuelas tabla (thead CLAVE/NIVEL/ALUMNOS) con botones de borrado
  *    ocultos en exporting, iglesias/transportes con bullet, coberturaAgua/zonaZap booleans,
  *    juntaAux display.
  *  - Export: generarPdf usa flushSync setExporting + html2canvas (scale1.5, bg #F5F0EB) ->
@@ -30,9 +32,9 @@ import { useState, useRef, useImperativeHandle } from 'react'
 import { flushSync } from 'react-dom'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
-import { MapContainer, TileLayer, Polyline, Marker } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, Marker, ZoomControl } from 'react-leaflet'
 import L from 'leaflet'
-import { School, Church, Bus, Droplets, MapPin } from 'lucide-react'
+import { School, Church, Bus, Droplets, MapPin, Users } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import type { SigedEscuela } from '../lib/consultarSIGED'
 import bannerImg from '../assets/ficha-banner.png'
@@ -89,6 +91,8 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
 
     // Cálculo derivado largo * ancho (m²)
 const intervencion = Math.round(largo * ancho)
+  // Beneficiarios estimados desde la longitud: sin decimales (entero más cercano)
+const beneficiarios = Math.round((largo / 6) * 2 * 4.5)
 
   const iglesiasList = iglesiasStr.split(',').map(e => e.trim()).filter(Boolean).slice(0, 3)
   const transportesList = transportesStr.split(',').map(e => e.trim()).filter(Boolean).slice(0, 3)
@@ -197,7 +201,10 @@ const generarPdf = async (): Promise<string> => {
     <div className={`${exporting ? 'pdf-export ' : ''}flex h-full flex-col bg-[#eaeaea]`}>
       {/* Floating toolbar pill */}
       <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
-        <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
+        <div className="flex items-center gap-3 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
+          <span className="whitespace-nowrap text-xs text-gray-institutional/70">
+            Mueve el mapa y encuadra con +/− · así saldrá en el PDF
+          </span>
           <button className="rounded-full bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50" onClick={handleExportPdf} disabled={exporting}>
             {exporting ? 'PDF...' : 'PDF'}
           </button>
@@ -246,7 +253,9 @@ const generarPdf = async (): Promise<string> => {
           {/* Map */}
           <div className="ficha-map-area">
             <div className="ficha-map-pill">{tipoObraUpper}</div>
-            <MapContainer center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} touchZoom={false} keyboard={false} preferCanvas>
+            <MapContainer center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging scrollWheelZoom doubleClickZoom touchZoom keyboard={false} preferCanvas>
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {!exporting && <ZoomControl position="topright" />}
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {hasTramo && <Polyline positions={tramoPuntos!.map(p => [p.lat, p.lng])} pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }} />}
               {hasTramo && (
@@ -290,6 +299,10 @@ const generarPdf = async (): Promise<string> => {
                   onBlur={e => setAncho(parseFloat(cleanText(e.currentTarget)) || 0)}>
                   {ancho > 0 ? String(ancho) : ''}
                 </div>
+              </div>
+              <div className="ficha-item">
+                <div className="ficha-label"><Users className="ficha-icon" /> Beneficiarios</div>
+                <div className="ficha-val">{beneficiarios > 0 ? beneficiarios.toLocaleString('es-MX') + ' personas' : '—'}</div>
               </div>
             </div>
 
