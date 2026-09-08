@@ -256,7 +256,11 @@ const generarPdf = async (): Promise<string> => {
           {/* Banner (color elegido en la píldora; el exportado sale con este) */}
           <div className="ficha-banner" style={{ backgroundImage: `url('${BANNERS[banner].img}')` }} />
           {/* Logos Gobierno de Puebla en la zona vacía superior derecha del banner */}
-          <img src={pueblaImg} alt="Puebla - Gobierno de la Ciudad" className="ficha-logo-puebla" />
+          <img
+            src={pueblaImg}
+            alt="Puebla - Gobierno de la Ciudad"
+            className={`ficha-logo-puebla${BANNERS[banner].tinta === '#FFFFFF' ? ' blanco' : ''}`}
+          />
 
           {/* Tipo de obra */}
           <div className="ficha-tipo-obra" contentEditable suppressContentEditableWarning
@@ -453,6 +457,10 @@ const generarPdf = async (): Promise<string> => {
           height: 72px; width: auto; z-index: 2;
           pointer-events: none;
         }
+        /* Banners oscuros (guinda/gris): logo en blanco vía matriz inversa.
+           brightness(0) colapsa todo a negro e invert(1) lo vuelve blanco,
+           conservando la transparencia (el texto calado muestra el banner). */
+        .ficha-logo-puebla.blanco { filter: brightness(0) invert(1); }
         .ficha-tipo-obra {
           position: absolute; top: 34px; left: 50px;
           font-size: 14px; font-weight: 700; color: #FFFFFF;
