@@ -19,8 +19,10 @@
  *    intervención calculada + beneficiarios debajo (redondeado a entero), escuelas tabla (thead CLAVE/NIVEL/ALUMNOS) con botones de borrado
  *    ocultos en exporting, iglesias/transportes con bullet, coberturaAgua/zonaZap booleans,
  *    juntaAux display.
- *  - Export: generarPdf usa flushSync setExporting + html2canvas (scale1.5, bg #F5F0EB) ->
- *    jsPDF landscape px_scaling -> base64. handleExportPdf descarga blob con URL.createObjectURL.
+ *  - Export: snapshotMapa congela la vista en PNG (tiles+tramo+marcadores+píldora,
+ *    fallback al mapa vivo) y se pinta sobre el mapa sin desmontarlo; generarPdf usa
+ *    flushSync setExporting + html2canvas (scale1.5, bg #F5F0EB) -> jsPDF landscape
+ *    px_scaling -> base64, más link clicable sobre la leyenda (pdf.link al Google Maps).
  *    useImperativeHandle expone exportarPdf para envío email en SolicitudDetail.
  *
  * Props: solicitud, sigedData?, ref.
@@ -94,6 +96,10 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   const [banner, setBanner] = useState<BannerKey>('gris')
   /** Banners claros (beige/blanco): textos del banner en verde institucional. */
   const bannerClaro = BANNERS[banner].tinta !== '#FFFFFF'
+  /** Instancia Leaflet para congelar la vista en PNG al exportar. */
+  const mapRef = useRef<L.Map | null>(null)
+  /** PNG estático del mapa (solo durante el export: congela la vista encuadrada). */
+  const [mapaEstatico, setMapaEstatico] = useState<string | null>(null)
   const iglesiasStr = (s.iglesias_cercanas || []).join(', ')
   const transportesStr = (s.transportes_cercanos || []).join(', ')
   const coberturaAgua = s.cobertura_agua ?? false
@@ -170,11 +176,124 @@ const tramoPuntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
   const markerIcon2 = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#7d2447;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">2</div>', iconSize: [20, 20], iconAnchor: [10, 10] })
 
     /** Captura con html2canvas scale1.5 + jsPDF landscape para exportar/base64. */
+
+  /**
+   * Congela la vista actual del mapa en un PNG (la misma que encuadró el usuario).
+   * Se pinta sobre el mapa vivo durante el export para que html2canvas capture
+   * pixeles fijos (cero desplazamientos de marcadores/píldora). Retorna null si
+   * algo falla y se usa el mapa vivo como antes (fallback).
+   */
+  const snapshotMapa = async (): Promise<string | null> => {
+    try {
+      const map = mapRef.current
+      if (!map) return null
+      const size = map.getSize()
+      if (size.x < 10 || size.y < 10) return null
+      const K = 2 // nitidez del PNG (el área mide 444x394 CSS px)
+      const W = Math.round(size.x * K)
+      const H = Math.round(size.y * K)
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = H
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      ctx.fillStyle = '#E8E3DE'
+      ctx.fillRect(0, 0, W, H)
+      const zoom = map.getZoom()
+      const pb = map.getPixelBounds()
+      const T = 256
+      const x0 = Math.floor(pb.min.x / T)
+      const x1 = Math.floor(pb.max.x / T)
+      const y0 = Math.floor(pb.min.y / T)
+      const y1 = Math.floor(pb.max.y / T)
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 48) return null
+      const cargar = async (x: number, y: number): Promise<ImageBitmap | null> => {
+        try {
+          const sub = 'abc'[(x + y) % 3]
+          const r = await fetch(`https://${sub}.tile.openstreetmap.org/${zoom}/${x}/${y}.png`)
+          if (!r.ok) return null
+          return await createImageBitmap(await r.blob())
+        } catch {
+          return null
+        }
+      }
+      const pedidos: Promise<{ x: number; y: number; img: ImageBitmap | null }>[] = []
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+          pedidos.push(cargar(x, y).then(img => ({ x, y, img })))
+        }
+      }
+      for (const { x, y, img } of await Promise.all(pedidos)) {
+        if (img) ctx.drawImage(img, (x * T - pb.min.x) * K, (y * T - pb.min.y) * K, T * K, T * K)
+      }
+      // Polilínea del tramo + marcadores 1/2 (igual que el mapa vivo)
+      if (hasTramo && tramoPuntos) {
+        ctx.strokeStyle = '#7d2447'
+        ctx.lineWidth = 4 * K
+        ctx.setLineDash([8 * K, 4 * K])
+        ctx.beginPath()
+        tramoPuntos.forEach((p, i) => {
+          const pt = map.latLngToContainerPoint([p.lat, p.lng])
+          if (i === 0) ctx.moveTo(pt.x * K, pt.y * K)
+          else ctx.lineTo(pt.x * K, pt.y * K)
+        })
+        ctx.stroke()
+        ctx.setLineDash([])
+        const extremos = [tramoPuntos[0], tramoPuntos[tramoPuntos.length - 1]]
+        extremos.forEach((p, i) => {
+          const pt = map.latLngToContainerPoint([p.lat, p.lng])
+          const cx = pt.x * K
+          const cy = pt.y * K
+          ctx.beginPath()
+          ctx.arc(cx, cy, 10 * K, 0, Math.PI * 2)
+          ctx.fillStyle = '#7d2447'
+          ctx.fill()
+          ctx.lineWidth = 2 * K
+          ctx.strokeStyle = '#ffffff'
+          ctx.stroke()
+          ctx.fillStyle = '#ffffff'
+          ctx.font = `800 ${10 * K}px Poppins, Arial, sans-serif`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(String(i + 1), cx, cy + K * 0.5)
+        })
+      }
+      // Píldora del tipo de obra con el color del banner elegido
+      ctx.font = `700 ${10 * K}px Poppins, Arial, sans-serif`
+      const tw = ctx.measureText(tipoObraUpper).width
+      const px = 12 * K
+      const py = 12 * K
+      const pw = tw + 28 * K
+      const ph = 20 * K
+      ctx.fillStyle = BANNERS[banner].color
+      const rr = (ctx as unknown as { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect
+      if (typeof rr === 'function') {
+        rr.call(ctx, px, py, pw, ph, 10 * K)
+        ctx.fill()
+      } else {
+        ctx.fillRect(px, py, pw, ph)
+      }
+      ctx.fillStyle = BANNERS[banner].tinta
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(tipoObraUpper, px + 14 * K, py + ph / 2 + K * 0.5)
+      return canvas.toDataURL('image/png')
+    } catch {
+      return null
+    }
+  }
+
 const generarPdf = async (): Promise<string> => {
     if (!fichaRef.current) throw new Error('Ficha no disponible')
+    // Congela el mapa ANTES del flush: el PNG hereda la vista encuadrada actual.
+    // Si falla, mapaEstatico queda null y se captura el mapa vivo como antes.
+    const estatico = await snapshotMapa().catch(() => null)
     // Forzar flush síncrono: html2canvas clona el DOM al instante y debe ver
     // la clase .pdf-export (sin transform/overflow) para capturar a tamaño natural.
-    flushSync(() => setExporting(true))
+    flushSync(() => {
+      setExporting(true)
+      setMapaEstatico(estatico)
+    })
     try {
       const canvas = await html2canvas(fichaRef.current, {
         scale: 1.5,
@@ -193,9 +312,13 @@ const generarPdf = async (): Promise<string> => {
         hotfixes: ['px_scaling'],
       })
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH)
+      // Enlace clicable sobre la fila de la leyenda (coordenadas ficha → PDF).
+      const f = pdfW / FICHA_W
+      pdf.link(47 * f, 600 * f, 444 * f, 26 * f, { url: googleMapsUrl })
       return pdf.output('datauristring').split(',')[1] ?? ''
     } finally {
       setExporting(false)
+      setMapaEstatico(null)
     }
   }
 
@@ -296,7 +419,7 @@ const generarPdf = async (): Promise<string> => {
           {/* Map */}
           <div className="ficha-map-area">
             <div className="ficha-map-pill" style={{ backgroundColor: BANNERS[banner].color, color: BANNERS[banner].tinta }}>{tipoObraUpper}</div>
-            <MapContainer center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging scrollWheelZoom doubleClickZoom touchZoom keyboard={false} preferCanvas>
+            <MapContainer ref={mapRef} center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging scrollWheelZoom doubleClickZoom touchZoom keyboard={false} preferCanvas>
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {hasTramo && <Polyline positions={tramoPuntos!.map(p => [p.lat, p.lng])} pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }} />}
@@ -307,6 +430,10 @@ const generarPdf = async (): Promise<string> => {
                 </>
               )}
             </MapContainer>
+            {/* PNG congelado sobre el mapa vivo solo durante el export (cero desplazamientos) */}
+            {exporting && mapaEstatico && (
+              <img src={mapaEstatico} alt="" draggable={false} className="ficha-map-captura" />
+            )}
           </div>
 
           {/* Map info */}
@@ -509,6 +636,10 @@ const generarPdf = async (): Promise<string> => {
         }
         .ficha-map-area .ficha-map-inner { width: 100%; height: 100%; }
         .ficha-map-area .ficha-map-inner .leaflet-control-attribution { display: none; }
+        /* PNG congelado: tapa el mapa vivo en el export (el mapa no se desmonta, conserva la vista) */
+        .ficha-map-captura { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 900; }
+        /* En el export la píldora HTML se oculta (ya va dibujada en el PNG) */
+        .pdf-export .ficha-map-pill { display: none !important; }
         .ficha-map-pill {
           position: absolute; top: 12px; left: 12px; z-index: 1000;
           background: #41504D; color: #DBC6B3;
@@ -523,7 +654,7 @@ const generarPdf = async (): Promise<string> => {
           padding: 5px 8px; background: #F5F0EB;
           font-size: 9px; color: #636462;
         }
-        .ficha-link { color: #0E94BE; text-decoration: none; font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ficha-link { color: #0E94BE; text-decoration: none; font-size: 8px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ficha-st-text {
           position: absolute; top: 646px; left: 47px;
           width: 444px; padding: 3px 8px;
