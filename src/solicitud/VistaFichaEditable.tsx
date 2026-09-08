@@ -25,7 +25,8 @@
  *
  * Props: solicitud, sigedData?, ref.
  * Helpers: cleanText (innerText trim NBSP), shortRoute (corta en " - ").
- * Assets: ficha-banner.png, ficha-footer.png, banner/footer CSS url.
+ * Assets: ficha-banner.png (gris) + variantes guinda/beige/blanco del pptx (BANNERS,
+ * selector en la píldora con anillo en el actual), ficha-footer.png, banner/footer CSS url.
  * Estilos: .ficha-gen 960x720, banner absolute, map-area 444x394, panel 432px, etc.
  */
 import { useState, useRef, useImperativeHandle } from 'react'
@@ -38,8 +39,22 @@ import { School, Church, Bus, Droplets, MapPin, Users } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import type { SigedEscuela } from '../lib/consultarSIGED'
 import bannerImg from '../assets/ficha-banner.png'
+import bannerGuindaImg from '../assets/ficha-banner-guinda.png'
+import bannerBeigeImg from '../assets/ficha-banner-beige.png'
+import bannerBlancoImg from '../assets/ficha-banner-blanco.png'
 import footerImg from '../assets/ficha-footer.png'
 import { useFitScale, useElementHeight } from '../lib/useFitScale'
+
+/** Banners disponibles para la ficha (el gris es el actual/por defecto). */
+const BANNERS = {
+  gris: { img: bannerImg, color: '#41504D', nombre: 'Gris' },
+  guinda: { img: bannerGuindaImg, color: '#7D2447', nombre: 'Guinda' },
+  beige: { img: bannerBeigeImg, color: '#DBC8B6', nombre: 'Beige' },
+  blanco: { img: bannerBlancoImg, color: '#FFFFFF', nombre: 'Blanco' },
+} as const
+
+/** Color de banner elegido en la píldora (fuera del área capturada al exportar). */
+type BannerKey = keyof typeof BANNERS
 
 // Ancho fijo de ficha 960px para impresión y escala responsive
 const FICHA_W = 960
@@ -72,6 +87,8 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   const [entreCalles, setEntreCalles] = useState(s.entre_calles || '')
   const [colonia] = useState(s.colonia || '')
   const [juntaAux] = useState(s.junta_auxiliar || '')
+  /** Banner actual de la ficha (selector en la píldora PDF). */
+  const [banner, setBanner] = useState<BannerKey>('gris')
   const iglesiasStr = (s.iglesias_cercanas || []).join(', ')
   const transportesStr = (s.transportes_cercanos || []).join(', ')
   const coberturaAgua = s.cobertura_agua ?? false
@@ -202,6 +219,24 @@ const generarPdf = async (): Promise<string> => {
       {/* Floating toolbar pill */}
       <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
         <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
+          {/* Selector de color de banner (no sale en el PDF: está fuera de fichaRef) */}
+          <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Color de banner">
+            {(Object.keys(BANNERS) as BannerKey[]).map(k => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={banner === k}
+                title={`Banner ${BANNERS[k].nombre}${banner === k ? ' (actual)' : ''}`}
+                onClick={() => setBanner(k)}
+                className={`h-6 w-6 rounded-full border border-black/15 transition-all ${
+                  banner === k ? 'ring-2 ring-guinda ring-offset-2 ring-offset-white' : 'hover:scale-110'
+                }`}
+                style={{ backgroundColor: BANNERS[k].color }}
+              />
+            ))}
+          </div>
+          <div className="h-6 w-px bg-gray-300" />
           <button className="rounded-full bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50" onClick={handleExportPdf} disabled={exporting}>
             {exporting ? 'PDF...' : 'PDF'}
           </button>
@@ -213,8 +248,8 @@ const generarPdf = async (): Promise<string> => {
         <div className="fit-wrap" style={{ width: FICHA_W * sFicha, height: docH * sFicha }}>
           <div ref={fichaRef} className="ficha-gen fit-inner"
             style={{ transform: sFicha < 1 ? `scale(${sFicha})` : undefined, transformOrigin: 'top left' }}>
-          {/* Banner */}
-          <div className="ficha-banner" />
+          {/* Banner (color elegido en la píldora; el exportado sale con este) */}
+          <div className="ficha-banner" style={{ backgroundImage: `url('${BANNERS[banner].img}')` }} />
 
           {/* Tipo de obra */}
           <div className="ficha-tipo-obra" contentEditable suppressContentEditableWarning
