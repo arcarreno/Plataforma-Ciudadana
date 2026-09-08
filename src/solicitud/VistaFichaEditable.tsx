@@ -45,6 +45,7 @@ import bannerGuindaImg from '../assets/ficha-banner-guinda.png'
 import bannerBeigeImg from '../assets/ficha-banner-beige.png'
 import bannerBlancoImg from '../assets/ficha-banner-blanco.png'
 import mosaicosImg from '../assets/ficha-mosaicos.png'
+import pueblaImg from '../assets/Puebla.png'
 import { useFitScale, useElementHeight } from '../lib/useFitScale'
 
 /** Banners disponibles para la ficha (el gris es el actual/por defecto). */
@@ -254,6 +255,8 @@ const generarPdf = async (): Promise<string> => {
             style={{ transform: sFicha < 1 ? `scale(${sFicha})` : undefined, transformOrigin: 'top left' }}>
           {/* Banner (color elegido en la píldora; el exportado sale con este) */}
           <div className="ficha-banner" style={{ backgroundImage: `url('${BANNERS[banner].img}')` }} />
+          {/* Logos Gobierno de Puebla en la zona vacía superior derecha del banner */}
+          <img src={pueblaImg} alt="Puebla - Gobierno de la Ciudad" className="ficha-logo-puebla" />
 
           {/* Tipo de obra */}
           <div className="ficha-tipo-obra" contentEditable suppressContentEditableWarning
@@ -444,6 +447,11 @@ const generarPdf = async (): Promise<string> => {
           width: 960px; height: 186px;
           background: url('${bannerImg}') no-repeat top left;
           background-size: 960px 186px;
+        }
+        .ficha-logo-puebla {
+          position: absolute; top: 28px; right: 34px;
+          height: 72px; width: auto; z-index: 2;
+          pointer-events: none;
         }
         .ficha-tipo-obra {
           position: absolute; top: 34px; left: 50px;
