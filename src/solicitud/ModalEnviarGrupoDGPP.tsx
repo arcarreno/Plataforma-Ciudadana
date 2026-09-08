@@ -62,6 +62,15 @@ export default function ModalEnviarGrupoDGPP({
     setSeleccionados(new Set(miembros.map(m => m.id_solicitud)))
   }, [miembros])
 
+  /** Bloquea el scroll del fondo mientras el modal está abierto (solo scrollea la card). */
+  useEffect(() => {
+    const previo = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previo
+    }
+  }, [])
+
   /** Cambia de modo y ajusta los marcados en consecuencia. */
   const elegirModo = (m: 'todas' | 'una') => {
     setModo(m)
@@ -86,9 +95,9 @@ export default function ModalEnviarGrupoDGPP({
 
   return createPortal(
     <div className="fixed inset-0 z-[10003] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Header guinda con logo */}
-        <div className="flex items-center gap-3 bg-guinda px-6 py-4">
+        <div className="flex shrink-0 items-center gap-3 bg-guinda px-6 py-4">
           <img src={logoSemovinfra} alt="SEMOVINFRA" className="h-10 w-10 rounded-full bg-white object-cover p-0.5" />
           <div className="flex flex-col">
             <h2 className="text-sm font-bold tracking-wide text-white">Enviar a DGPP</h2>
@@ -97,8 +106,8 @@ export default function ModalEnviarGrupoDGPP({
           <Users className="ml-auto h-5 w-5 text-white/80" />
         </div>
 
-        {/* Cuerpo: pregunta + modo a la izquierda, checklist a la derecha */}
-        <div className="grid gap-5 px-6 py-5 md:grid-cols-[1fr_1.2fr]">
+        {/* Cuerpo: pregunta + modo a la izquierda, checklist a la derecha (única zona con scroll) */}
+        <div className="grid min-h-0 gap-5 overflow-y-auto px-6 py-5 md:grid-cols-[1fr_1.2fr]">
           <div className="flex flex-col gap-3">
             <p className="text-sm font-medium text-gray-institutional">
               Esta petición es parte de un grupo. ¿Quieres mandar todas o solo una en específico a {destino}?
@@ -170,7 +179,7 @@ export default function ModalEnviarGrupoDGPP({
         {error && <p className="px-6 pb-2 text-sm text-red-600">{error}</p>}
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 border-t border-alabaster-dark/30 bg-alabaster/30 px-6 py-4">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-alabaster-dark/30 bg-alabaster/30 px-6 py-4">
           <button
             type="button"
             onClick={onCancel}
