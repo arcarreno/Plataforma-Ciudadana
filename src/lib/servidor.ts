@@ -296,6 +296,103 @@ export function concentracionVecinos(id: number): Promise<{ data: SolicitudVecin
   return api.get<{ data: SolicitudVecino[] }>(`/api/solicitudes/${id}/vecinos`)
 }
 
+/** Miembro de un grupo de concentración (endpoint /grupo: incluye a la actual). */
+export interface MiembroGrupo {
+  /** PK de la solicitud. */
+  id_solicitud: number
+  /** Folio único (ej. ST-0037). */
+  folio_unico: string
+  /** Tipo de obra. */
+  tipo_solicitud: string
+  /** Fase actual. */
+  estatus_fase: string
+  /** Nombre del solicitante. */
+  nombre_solicitante: string
+  /** Peso de ranking (12 = concentración). */
+  peso_ranking: number
+  /** Distancia en metros al origen del grupo (0 = la actual). */
+  distancia_m: number
+  /** ID de la última visita, si tiene. */
+  visita_id: number | null
+  /** True si su visita ya tiene fotos, comentarios o checks. */
+  tiene_evidencia: boolean
+}
+
+/**
+ * Miembros del racimo de concentración de una solicitud (para el modal de envío
+ * grupal a DGPP). Requiere sesión (Bearer).
+ */
+export function grupoConcentracion(
+  id: number,
+  token?: string
+): Promise<{ data: MiembroGrupo[]; total: number }> {
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+  return api.get<{ data: MiembroGrupo[]; total: number }>(
+    `/api/solicitudes/${id}/grupo`,
+    headers ? { headers } : undefined
+  )
+}
+
+/** Resumen de miembro para colapsar cards en el grid (endpoint /grupos-concentracion). */
+export interface MiembroCluster {
+  /** PK de la solicitud. */
+  id_solicitud: number
+  /** Folio único. */
+  folio_unico: string
+  /** Nombre del solicitante. */
+  nombre_solicitante: string
+  /** Tipo de obra. */
+  tipo_solicitud: string
+  /** Fase actual. */
+  estatus_fase: string
+  /** Calle del racimo. */
+  calle: string
+}
+
+/** Racimo global de concentración (2+ miembros). */
+export interface GrupoCluster {
+  /** Miembros ordenados por folio. */
+  miembros: MiembroCluster[]
+}
+
+/**
+ * Todos los racimos de concentración activos (peso 12, misma calle + cadena 200m).
+ * Una sola llamada para colapsar el grid en cards apiladas. Requiere sesión.
+ */
+export function gruposConcentracion(token?: string): Promise<{ data: GrupoCluster[]; total_grupos: number }> {
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+  return api.get<{ data: GrupoCluster[]; total_grupos: number }>(
+    '/api/grupos-concentracion',
+    headers ? { headers } : undefined
+  )
+}
+
+/**
+ * Cambia el estatus_fase de varias solicitudes en una sola llamada.
+ * Si el servidor aún no expone el bulk (404), cae a PATCH individual por ID.
+ */
+export async function actualizarEstatusBulk(
+  ids: number[],
+  estatus: EstatusFase
+): Promise<{ actualizadas: number[] }> {
+  try {
+    const res = await api.post<{
+      data: { actualizadas: number[]; errores: { id_solicitud: number; error: string }[] }
+    }>('/api/solicitudes/bulk-estatus', { ids, estatus_fase: estatus })
+    return { actualizadas: res.data.actualizadas }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      const actualizadas: number[] = []
+      for (const id of ids) {
+        await actualizarEstatus(id, estatus)
+        actualizadas.push(id)
+      }
+      return { actualizadas }
+    }
+    throw err
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 6) Patches de edición (solo FastAPI, sin fallback)
 // ----------------------------------------------------------------------------

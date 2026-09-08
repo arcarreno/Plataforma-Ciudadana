@@ -36,7 +36,9 @@ import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle, PersonStanding } from 'lucide-react'
-import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud } from '../lib/servidor'
+import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud, grupoConcentracion } from '../lib/servidor'
+import type { MiembroGrupo } from '../lib/servidor'
+import { getToken } from '../lib/auth'
 import { urlEvidencia } from '../lib/api'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_ACTIVOS, CATALOGO_TIPOS_OBRA } from '../core/constants'
@@ -51,11 +53,17 @@ import type { SigedEscuela } from '../lib/consultarSIGED'
 import VistaOficioEditable from './VistaOficioEditable'
 import VistaFichaEditable from './VistaFichaEditable'
 import StreetView from './StreetView'
+import ModalEnviarGrupoDGPP from './ModalEnviarGrupoDGPP'
+
+/** Estatus que dispara el modal de envío grupal cuando la solicitud es peso 12. */
+const ESTATUS_DGPP = 'Dirección General de Planeación y Proyectos' as EstatusFase
 
 interface SolicitudDetailProps {
   solicitud: Solicitud
   onClose: () => void
   onEstatusChange?: (nuevo: EstatusFase) => void
+  /** Envío en lote (grupo de concentración) — si existe, el select a DGPP abre el modal grupal. */
+  onGrupoEstatusChange?: (ids: number[], nuevo: EstatusFase) => Promise<void> | void
   onNavigate?: (solicitud: Solicitud) => void
   userRole?: string
 }
@@ -125,7 +133,7 @@ function DetailMarker({ position, icon }: { position: L.LatLngExpression; icon: 
 }
 
 // --- Componente detalle: estado para capas, detection, fullscreen, satélite, StreetView, SIGED, vecinos y docs ---
-export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, onNavigate, userRole }: SolicitudDetailProps) {
+export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, onGrupoEstatusChange, onNavigate, userRole }: SolicitudDetailProps) {
   // Alias s para brevedad; hasTramo indica si hay p1/p2 válidos
   const s = solicitud
   const hasTramo = s.tramo_lat_ini && s.tramo_lng_ini && s.tramo_lat_fin && s.tramo_lng_fin
@@ -154,6 +162,14 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   // Vecinos cercanos solo si peso=12 (concentración), con loading
   const [vecinos, setVecinos] = useState<{ id_solicitud: number; folio_unico: string; distancia_m: number }[]>([])
   const [vecinosLoading, setVecinosLoading] = useState(false)
+  /** Modal de envío grupal a DGPP: destino + miembros (null = cerrado). */
+  const [grupoModal, setGrupoModal] = useState<{ destino: EstatusFase; miembros: MiembroGrupo[] } | null>(null)
+  /** True mientras se cargan los miembros del grupo para el modal. */
+  const [grupoCargando, setGrupoCargando] = useState(false)
+  /** True mientras se ejecuta el bulk de envío. */
+  const [grupoEnviando, setGrupoEnviando] = useState(false)
+  /** Error del bulk (se muestra dentro del modal). */
+  const [grupoError, setGrupoError] = useState<string | null>(null)
   // Tabs de documentación: oficio/ficha/enviar (null cierra modal)
   const [documentTab, setDocumentTab] = useState<'oficio' | 'ficha' | 'enviar' | null>(null)
   const [enviandoEmail, setEnviandoEmail] = useState(false)
@@ -211,6 +227,48 @@ useEffect(() => {
   // Abre modal de docs en Oficio por defecto
   const handleOpenDocumentModal = () => {
     setDocumentTab('oficio')
+  }
+
+  /**
+   * Cambio de estatus desde el select: si el destino es DGPP y la solicitud es
+   * parte de un grupo (peso 12), carga los miembros y abre el modal grupal
+   * (todas/una + checklist). Sin grupo (≤1 miembro o error) aplica directo.
+   */
+  const manejarCambioEstatus = async (nuevo: EstatusFase) => {
+    if (!onEstatusChange) return
+    if (nuevo !== ESTATUS_DGPP || s.peso_ranking !== 12 || s.id_solicitud == null || !onGrupoEstatusChange) {
+      onEstatusChange(nuevo)
+      return
+    }
+    setGrupoCargando(true)
+    setGrupoError(null)
+    try {
+      const res = await grupoConcentracion(s.id_solicitud, getToken() ?? undefined)
+      if (!res.data || res.data.length <= 1) {
+        onEstatusChange(nuevo)
+        return
+      }
+      setGrupoModal({ destino: nuevo, miembros: res.data })
+    } catch {
+      onEstatusChange(nuevo)
+    } finally {
+      setGrupoCargando(false)
+    }
+  }
+
+  /** Confirma el envío grupal con los IDs marcados en el modal. */
+  const confirmarEnvioGrupo = async (ids: number[]) => {
+    if (!grupoModal || !onGrupoEstatusChange) return
+    setGrupoEnviando(true)
+    setGrupoError(null)
+    try {
+      await onGrupoEstatusChange(ids, grupoModal.destino)
+      setGrupoModal(null)
+    } catch (err) {
+      setGrupoError(err instanceof Error ? err.message : 'No se pudo enviar el grupo')
+    } finally {
+      setGrupoEnviando(false)
+    }
   }
 
   const handleTabChange = (tab: 'oficio' | 'ficha' | 'enviar') => {
@@ -374,6 +432,18 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
   // --- Render condicional: si documentTab, muestra editor oficio/ficha/enviar; si no, detalle completo ---
   return (
     <>
+      {/* Modal de envío grupal a DGPP (portal z-[10003], encima del detalle) */}
+      {grupoModal && s.id_solicitud != null && (
+        <ModalEnviarGrupoDGPP
+          miembros={grupoModal.miembros}
+          actualId={s.id_solicitud}
+          destino={grupoModal.destino}
+          enviando={grupoEnviando}
+          error={grupoError}
+          onConfirm={confirmarEnvioGrupo}
+          onCancel={() => { setGrupoModal(null); setGrupoError(null) }}
+        />
+      )}
       {documentTab ? (
         <div className="fixed inset-0 z-[9999] flex flex-col bg-black/60">
           {/* Header guinda con tabs */}
@@ -591,8 +661,9 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                       {onEstatusChange ? (
                         <select
                           value={s.estatus_fase || ''}
-                          onChange={e => onEstatusChange(e.target.value as EstatusFase)}
-                          className="max-w-[200px] truncate rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda"
+                          onChange={e => manejarCambioEstatus(e.target.value as EstatusFase)}
+                          disabled={grupoCargando}
+                          className="max-w-[200px] truncate rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-guinda outline-none focus:border-guinda disabled:opacity-50"
                         >
                           {ESTATUS_ACTIVOS.map(e => (
                             <option key={e} value={e} className="truncate">{e}</option>
@@ -812,6 +883,11 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                       <p className="text-xs text-gray-institutional/50">Buscando solicitudes cercanas...</p>
                     ) : vecinos.length > 0 ? (
                       <div className="flex flex-col gap-1.5">
+                        {/* Tarjeta actual en guinda institucional: indica dónde estás parado */}
+                        <div className="flex w-full items-center justify-between rounded-lg bg-guinda px-3 py-2 text-sm">
+                          <span className="font-mono font-medium text-white">{s.folio_unico}</span>
+                          <span className="text-xs text-white/80">estás aquí</span>
+                        </div>
                         {vecinos.map(v => (
                           <button
                             key={v.id_solicitud}

@@ -13,7 +13,9 @@
  *    mapeado a peso_ranking). Ambos resetean page.
  *  - Orden: sortAsc bool toggle con ArrowUpDown, titulo dinámico.
  *  - Cards grid sm:2 xl:3: cada solicitud calcula esPrioridad (>=15 guinda), esConcentracion (12 beige),
- *    esMaxRanking (10 verde oscuro) vs default blanco. ESTATUS_COLORS mapea bg/text por estatus.
+ *    esMaxRanking (10 verde oscuro) vs default blanco. Los racimos de concentración
+ *    (GET /api/grupos-concentracion) colapsan a una card apilada con badge "Grupo ×N"
+ *    (solo pinta la de menor folio presente). ESTATUS_COLORS mapea bg/text por estatus.
  *    Muestra folio, estatus badge, solicitante, CURP/tipo/colonia/junta, ZAP/Agua/distancia/ancho,
  *    y evidencias count. Click abre SolicitudDetail (selected state).
  *  - Detail: onEstatusChange -> actualizarEstatus + optimista en solicitudes y selected;
@@ -32,12 +34,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { listarSolicitudes, actualizarEstatus, eliminarSolicitud } from '../lib/servidor'
+import { listarSolicitudes, actualizarEstatus, eliminarSolicitud, gruposConcentracion, actualizarEstatusBulk } from '../lib/servidor'
+import type { GrupoCluster } from '../lib/servidor'
 import { getToken } from '../lib/auth'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_ACTIVOS } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
-import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users } from 'lucide-react'
+import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users, Layers } from 'lucide-react'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
 import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 import VistaBtTablasModal from '../shared/VistaBtTablas'
@@ -77,6 +80,8 @@ export default function AdminDashboard() {
   const debounceRef = useRef<number | undefined>(undefined)
   const [deleteTarget, setDeleteTarget] = useState<Solicitud | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  /** Racimos de concentración para colapsar el grid en cards apiladas. */
+  const [grupos, setGrupos] = useState<GrupoCluster[]>([])
   const [opcionesAbierto, setOpcionesAbierto] = useState(false)
   const [verTablasAbierto, setVerTablasAbierto] = useState(false)
   const [exportando, setExportando] = useState(false)
@@ -107,6 +112,11 @@ const cargarSolicitudes = useCallback(async () => {
     setSolicitudes(res.data)
     setTotalCount(res.total)
     setLoading(false)
+    // Racimos para colapsar el grid (best-effort: si falla, se muestran cards sueltas)
+    gruposConcentracion(getToken() ?? undefined).then(
+      r => setGrupos(r.data ?? []),
+      () => setGrupos([])
+    )
   }, [searchQuery, filtroEstatus, filtroPrioridad, page, sortAsc, soloMias, user?.email])
 
   // Carga inicial y cada que cambian params de cargarSolicitudes
@@ -147,6 +157,19 @@ const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFa
     ))
     setSelected(prev => prev && prev.id_solicitud === solicitud.id_solicitud
       ? { ...prev, estatus_fase: nuevoEstatus }
+      : prev
+    )
+  }
+
+  // Envío en lote a DGPP (modal grupal del detalle): bulk + optimista en lista/selected
+  const handleGrupoEstatusChange = async (ids: number[], nuevo: EstatusFase) => {
+    const res = await actualizarEstatusBulk(ids, nuevo)
+    const marcadas = new Set(res.actualizadas)
+    setSolicitudes(prev => prev.map(s =>
+      s.id_solicitud != null && marcadas.has(s.id_solicitud) ? { ...s, estatus_fase: nuevo } : s
+    ))
+    setSelected(prev => prev && prev.id_solicitud != null && marcadas.has(prev.id_solicitud)
+      ? { ...prev, estatus_fase: nuevo }
       : prev
     )
   }
@@ -205,6 +228,10 @@ const handleExportarExcel = async () => {
     return todas as unknown as Record<string, unknown>[]
   }, [cargarTodasSolicitudes])
 
+  // Mapa id -> racimo (colapso del grid: un grupo = una card apilada)
+  const grupoDe = new Map<number, GrupoCluster>()
+  grupos.forEach(g => g.miembros.forEach(m => grupoDe.set(m.id_solicitud, g)))
+
   // --- JSX: header con búsqueda/filtros/orden/opciones, grid de cards, paginación, modales ---
   return (
     <div className="flex flex-col gap-6">
@@ -213,6 +240,7 @@ const handleExportarExcel = async () => {
           solicitud={selected}
           onClose={() => setSelected(null)}
           onEstatusChange={(nuevo) => handleEstatusChange(selected, nuevo)}
+          onGrupoEstatusChange={handleGrupoEstatusChange}
           onNavigate={(s) => setSelected(s)}
           userRole={user?.rol}
         />
@@ -355,6 +383,15 @@ const handleExportarExcel = async () => {
             const esConcentracion = s.peso_ranking === 12
             const esMaxRanking = s.peso_ranking === 10
             const estatusColor = ESTATUS_COLORS[s.estatus_fase || ''] ?? { bg: 'bg-gray-100', text: 'text-gray-700' }
+            // Colapso de racimos: solo la de menor folio presente pinta la card apilada
+            const grupo = s.id_solicitud != null ? grupoDe.get(s.id_solicitud) : undefined
+            const presentes = grupo
+              ? grupo.miembros.filter(m => solicitudes.some(x => x.id_solicitud === m.id_solicitud))
+              : []
+            const esRep = !!grupo && presentes.length >= 2
+              && [...presentes].sort((a, b) => (a.folio_unico || '').localeCompare(b.folio_unico || ''))[0].id_solicitud === s.id_solicitud
+            if (grupo && presentes.length >= 2 && !esRep) return null
+            const totalGrupo = esRep && grupo ? grupo.miembros.length : 0
             return (
               <div
                 key={s.id_solicitud}
@@ -362,7 +399,7 @@ const handleExportarExcel = async () => {
                 tabIndex={0}
                 onClick={() => setSelected(s)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(s) }}
-                className={`group cursor-pointer rounded-2xl p-5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+                className={`group relative z-0 cursor-pointer rounded-2xl p-5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
                   esPrioridad
                     ? 'border border-guinda/20 bg-guinda text-white'
                     : esConcentracion
@@ -372,6 +409,23 @@ const handleExportarExcel = async () => {
                         : 'border border-gray-100 bg-white'
                 }`}
               >
+                {/* Capas escalonadas detrás + badge de grupo (solo representante del racimo) */}
+                {totalGrupo > 0 && (
+                  <>
+                    {presentes.slice(1, 4).map((m, i) => (
+                      <div
+                        key={m.id_solicitud}
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 rounded-2xl border border-[#DBC6B3]/60 bg-[#DBC6B3]"
+                        style={{ transform: `translate(${(i + 1) * 7}px, ${(i + 1) * 7}px) rotate(${(i + 1) * 1.2}deg)`, zIndex: -(i + 1) }}
+                      />
+                    ))}
+                    <span className="absolute -right-2 -top-2 z-10 flex items-center gap-1 rounded-full bg-guinda px-2.5 py-1 text-[10px] font-bold text-white shadow">
+                      <Layers className="h-3 w-3" />
+                      Grupo ×{totalGrupo}
+                    </span>
+                  </>
+                )}
                 <div className="mb-3 flex items-center justify-between">
                   <p className={`font-mono text-sm font-bold tracking-wider ${
                     esPrioridad ? 'text-white/90' : esConcentracion ? 'text-black/90' : esMaxRanking ? 'text-[#DBC6B3]' : 'text-guinda'
