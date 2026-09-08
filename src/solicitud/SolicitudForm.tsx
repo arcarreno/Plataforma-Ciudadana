@@ -50,7 +50,7 @@ import Button from '../shared/Button'
 import Card from '../shared/Card'
 import { Input, Textarea } from '../shared/Input'
 import Select from '../shared/Select'
-import { TIPOS_OBRA_NOMBRES, RANKING_PUNTOS_CARGO_PUBLICO } from '../core/constants'
+import { TIPOS_OBRA_NOMBRES, RANKING_PUNTOS_CARGO_PUBLICO, CURP_SIN_LIMITE } from '../core/constants'
 import { crearSolicitud } from '../lib/solicitud'
 import { validarFormatoCURP, validarDigitoVerificador, inicialesCoinciden } from '../lib/curp'
 import type { SolicitudFormData, SolicitudErrors } from '../types/solicitud'
@@ -1190,7 +1190,11 @@ return (
                 <img src={logoSemovinfra} alt="SEMOVINFRA" className="h-10 w-10 rounded-full bg-white object-cover p-0.5" />
                 <div className="flex flex-col">
                   <h2 className="text-sm font-bold tracking-wide text-white">Límite por CURP</h2>
-                  <span className="text-xs text-white/80">3 solicitudes al mes</span>
+                  <span className="text-xs text-white/80">
+                    {form.curp.trim().toUpperCase() === CURP_SIN_LIMITE
+                      ? 'CURP con límite ilimitado'
+                      : '3 solicitudes al mes'}
+                  </span>
                 </div>
                 <Info className="ml-auto h-5 w-5 text-white/80" />
               </div>
@@ -1207,6 +1211,11 @@ return (
                     <span className="font-semibold text-gray-institutional"> hasta 3 solicitudes al mes</span>. Así
                     aseguramos que todas las colonias y familias tengan oportunidad de ser atendidas.
                   </p>
+                  {form.curp.trim().toUpperCase() === CURP_SIN_LIMITE && (
+                    <p className="rounded-xl bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-700">
+                      Esta CURP está exenta del límite mensual: puede registrar peticiones ilimitadas al mes.
+                    </p>
+                  )}
                   <ul className="list-disc space-y-2 pl-5 text-sm text-gray-institutional/70">
                     <li>
                       <span className="font-medium text-gray-institutional">Equidad:</span> distribuimos los recursos

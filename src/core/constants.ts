@@ -32,6 +32,14 @@ export const APP_NAME = 'Atención Ciudadana'
 export const MAX_SOLICITUDES_PER_MONTH = 3
 
 /**
+ * CURP exenta del límite mensual de solicitudes (peticiones ilimitadas).
+ * Única excepción al tope de 3 peticiones/mes; corresponde a la administración.
+ * El servidor valida esta misma CURP antes de rechazar por límite, por lo que
+ * aquí solo se usa para ads adaptar los mensajes de error/ayuda.
+ */
+export const CURP_SIN_LIMITE = 'CXGA030209HPLRNNA3'
+
+/**
  * Puntaje base otorgado a toda solicitud en el ranking de priorización.
  * A partir de aquí se suman bonificaciones por evidencia, concentración, etc.
  */

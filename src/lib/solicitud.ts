@@ -35,6 +35,7 @@ import type { Solicitud, SolicitudFormData } from '../types/solicitud'
 import {
   RANKING_PUNTOS_BASE,
   RANKING_PUNTOS_CON_EVIDENCIA,
+  CURP_SIN_LIMITE,
 } from '../core/constants'
 import { geolocalizarCalle } from './geolocalizarCalle'
 
@@ -284,6 +285,9 @@ async function crearSupabase(
   // Separar campos que no van directo al insert o requieren transformación
   const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, calle, entre_calles, zona_zap, cobertura_agua, ...rest } = data
 
+  // La CURP administrativa está exenta del límite mensual (peticiones ilimitadas)
+  const curpExenta = rest.curp?.trim().toUpperCase() === CURP_SIN_LIMITE
+
   const lat = parseFloat(latitud)
   const lng = parseFloat(longitud)
 
@@ -334,7 +338,8 @@ async function crearSupabase(
 
   if (error) {
     // El trigger/constr en BD limita a 3 solicitudes mensuales por CURP
-    if (/l[ií]mite de 3 solicitudes/i.test(error.message ?? '')) {
+    // (la CURP administrativa está exenta: no se traduce el error a mensaje de límite)
+    if (!curpExenta && /l[ií]mite de 3 solicitudes/i.test(error.message ?? '')) {
       return { error: 'Has alcanzado el límite de 3 solicitudes mensuales para este CURP.' }
     }
     return { error: `No se pudo guardar en el respaldo: ${error.message}` }
@@ -371,6 +376,9 @@ export async function crearSolicitud(
 ): Promise<{ data?: Solicitud; error?: string; advertencia?: string; respaldo?: boolean }> {
   // Extraer campos que requieren tratamiento especial antes de armar FormData
   const { archivos, latitud, longitud, tramo_lat_ini, tramo_lng_ini, tramo_lat_fin, tramo_lng_fin, calle, entre_calles, zona_zap, cobertura_agua, ...rest } = data
+
+  // La CURP administrativa está exenta del límite mensual (peticiones ilimitadas)
+  const curpExenta = rest.curp?.trim().toUpperCase() === CURP_SIN_LIMITE
 
   const lat = parseFloat(latitud)
   const lng = parseFloat(longitud)
@@ -437,7 +445,8 @@ export async function crearSolicitud(
   } catch (err) {
     if (err instanceof ApiError) {
       // Límite de negocio: 3 solicitudes por CURP por mes (validado en servidor)
-      if (err.status === 400 && /l[íi]mite de 3 solicitudes/i.test(err.message)) {
+      // (la CURP administrativa está exenta: no se muestra el error amigable de límite)
+      if (!curpExenta && err.status === 400 && /l[íi]mite de 3 solicitudes/i.test(err.message)) {
         return {
           error: 'Has alcanzado el límite de 3 solicitudes mensuales para este CURP.',
         }
