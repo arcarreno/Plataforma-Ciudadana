@@ -16,12 +16,15 @@
  *  4. Edición inline (actualizarGeo / actualizarObra / actualizarTramo) — solo si esCargoPublico.
  *     Gestiona listas dinámicas de escuelas/iglesias/rutas con add/update/remove.
  *  5. Documentación: tabs Oficio/Ficha/Enviar. VistaOficioEditable y VistaFichaEditable se
- *     exportan a PDF base64 (html2canvas+jsPDF) y se envían vía POST /api/enviar-documentacion
- *     con límite 3.8MB (413 handling). Blur forzado en contentEditable antes de capturar.
+ *     exportan a PDF base64 (html2canvas+jsPDF) y se envían al backend
+ *     (POST /api/solicitudes/:id/enviar-documentacion: validación + SMTP allá).
+ *     Fallo CORREO_* muestra panel para llamar al solicitante y corregir el correo
+ *     (PATCH /api/solicitudes/:id/contacto + reintento). Blur forzado antes de capturar.
  *  6. Vecinos: si peso=12, lista de folios cercanos navegables via obtenerSolicitud + onNavigate.
  *
  * Endpoints:
- *  - servidor: concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud
+ *  - servidor: concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud,
+ *    grupoConcentracion, enviarDocumentacion, actualizarContacto, esFalloEnvio (backend FastAPI)
  *  - consultarSIGED(CCT) -> datos SEP (nivel, alumnos)
  *  - /api/enviar-documentacion (oficioPdf, fichaPdf base64)
  *
@@ -36,7 +39,7 @@ import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle, PersonStanding } from 'lucide-react'
-import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud, grupoConcentracion } from '../lib/servidor'
+import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud, grupoConcentracion, enviarDocumentacion, actualizarContacto, esFalloEnvio } from '../lib/servidor'
 import type { MiembroGrupo } from '../lib/servidor'
 import { getToken } from '../lib/auth'
 import { urlEvidencia } from '../lib/api'
@@ -175,6 +178,11 @@ export default function SolicitudDetail({ solicitud, onClose, onEstatusChange, o
   const [enviandoEmail, setEnviandoEmail] = useState(false)
   const [emailEnviado, setEmailEnviado] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
+  /** Fallo CORREO_* del backend: muestra el panel de llamada al solicitante + corrección. */
+  const [falloEnvio, setFalloEnvio] = useState<{ codigo: string; mensaje: string; destino: string } | null>(null)
+  /** Borrador del correo corregido + flag de guardado. */
+  const [correoEdit, setCorreoEdit] = useState('')
+  const [guardandoCorreo, setGuardandoCorreo] = useState(false)
 
     // Carga capas GeoJSON y resuelve DeteccionPunto para el pin de la solicitud
 useEffect(() => {
@@ -282,6 +290,7 @@ useEffect(() => {
 const handleEnviarDocumentacion = async () => {
     setEnviandoEmail(true)
     setEmailError(null)
+    setFalloEnvio(null)
     try {
       if (!oficioRef.current || !fichaRef.current) {
         throw new Error('Documentos no disponibles')
@@ -303,28 +312,64 @@ const handleEnviarDocumentacion = async () => {
         oficioNombre: `Oficio_${s.folio_unico}.pdf`,
         fichaNombre: `Ficha_tecnica_${s.folio_unico}.pdf`,
       })
-      if (body.length > 3_800_000) {
+      if (body.length > 14_000_000) {
         throw new Error('La documentación es demasiado grande para enviarse por correo. Intenta reducir el contenido de los documentos.')
       }
-      const res = await fetch('/api/enviar-documentacion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body,
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        let data: { error?: string } | null = null
-        try { data = JSON.parse(text) } catch { /* respuesta no JSON */ }
-        if (res.status === 413) {
-          throw new Error('La documentación excede el tamaño máximo permitido por el servidor. Reduce el contenido de los documentos e inténtalo de nuevo.')
-        }
-        throw new Error(data?.error || `Error al enviar (${res.status})`)
-      }
+      if (s.id_solicitud == null) throw new Error('Solicitud sin ID')
+      // Envío desde el backend (validación + SMTP allá); el navegador solo renderizó los PDFs
+      await enviarDocumentacion(
+        s.id_solicitud,
+        {
+          oficioPdf,
+          fichaPdf,
+          oficioNombre: `Oficio_${s.folio_unico}.pdf`,
+          fichaNombre: `Ficha_tecnica_${s.folio_unico}.pdf`,
+        },
+        getToken() ?? undefined
+      )
       setEmailEnviado(true)
     } catch (err: any) {
-      setEmailError(err?.message || 'Error al enviar correo')
+      const fallo = esFalloEnvio(err)
+      if (fallo && fallo.codigo.startsWith('CORREO')) {
+        // Correo inexistente o mal escrito: panel de llamada al solicitante + corrección
+        setFalloEnvio({ codigo: fallo.codigo, mensaje: fallo.message, destino: s.correo ?? '' })
+        setCorreoEdit(s.correo ?? '')
+        setEmailError(null)
+      } else {
+        setEmailError(err?.message || 'Error al enviar correo')
+      }
     }
     setEnviandoEmail(false)
+  }
+
+  /**
+   * Guarda el correo corregido (backend) y reintenta el envío con el nuevo correo.
+   * Si el nuevo también falla por CORREO_*, el panel se queda con el error actualizado.
+   */
+  const guardarCorreoYReintentar = async () => {
+    if (s.id_solicitud == null) return
+    const nuevo = correoEdit.trim()
+    if (!nuevo) {
+      setEmailError('Escriba el correo corregido antes de guardar')
+      return
+    }
+    setGuardandoCorreo(true)
+    try {
+      await actualizarContacto(s.id_solicitud, { correo: nuevo }, getToken() ?? undefined)
+      s.correo = nuevo
+      setFalloEnvio(null)
+      setEmailError(null)
+      await handleEnviarDocumentacion()
+    } catch (err) {
+      const fallo = esFalloEnvio(err)
+      if (fallo && fallo.codigo.startsWith('CORREO')) {
+        setFalloEnvio({ codigo: fallo.codigo, mensaje: fallo.message, destino: nuevo })
+      } else {
+        setEmailError(err instanceof Error ? err.message : 'Error al enviar correo')
+      }
+    } finally {
+      setGuardandoCorreo(false)
+    }
   }
 
   // Solo cargo público ve botones de generar docs (esCargoPublico)
@@ -549,6 +594,65 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                     )}
                     {emailError && (
                       <p className="mt-2 text-center text-sm text-red-500">{emailError}</p>
+                    )}
+                    {/* Fallo CORREO_*: llamar al solicitante + corregir correo + reintentar */}
+                    {falloEnvio && (
+                      <div className="mt-4 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm">
+                        <p className="font-bold text-red-700">El correo no existe o está mal escrito</p>
+                        <p className="mt-1 text-gray-700">
+                          Por favor llame al solicitante <span className="font-semibold">{s.nombre_solicitante}</span>
+                          {s.telefono ? (
+                            <> al <span className="font-semibold">{s.telefono}</span></>
+                          ) : (
+                            ' (sin teléfono registrado)'
+                          )}
+                        </p>
+                        <div className="mt-3 space-y-1 rounded-lg bg-white/70 p-3 text-xs text-gray-700">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Folio</span>
+                            <span className="font-mono font-medium">{s.folio_unico}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Calle</span>
+                            <span className="font-medium">{s.calle || '—'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Entre calles</span>
+                            <span className="font-medium">{s.entre_calles || '—'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Correo intentado</span>
+                            <span className="font-medium">{falloEnvio.destino || '—'}</span>
+                          </div>
+                        </div>
+                        <label className="mt-3 block text-xs font-semibold text-gray-700">
+                          Corregir correo electrónico
+                        </label>
+                        <div className="mt-1 flex gap-2">
+                          <input
+                            type="email"
+                            value={correoEdit}
+                            onChange={e => setCorreoEdit(e.target.value)}
+                            placeholder="nuevo@correo.com"
+                            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-guinda"
+                          />
+                          <button
+                            type="button"
+                            onClick={guardarCorreoYReintentar}
+                            disabled={guardandoCorreo || !correoEdit.trim()}
+                            className="shrink-0 rounded-xl bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
+                          >
+                            {guardandoCorreo ? 'Guardando…' : 'Guardar y reintentar'}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFalloEnvio(null)}
+                          className="mt-2 text-xs text-gray-500 underline"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
                     )}
                     {!s.correo && (
                       <p className="mt-2 text-center text-sm text-amber-600">

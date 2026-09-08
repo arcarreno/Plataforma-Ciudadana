@@ -442,6 +442,85 @@ export function actualizarEstatus(
   })
 }
 
+/** Códigos tipificados de fallo al enviar documentación (los define el backend). */
+export type CodigoFalloEnvio =
+  | 'CORREO_REQUERIDO' | 'CORREO_FORMATO' | 'CORREO_DOMINIO' | 'CORREO_RECHAZADO'
+  | 'SMTP_FALLO' | 'SMTP_CONFIG' | 'DOC_INVALIDO'
+
+/**
+ * Error tipificado del envío de documentación: distingue si el problema es el
+ * correo del solicitante (mostrar panel de llamada + corrección) o el servidor.
+ */
+export class FalloEnvioError extends Error {
+  /** Código machine-readable del backend. */
+  codigo: CodigoFalloEnvio
+  constructor(codigo: CodigoFalloEnvio, mensaje: string) {
+    super(mensaje)
+    this.codigo = codigo
+  }
+}
+
+/**
+ * Extrae {codigo, mensaje} del detail dict de FastAPI en errores tipificados
+ * (`API error N: {"detail": {...}}`). Retorna null si no es tipificado.
+ */
+export function esFalloEnvio(err: unknown): FalloEnvioError | null {
+  if (!(err instanceof ApiError)) return null
+  const m = /^API error \d+: ([\s\S]+)$/.exec(err.message)
+  if (!m) return null
+  try {
+    const d = (JSON.parse(m[1]) as { detail?: { codigo?: unknown; mensaje?: unknown } }).detail
+    if (d && typeof d.codigo === 'string' && typeof d.mensaje === 'string') {
+      return new FalloEnvioError(d.codigo as CodigoFalloEnvio, d.mensaje)
+    }
+  } catch {
+    /* no era un fallo tipificado */
+  }
+  return null
+}
+
+/**
+ * Envía Oficio + Ficha por correo desde el backend (validación + SMTP allá).
+ * El navegador solo renderiza los PDFs (ahí se editan); todo lo demás vive en
+ * FastAPI. Lanza FalloEnvioError si el correo es inválido o SMTP falla.
+ */
+export async function enviarDocumentacion(
+  id: number,
+  docs: { oficioPdf: string; fichaPdf: string; oficioNombre?: string; fichaNombre?: string; correo?: string },
+  token?: string
+): Promise<{ ok: boolean; destino?: string }> {
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+  try {
+    return await api.post<{ ok: boolean; destino?: string }>(
+      `/api/solicitudes/${id}/enviar-documentacion`,
+      {
+        oficio_pdf: docs.oficioPdf,
+        ficha_pdf: docs.fichaPdf,
+        oficio_nombre: docs.oficioNombre ?? '',
+        ficha_nombre: docs.fichaNombre ?? '',
+        correo: docs.correo ?? '',
+      },
+      headers ? { headers } : undefined
+    )
+  } catch (err) {
+    throw esFalloEnvio(err) ?? err
+  }
+}
+
+/** Corrige el correo del solicitante (usado tras un fallo CORREO_*). */
+export function actualizarContacto(
+  id: number,
+  data: { correo: string },
+  token?: string
+): Promise<{ ok: boolean; correo: string }> {
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+  return api.patch<{ ok: boolean; correo: string }>(
+    `/api/solicitudes/${id}/contacto`,
+    data,
+    headers ? { headers } : undefined
+  )
+}
+
 /** Borra una solicitud (solo admin) */
 export function eliminarSolicitud(id: number): Promise<{ ok: boolean }> {
   return api.delete<{ ok: boolean }>(`/api/solicitudes/${id}`)
