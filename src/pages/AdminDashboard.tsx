@@ -14,7 +14,7 @@
  *  - Orden: sortAsc bool toggle con ArrowUpDown, titulo dinámico.
  *  - Cards grid sm:2 xl:3: cada solicitud calcula esPrioridad (>=15 guinda), esConcentracion (12 beige),
  *    esMaxRanking (10 verde oscuro) vs default blanco. Los racimos de concentración
- *    (GET /api/grupos-concentracion) colapsan a una card apilada con badge "Grupo ×N"
+ *    (GET /api/grupos-concentracion) colapsan a una sola card con badge "Grupo ×N"
  *    (solo pinta la de menor folio presente). ESTATUS_COLORS mapea bg/text por estatus.
  *    Muestra folio, estatus badge, solicitante, CURP/tipo/colonia/junta, ZAP/Agua/distancia/ancho,
  *    y evidencias count. Click abre SolicitudDetail (selected state).
@@ -399,7 +399,7 @@ const handleExportarExcel = async () => {
                 tabIndex={0}
                 onClick={() => setSelected(s)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(s) }}
-                className={`group relative z-0 cursor-pointer rounded-2xl p-5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+                className={`group relative cursor-pointer rounded-2xl p-5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
                   esPrioridad
                     ? 'border border-guinda/20 bg-guinda text-white'
                     : esConcentracion
@@ -409,22 +409,12 @@ const handleExportarExcel = async () => {
                         : 'border border-gray-100 bg-white'
                 }`}
               >
-                {/* Capas escalonadas detrás + badge de grupo (solo representante del racimo) */}
+                {/* Badge de grupo (solo representante del racimo) */}
                 {totalGrupo > 0 && (
-                  <>
-                    {presentes.slice(1, 4).map((m, i) => (
-                      <div
-                        key={m.id_solicitud}
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 rounded-2xl border border-[#DBC6B3]/60 bg-[#DBC6B3]"
-                        style={{ transform: `translate(${(i + 1) * 7}px, ${(i + 1) * 7}px) rotate(${(i + 1) * 1.2}deg)`, zIndex: -(i + 1) }}
-                      />
-                    ))}
-                    <span className="absolute -right-2 -top-2 z-10 flex items-center gap-1 rounded-full bg-guinda px-2.5 py-1 text-[10px] font-bold text-white shadow">
-                      <Layers className="h-3 w-3" />
-                      Grupo ×{totalGrupo}
-                    </span>
-                  </>
+                  <span className="absolute -right-2 -top-2 z-10 flex items-center gap-1 rounded-full bg-guinda px-2.5 py-1 text-[10px] font-bold text-white shadow">
+                    <Layers className="h-3 w-3" />
+                    Grupo ×{totalGrupo}
+                  </span>
                 )}
                 <div className="mb-3 flex items-center justify-between">
                   <p className={`font-mono text-sm font-bold tracking-wider ${

@@ -883,26 +883,37 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                       <p className="text-xs text-gray-institutional/50">Buscando solicitudes cercanas...</p>
                     ) : vecinos.length > 0 ? (
                       <div className="flex flex-col gap-1.5">
-                        {/* Tarjeta actual en guinda institucional: indica dónde estás parado */}
-                        <div className="flex w-full items-center justify-between rounded-lg bg-guinda px-3 py-2 text-sm">
-                          <span className="font-mono font-medium text-white">{s.folio_unico}</span>
-                          <span className="text-xs text-white/80">estás aquí</span>
-                        </div>
-                        {vecinos.map(v => (
-                          <button
-                            key={v.id_solicitud}
-                            type="button"
-                            disabled={!onNavigate}
-                            onClick={async () => {
-                              const res = await obtenerSolicitud(v.id_solicitud)
-                              if (res.data) onNavigate?.(res.data)
-                            }}
-                            className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm transition-colors hover:bg-guinda/5 disabled:cursor-default"
-                          >
-                            <span className="font-mono font-medium text-guinda">{v.folio_unico}</span>
-                            <span className="text-xs text-gray-institutional/60">{v.distancia_m}m</span>
-                          </button>
-                        ))}
+                        {/* Orden fijo por folio (la actual no sube): solo se resalta en guinda donde estás */}
+                        {(s.id_solicitud != null
+                          ? [{ id_solicitud: s.id_solicitud, folio_unico: s.folio_unico, distancia_m: 0 }, ...vecinos]
+                          : vecinos
+                        )
+                          .sort((a, b) => (a.folio_unico || '').localeCompare(b.folio_unico || ''))
+                          .map(v =>
+                            v.id_solicitud === s.id_solicitud ? (
+                              <div
+                                key={v.id_solicitud}
+                                className="flex w-full items-center justify-between rounded-lg bg-guinda px-3 py-2 text-sm"
+                              >
+                                <span className="font-mono font-medium text-white">{v.folio_unico}</span>
+                                <span className="text-xs text-white/80">estás aquí</span>
+                              </div>
+                            ) : (
+                              <button
+                                key={v.id_solicitud}
+                                type="button"
+                                disabled={!onNavigate}
+                                onClick={async () => {
+                                  const res = await obtenerSolicitud(v.id_solicitud)
+                                  if (res.data) onNavigate?.(res.data)
+                                }}
+                                className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm transition-colors hover:bg-guinda/5 disabled:cursor-default"
+                              >
+                                <span className="font-mono font-medium text-guinda">{v.folio_unico}</span>
+                                <span className="text-xs text-gray-institutional/60">{v.distancia_m}m</span>
+                              </button>
+                            )
+                          )}
                       </div>
                     ) : (
                       <p className="text-xs text-gray-institutional/50">Sin solicitudes cercanas</p>
