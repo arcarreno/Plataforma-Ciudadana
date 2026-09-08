@@ -107,8 +107,8 @@ export default function ModalEnviarGrupoDGPP({
         </div>
 
         {/* Cuerpo: pregunta + modo a la izquierda, checklist a la derecha (única zona con scroll) */}
-        <div className="grid min-h-0 gap-5 overflow-y-auto px-6 py-5 md:grid-cols-[1fr_1.2fr]">
-          <div className="flex flex-col gap-3">
+        <div className="grid min-h-0 gap-5 overflow-y-auto overflow-x-hidden px-6 py-5 md:grid-cols-[0.9fr_1.1fr]">
+          <div className="flex min-w-0 flex-col gap-3">
             <p className="text-sm font-medium text-gray-institutional">
               Esta petición es parte de un grupo. ¿Quieres mandar todas o solo una en específico a {destino}?
             </p>
@@ -116,7 +116,7 @@ export default function ModalEnviarGrupoDGPP({
               <button
                 type="button"
                 onClick={() => elegirModo('todas')}
-                className={`rounded-xl border-2 px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`rounded-xl border-2 px-4 py-2.5 text-center text-sm font-medium transition-colors ${
                   modo === 'todas'
                     ? 'border-guinda bg-guinda/5 text-guinda'
                     : 'border-gray-200 text-gray-institutional hover:border-gray-300'
@@ -127,7 +127,7 @@ export default function ModalEnviarGrupoDGPP({
               <button
                 type="button"
                 onClick={() => elegirModo('una')}
-                className={`rounded-xl border-2 px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`rounded-xl border-2 px-4 py-2.5 text-center text-sm font-medium transition-colors ${
                   modo === 'una'
                     ? 'border-guinda bg-guinda/5 text-guinda'
                     : 'border-gray-200 text-gray-institutional hover:border-gray-300'
@@ -141,11 +141,11 @@ export default function ModalEnviarGrupoDGPP({
             </p>
           </div>
 
-          <div className="flex min-h-0 flex-col gap-1.5">
+          <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-institutional/60">
               Peticiones a enviar ({ids.length})
             </span>
-            <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-100 p-1.5">
+            <div className="max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-gray-100 p-1.5">
               {miembros.map(m => (
                 <label
                   key={m.id_solicitud}
@@ -160,13 +160,16 @@ export default function ModalEnviarGrupoDGPP({
                     className="h-4 w-4 shrink-0 accent-[#7D2447]"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block font-mono text-xs font-bold text-guinda">
+                    <span className="block truncate font-mono text-xs font-bold text-guinda">
                       {m.folio_unico}
                       {m.id_solicitud === actualId && (
                         <span className="ml-1 rounded bg-guinda/10 px-1.5 py-0.5 font-sans text-[10px] font-medium">actual</span>
                       )}
                     </span>
-                    <span className="block truncate text-xs text-gray-institutional/70">
+                    <span
+                      className="block truncate text-xs text-gray-institutional/70"
+                      title={`${m.nombre_solicitante || 'Sin nombre'} · ${m.estatus_fase}`}
+                    >
                       {m.nombre_solicitante || 'Sin nombre'} · {m.estatus_fase}
                     </span>
                   </span>
@@ -179,7 +182,7 @@ export default function ModalEnviarGrupoDGPP({
         {error && <p className="px-6 pb-2 text-sm text-red-600">{error}</p>}
 
         {/* Footer */}
-        <div className="flex shrink-0 justify-end gap-3 border-t border-alabaster-dark/30 bg-alabaster/30 px-6 py-4">
+        <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-alabaster-dark/30 bg-alabaster/30 px-6 py-4">
           <button
             type="button"
             onClick={onCancel}
