@@ -26,7 +26,9 @@
  * Props: solicitud, sigedData?, ref.
  * Helpers: cleanText (innerText trim NBSP), shortRoute (corta en " - ").
  * Assets: ficha-banner.png (gris) + variantes guinda/beige/blanco del pptx (BANNERS,
- * selector en la píldora con anillo en el actual), ficha-footer.png, banner/footer CSS url.
+ * selector en la píldora con anillo en el actual; `tinta` pinta textos del banner y
+ * píldora del mapa; `banner-claro` fuerza verde institucional en banners claros),
+ * ficha-mosaicos.png (greca del pptx como footer), banner/footer CSS url.
  * Estilos: .ficha-gen 960x720, banner absolute, map-area 444x394, panel 432px, etc.
  */
 import { useState, useRef, useImperativeHandle } from 'react'
@@ -42,15 +44,15 @@ import bannerImg from '../assets/ficha-banner.png'
 import bannerGuindaImg from '../assets/ficha-banner-guinda.png'
 import bannerBeigeImg from '../assets/ficha-banner-beige.png'
 import bannerBlancoImg from '../assets/ficha-banner-blanco.png'
-import footerImg from '../assets/ficha-footer.png'
+import mosaicosImg from '../assets/ficha-mosaicos.png'
 import { useFitScale, useElementHeight } from '../lib/useFitScale'
 
 /** Banners disponibles para la ficha (el gris es el actual/por defecto). */
 const BANNERS = {
-  gris: { img: bannerImg, color: '#41504D', nombre: 'Gris' },
-  guinda: { img: bannerGuindaImg, color: '#7D2447', nombre: 'Guinda' },
-  beige: { img: bannerBeigeImg, color: '#DBC8B6', nombre: 'Beige' },
-  blanco: { img: bannerBlancoImg, color: '#FFFFFF', nombre: 'Blanco' },
+  gris: { img: bannerImg, color: '#41504D', nombre: 'Gris', tinta: '#FFFFFF' },
+  guinda: { img: bannerGuindaImg, color: '#7D2447', nombre: 'Guinda', tinta: '#FFFFFF' },
+  beige: { img: bannerBeigeImg, color: '#DBC8B6', nombre: 'Beige', tinta: '#41504D' },
+  blanco: { img: bannerBlancoImg, color: '#FFFFFF', nombre: 'Blanco', tinta: '#41504D' },
 } as const
 
 /** Color de banner elegido en la píldora (fuera del área capturada al exportar). */
@@ -89,6 +91,8 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   const [juntaAux] = useState(s.junta_auxiliar || '')
   /** Banner actual de la ficha (selector en la píldora PDF). */
   const [banner, setBanner] = useState<BannerKey>('gris')
+  /** Banners claros (beige/blanco): textos del banner en verde institucional. */
+  const bannerClaro = BANNERS[banner].tinta !== '#FFFFFF'
   const iglesiasStr = (s.iglesias_cercanas || []).join(', ')
   const transportesStr = (s.transportes_cercanos || []).join(', ')
   const coberturaAgua = s.cobertura_agua ?? false
@@ -246,7 +250,7 @@ const generarPdf = async (): Promise<string> => {
       {/* Ficha container */}
       <div ref={scrollRef} className="ficha-scroll flex flex-1 items-start justify-center overflow-y-auto pt-16 pb-8">
         <div className="fit-wrap" style={{ width: FICHA_W * sFicha, height: docH * sFicha }}>
-          <div ref={fichaRef} className="ficha-gen fit-inner"
+          <div ref={fichaRef} className={`ficha-gen fit-inner${bannerClaro ? ' banner-claro' : ''}`}
             style={{ transform: sFicha < 1 ? `scale(${sFicha})` : undefined, transformOrigin: 'top left' }}>
           {/* Banner (color elegido en la píldora; el exportado sale con este) */}
           <div className="ficha-banner" style={{ backgroundImage: `url('${BANNERS[banner].img}')` }} />
@@ -284,7 +288,7 @@ const generarPdf = async (): Promise<string> => {
 
           {/* Map */}
           <div className="ficha-map-area">
-            <div className="ficha-map-pill">{tipoObraUpper}</div>
+            <div className="ficha-map-pill" style={{ backgroundColor: BANNERS[banner].color, color: BANNERS[banner].tinta }}>{tipoObraUpper}</div>
             <MapContainer center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging scrollWheelZoom doubleClickZoom touchZoom keyboard={false} preferCanvas>
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -568,14 +572,30 @@ const generarPdf = async (): Promise<string> => {
         .ficha-row-del-btn:hover { background: #c00; color: #fff; }
 
         .ficha-footer-img {
-          position: absolute; bottom: 14px; left: 14px;
-          width: 932px; height: 12px;
-          background: url('${footerImg}') no-repeat bottom left;
-          background-size: 932px 12px;
+          position: absolute; bottom: 10px; left: 14px;
+          width: 932px; height: 16px;
+          background: url('${mosaicosImg}') no-repeat bottom left;
+          background-size: 932px 16px;
         }
         .ficha-footer-txt {
-          position: absolute; bottom: 28px; left: 0; right: 0;
+          position: absolute; bottom: 30px; left: 0; right: 0;
           text-align: center; font-size: 7px; color: #999;
+        }
+        /* Banners claros (beige/blanco): textos del banner en verde institucional */
+        .banner-claro .ficha-tipo-obra,
+        .banner-claro .ficha-street-text,
+        .banner-claro .ficha-location-text,
+        .banner-claro .ficha-entre-calles { color: #41504D; }
+        .banner-claro .ficha-tipo-obra[contenteditable]:hover,
+        .banner-claro .ficha-tipo-obra[contenteditable]:focus,
+        .banner-claro .ficha-street-text[contenteditable]:hover,
+        .banner-claro .ficha-street-text[contenteditable]:focus,
+        .banner-claro .ficha-editable:hover,
+        .banner-claro .ficha-editable:focus,
+        .banner-claro .ficha-entre-calles[contenteditable]:hover,
+        .banner-claro .ficha-entre-calles[contenteditable]:focus {
+          outline: 1px dashed rgba(65,80,77,0.6);
+          background: rgba(65,80,77,0.1);
         }
       `}</style>
     </div>
