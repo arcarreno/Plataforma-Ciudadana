@@ -163,7 +163,7 @@ const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFa
 
   // Envío en lote a DGPP (modal grupal del detalle): bulk + optimista en lista/selected
   const handleGrupoEstatusChange = async (ids: number[], nuevo: EstatusFase) => {
-    const res = await actualizarEstatusBulk(ids, nuevo)
+    const res = await actualizarEstatusBulk(ids, nuevo, getToken() ?? undefined)
     const marcadas = new Set(res.actualizadas)
     setSolicitudes(prev => prev.map(s =>
       s.id_solicitud != null && marcadas.has(s.id_solicitud) ? { ...s, estatus_fase: nuevo } : s

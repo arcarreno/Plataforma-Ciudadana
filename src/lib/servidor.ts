@@ -373,12 +373,14 @@ export function gruposConcentracion(token?: string): Promise<{ data: GrupoCluste
  */
 export async function actualizarEstatusBulk(
   ids: number[],
-  estatus: EstatusFase
+  estatus: EstatusFase,
+  token?: string
 ): Promise<{ actualizadas: number[] }> {
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
   try {
     const res = await api.post<{
       data: { actualizadas: number[]; errores: { id_solicitud: number; error: string }[] }
-    }>('/api/solicitudes/bulk-estatus', { ids, estatus_fase: estatus })
+    }>('/api/solicitudes/bulk-estatus', { ids, estatus_fase: estatus }, headers ? { headers } : undefined)
     return { actualizadas: res.data.actualizadas }
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
