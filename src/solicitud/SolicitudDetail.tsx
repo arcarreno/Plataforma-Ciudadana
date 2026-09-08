@@ -533,9 +533,10 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
             <div className={`absolute inset-0 ${documentTab === 'ficha' ? 'z-20' : 'z-10'}`}>
               <VistaFichaEditable ref={fichaRef} solicitud={s} sigedData={sigedData} />
             </div>
-            <div className={`absolute inset-0 ${documentTab === 'enviar' ? 'z-30' : 'z-10'}`}>
-              <div className="flex h-full flex-col items-center justify-center bg-gray-50 p-8">
-                <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-100">
+            <div className={`absolute inset-0 overflow-hidden ${documentTab === 'enviar' ? 'z-30' : 'z-10'}`}>
+              {/* Scroll propio de la pestaña: el contenido largo ya no se corta ni mueve otras capas */}
+              <div className="h-full overflow-y-auto bg-gray-50 p-4 sm:p-8">
+                <div className="mx-auto my-4 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-sm border border-gray-100 sm:p-8">
                   <div className="mb-6 text-center">
                     <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-guinda/10">
                       <Send className="h-6 w-6 text-guinda" />
@@ -598,61 +599,65 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                     )}
                     {/* Fallo CORREO_*: llamar al solicitante + corregir correo + reintentar */}
                     {falloEnvio && (
-                      <div className="mt-4 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm">
+                      <div className="mt-4 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm sm:p-5">
                         <p className="font-bold text-red-700">El correo no existe o está mal escrito</p>
-                        <p className="mt-1 text-gray-700">
-                          Por favor llame al solicitante <span className="font-semibold">{s.nombre_solicitante}</span>
-                          {s.telefono ? (
-                            <> al <span className="font-semibold">{s.telefono}</span></>
-                          ) : (
-                            ' (sin teléfono registrado)'
-                          )}
-                        </p>
-                        <div className="mt-3 space-y-1 rounded-lg bg-white/70 p-3 text-xs text-gray-700">
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Folio</span>
-                            <span className="font-mono font-medium">{s.folio_unico}</span>
+                        <div className="mt-3 grid gap-4 md:grid-cols-2">
+                          <div>
+                            <p className="text-gray-700">
+                              Por favor llame al solicitante <span className="font-semibold">{s.nombre_solicitante}</span>
+                              {s.telefono ? (
+                                <> al <span className="font-semibold">{s.telefono}</span></>
+                              ) : (
+                                ' (sin teléfono registrado)'
+                              )}
+                            </p>
+                            <div className="mt-3 space-y-1 rounded-lg bg-white/70 p-3 text-xs text-gray-700">
+                              <div className="flex justify-between gap-2">
+                                <span className="text-gray-500">Folio</span>
+                                <span className="font-mono font-medium">{s.folio_unico}</span>
+                              </div>
+                              <div className="flex justify-between gap-2">
+                                <span className="text-gray-500">Calle</span>
+                                <span className="text-right font-medium">{s.calle || '—'}</span>
+                              </div>
+                              <div className="flex justify-between gap-2">
+                                <span className="text-gray-500">Entre calles</span>
+                                <span className="text-right font-medium">{s.entre_calles || '—'}</span>
+                              </div>
+                              <div className="flex justify-between gap-2">
+                                <span className="text-gray-500">Correo intentado</span>
+                                <span className="break-all text-right font-medium">{falloEnvio.destino || '—'}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Calle</span>
-                            <span className="font-medium">{s.calle || '—'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Entre calles</span>
-                            <span className="font-medium">{s.entre_calles || '—'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Correo intentado</span>
-                            <span className="font-medium">{falloEnvio.destino || '—'}</span>
+                          <div className="flex flex-col">
+                            <label className="text-xs font-semibold text-gray-700">
+                              Corregir correo electrónico
+                            </label>
+                            <input
+                              type="email"
+                              value={correoEdit}
+                              onChange={e => setCorreoEdit(e.target.value)}
+                              placeholder="nuevo@correo.com"
+                              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-guinda"
+                            />
+                            <button
+                              type="button"
+                              onClick={guardarCorreoYReintentar}
+                              disabled={guardandoCorreo || !correoEdit.trim()}
+                              className="mt-2 w-full rounded-xl bg-guinda px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
+                            >
+                              {guardandoCorreo ? 'Guardando…' : 'Guardar y reintentar'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFalloEnvio(null)}
+                              className="mt-2 self-start text-xs text-gray-500 underline"
+                            >
+                              Cerrar
+                            </button>
                           </div>
                         </div>
-                        <label className="mt-3 block text-xs font-semibold text-gray-700">
-                          Corregir correo electrónico
-                        </label>
-                        <div className="mt-1 flex gap-2">
-                          <input
-                            type="email"
-                            value={correoEdit}
-                            onChange={e => setCorreoEdit(e.target.value)}
-                            placeholder="nuevo@correo.com"
-                            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-guinda"
-                          />
-                          <button
-                            type="button"
-                            onClick={guardarCorreoYReintentar}
-                            disabled={guardandoCorreo || !correoEdit.trim()}
-                            className="shrink-0 rounded-xl bg-guinda px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
-                          >
-                            {guardandoCorreo ? 'Guardando…' : 'Guardar y reintentar'}
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setFalloEnvio(null)}
-                          className="mt-2 text-xs text-gray-500 underline"
-                        >
-                          Cerrar
-                        </button>
                       </div>
                     )}
                     {!s.correo && (
