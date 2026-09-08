@@ -39,7 +39,7 @@ import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle, PersonStanding } from 'lucide-react'
-import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud, grupoConcentracion, enviarDocumentacion, actualizarContacto, esFalloEnvio } from '../lib/servidor'
+import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud, grupoConcentracion, enviarDocumentacion, actualizarContacto, esFalloEnvio, FalloEnvioError } from '../lib/servidor'
 import type { MiembroGrupo } from '../lib/servidor'
 import { getToken } from '../lib/auth'
 import { urlEvidencia } from '../lib/api'
@@ -329,7 +329,8 @@ const handleEnviarDocumentacion = async () => {
       )
       setEmailEnviado(true)
     } catch (err: any) {
-      const fallo = esFalloEnvio(err)
+      // enviarDocumentacion ya lanza FalloEnvioError; si vino crudo (ApiError), se tipifica aquí
+      const fallo = err instanceof FalloEnvioError ? err : esFalloEnvio(err)
       if (fallo && fallo.codigo.startsWith('CORREO')) {
         // Correo inexistente o mal escrito: panel de llamada al solicitante + corrección
         setFalloEnvio({ codigo: fallo.codigo, mensaje: fallo.message, destino: s.correo ?? '' })
@@ -361,7 +362,7 @@ const handleEnviarDocumentacion = async () => {
       setEmailError(null)
       await handleEnviarDocumentacion()
     } catch (err) {
-      const fallo = esFalloEnvio(err)
+      const fallo = err instanceof FalloEnvioError ? err : esFalloEnvio(err)
       if (fallo && fallo.codigo.startsWith('CORREO')) {
         setFalloEnvio({ codigo: fallo.codigo, mensaje: fallo.message, destino: nuevo })
       } else {
