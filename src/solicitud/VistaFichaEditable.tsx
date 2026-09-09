@@ -42,6 +42,8 @@ import L from 'leaflet'
 import { School, Church, Bus, Droplets, MapPin, Users } from 'lucide-react'
 import type { Solicitud } from '../types/solicitud'
 import type { SigedEscuela } from '../lib/consultarSIGED'
+import { consultarSIGED } from '../lib/consultarSIGED'
+import { getToken } from '../lib/auth'
 import bannerImg from '../assets/ficha-banner.png'
 import bannerGuindaImg from '../assets/ficha-banner-guinda.png'
 import bannerBeigeImg from '../assets/ficha-banner-beige.png'
@@ -135,6 +137,44 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref, banne
     const raw = (s.escuelas_cercanas || []).map(c => c.trim().toUpperCase()).filter(Boolean).slice(0, 3)
     return [...new Set(raw)]
   })
+  /** Escuelas validadas en SEP por CCT (auto-relleno de la tabla al abrir). */
+  const [sigedMap, setSigedMap] = useState<Record<string, SigedEscuela>>({})
+  /** True mientras se validan los CCT contra SEP. */
+  const [sigedCargando, setSigedCargando] = useState(false)
+
+  /** Auto-relleno: resuelve cada CCT de la tabla (caché primero, en paralelo). */
+  useEffect(() => {
+    let vivo = true
+    const semilla: Record<string, SigedEscuela> = {}
+    if (sigedData && escuelasCct.includes(sigedData.cct.toUpperCase())) {
+      semilla[sigedData.cct.toUpperCase()] = sigedData
+    }
+    const faltantes = escuelasCct.filter(c => c && !semilla[c])
+    if (faltantes.length === 0) {
+      setSigedMap(semilla)
+      return
+    }
+    setSigedCargando(true)
+    setSigedMap(semilla)
+    Promise.all(
+      faltantes.map(c =>
+        consultarSIGED(c, undefined, getToken() ?? undefined).then(r => ({ c, r }))
+      )
+    ).then(res => {
+      if (!vivo) return
+      const m: Record<string, SigedEscuela> = { ...semilla }
+      res.forEach(({ c, r }) => {
+        if (r.data) m[c] = r.data
+      })
+      setSigedMap(m)
+      setSigedCargando(false)
+    }).catch(() => {
+      if (vivo) setSigedCargando(false)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [])
 
     // Cálculo derivado largo * ancho (m²)
 const intervencion = Math.round(largo * ancho)
@@ -520,7 +560,7 @@ const generarPdf = async (): Promise<string> => {
                       <thead><tr><th>CLAVE</th><th>NIVEL</th><th>ALUMNOS</th></tr></thead>
                       <tbody>
                         {escuelasCct.map((cct, i) => {
-                          const match = sigedData && sigedData.cct.toUpperCase() === cct ? sigedData : null
+                          const match = sigedMap[cct] ?? (sigedData && sigedData.cct.toUpperCase() === cct ? sigedData : null)
                           return (
                             <tr key={i} className="ficha-esc-row">
                               <td><span contentEditable={!soloLectura} suppressContentEditableWarning>{cct}</span></td>
@@ -534,6 +574,13 @@ const generarPdf = async (): Promise<string> => {
                         })}
                       </tbody>
                     </table>
+                    {sigedCargando ? (
+                      <p className="ficha-hint">Validando en SEP…</p>
+                    ) : (
+                      escuelasCct.some(c => !sigedMap[c]) && (
+                        <p className="ficha-hint">CCT sin validar en SEP — editable manual</p>
+                      )
+                    )}
                   </div>
                 )}
               </div>
@@ -741,6 +788,7 @@ const generarPdf = async (): Promise<string> => {
           background: #f5eef2;
         }
         .ficha-esc-wrap { position: relative; display: inline-block; width: 100%; }
+        .ficha-hint { font-size: 9px; color: #999; margin-top: 2px; }
         .ficha-del-table-btn { position: absolute; top: -18px; right: 0; background: #41504D; color: #DBC6B3; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity 0.15s; z-index: 2; display: flex; align-items: center; justify-content: center; }
         .ficha-esc-wrap:hover .ficha-del-table-btn { opacity: 1; }
         .ficha-del-table-btn:hover { background: #c00; color: #fff; }

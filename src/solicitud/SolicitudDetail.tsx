@@ -192,6 +192,22 @@ useEffect(() => {
     })
   }, [s.latitud, s.longitud])
 
+  /** Reintento manual de SIGED (mismo flujo que el debounce, sin espera). */
+  const reintentarSiged = async () => {
+    if (sigedCct.length !== 10 || sigedLoading) return
+    setSigedLoading(true)
+    setSigedError(null)
+    const { data, error } = await consultarSIGED(sigedCct, undefined, getToken() ?? undefined)
+    if (error) {
+      setSigedError(error)
+      setSigedData(null)
+    } else if (data) {
+      setSigedData(data)
+      setSigedError(null)
+    }
+    setSigedLoading(false)
+  }
+
     // --- SIGED: debounce 500ms al escribir CCT de 10 chars, consulta y maneja data/error ---
 useEffect(() => {
     if (sigedCct.length !== 10) {
@@ -203,7 +219,7 @@ useEffect(() => {
     setSigedLoading(true)
     setSigedError(null)
     const timer = setTimeout(async () => {
-      const { data, error } = await consultarSIGED(sigedCct)
+      const { data, error } = await consultarSIGED(sigedCct, undefined, getToken() ?? undefined)
       if (cancelled) return
       if (error) {
         setSigedError(error)
@@ -1353,7 +1369,19 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                     </div>
 
                     {sigedError && (
-                      <p className="text-xs text-red-500">{sigedError}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="flex-1 text-xs text-red-500">{sigedError}</p>
+                        {sigedCct.length === 10 && (
+                          <button
+                            type="button"
+                            onClick={reintentarSiged}
+                            disabled={sigedLoading}
+                            className="shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-xs text-guinda transition-colors hover:bg-guinda/5 disabled:opacity-50"
+                          >
+                            {sigedLoading ? 'Buscando…' : 'Reintentar'}
+                          </button>
+                        )}
+                      </div>
                     )}
 
                     {sigedData && (
