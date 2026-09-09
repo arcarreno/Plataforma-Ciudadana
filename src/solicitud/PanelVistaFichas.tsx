@@ -8,7 +8,7 @@
  *
  * @props solicitudes - Página actual; grupos - racimos; onAbrir - abre el detalle.
  */
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, ExternalLink, Layers } from 'lucide-react'
 import VistaFichaEditable, { bannerPorPeso } from './VistaFichaEditable'
 import type { Solicitud } from '../types/solicitud'
@@ -60,6 +60,16 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir }: PanelVistaFichasProp
   /** ST seleccionada (por defecto la primera; si sale de la lista, vuelve a la primera). */
   const [selId, setSelId] = useState<number | null>(null)
   const actual = visibles.find(v => v.id_solicitud === selId) ?? visibles[0] ?? null
+  /** Altura real de la ficha para topar el sidebar (sin espacios sobrantes ni desbordes). */
+  const fichaRef = useRef<HTMLDivElement>(null)
+  const [altoFicha, setAltoFicha] = useState<number | null>(null)
+  useEffect(() => {
+    const el = fichaRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setAltoFicha(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [actual?.id_solicitud])
   const idx = actual ? visibles.findIndex(v => v.id_solicitud === actual.id_solicitud) : -1
   const totalGrupo = (() => {
     if (!actual || actual.id_solicitud == null) return 0
@@ -78,10 +88,11 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir }: PanelVistaFichasProp
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row">
-      {/* Sidebar de ST: lista scrolleable con activo resaltado */}
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      {/* Sidebar de ST: misma altura que la ficha, con scroll interno solo si hace falta */}
       <div
-        className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:max-h-[72vh] lg:min-h-[540px] lg:w-72 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:pb-0 lg:pr-1"
+        className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:w-72 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:pb-0 lg:pr-1"
+        style={altoFicha ? { maxHeight: altoFicha } : undefined}
         role="listbox"
         aria-label="Peticiones de la página"
       >
@@ -158,7 +169,7 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir }: PanelVistaFichasProp
           </div>
         </div>
         {actual && (
-          <div className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
+          <div ref={fichaRef} className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
             <VistaFichaEditable
               key={actual.id_solicitud}
               solicitud={actual}
