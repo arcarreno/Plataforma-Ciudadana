@@ -33,16 +33,34 @@ import mosaico from '../assets/elemento-Mosaico.svg'
 import ConsentModals from '../shared/ConsentModals'
 
 // --- Features de landing: 4 cards con icon y descripción ---
-const features = [
+// Las cards con `video` abren el modal reproductor al hacer clic.
+const features: {
+  icon: typeof ClipboardList
+  title: string
+  desc: string
+  video?: { src: string; titulo: string; descripcion: string }
+}[] = [
   {
     icon: ClipboardList,
     title: 'Solicita obras',
     desc: 'Reporta la necesidad de una obra pública en tu colonia de forma rápida y sencilla.',
+    video: {
+      src: '/videos/solicita-obras.mp4',
+      titulo: 'Solicita obras',
+      descripcion:
+        'Así de fácil reportas una obra pública en tu colonia: llena tus datos, marca la ubicación y recibe tu folio.',
+    },
   },
   {
     icon: MapPin,
     title: 'Ubicación en mapa',
     desc: 'Señala exactamente el lugar usando el mapa interactivo.',
+    video: {
+      src: '/videos/ubicacion-mapa.mp4',
+      titulo: 'Ubicación en mapa',
+      descripcion:
+        'Coloca el pin, traza el tramo y la plataforma extrae sola la distancia, el ancho y los datos del entorno.',
+    },
   },
   {
     icon: FileText,
@@ -52,7 +70,7 @@ const features = [
   {
     icon: Shield,
     title: 'Seguimiento',
-    desc: 'Consulta el estatus de tu solicitud con tu número de folio en cualquier momento.',
+    desc: 'Consulta el estatus de tu solicitud con tu CURP en cualquier momento.',
   },
 ]
 
@@ -87,8 +105,8 @@ export default function Inicio() {
   const [activePos, setActivePos] = useState(-1)
   const [rippleActive, setRippleActive] = useState(false)
   const [esMovil, setEsMovil] = useState(() => !window.matchMedia(MQ_DESKTOP).matches)
-  // Modal con el video demo de "Solicita obras" (se abre al hacer clic en su card)
-  const [videoOpen, setVideoOpen] = useState(false)
+  // Modal con video demo (según la card con video que se haya tocado)
+  const [videoActivo, setVideoActivo] = useState<{ src: string; titulo: string; descripcion: string } | null>(null)
   const dispRef = useRef<SVGFEDisplacementMapElement>(null)
   const rippleScale = useSpring(3, { stiffness: 180, damping: 15 })
 
@@ -204,14 +222,14 @@ useEffect(() => {
           onMouseEnter={() => setRippleActive(true)}
           onMouseLeave={() => setRippleActive(false)}
         >
-        {features.map((f, i) => (
-          i === 0 ? (
+        {features.map((f) => (
+          f.video ? (
           <button
             key={f.title}
             type="button"
-            onClick={() => setVideoOpen(true)}
+            onClick={() => f.video && setVideoActivo(f.video)}
             className="cursor-pointer rounded-2xl text-left transition-transform duration-200 hover:-translate-y-0.5"
-            title="Ver video: cómo solicitar una obra"
+            title={`Ver video: ${f.title}`}
           >
             <Card hover>
               <div className="flex flex-col items-center text-center">
@@ -246,13 +264,13 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* Modal con el video demo de Solicita obras */}
+      {/* Modal con el video demo de la card tocada */}
       <ModalVideo
-        open={videoOpen}
-        onClose={() => setVideoOpen(false)}
-        src="/videos/solicita-obras.mp4"
-        titulo="Solicita obras"
-        descripcion="Así de fácil reportas una obra pública en tu colonia: llena tus datos, marca la ubicación y recibe tu folio."
+        open={videoActivo != null}
+        onClose={() => setVideoActivo(null)}
+        src={videoActivo?.src ?? ''}
+        titulo={videoActivo?.titulo ?? ''}
+        descripcion={videoActivo?.descripcion ?? ''}
       />
 
             {/* Cómo funciona: desktop animado con activePos vs mobile grid estático */}
