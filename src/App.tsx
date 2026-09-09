@@ -34,6 +34,7 @@ import NuevaSolicitud from './pages/NuevaSolicitud'
 import ConsultarFolio from './pages/ConsultarFolio'
 import Consultar from './pages/Consultar'
 import Verificar from './pages/Verificar'
+import IniciarSesion from './pages/IniciarSesion'
 import AdminDashboard from './pages/AdminDashboard'
 import GestionUsuarios from './pages/GestionUsuarios'
 
@@ -69,6 +70,8 @@ export default function App() {
             <Route path="/consultar" element={<Consultar />} />
             {/* Verificación de correo para auto-registro (muestra PasswordSetupModal). */}
             <Route path="/verificar" element={<Verificar />} />
+            {/* Pestaña pública de acceso (login/registro sin contenedor). */}
+            <Route path="/iniciar-sesion" element={<IniciarSesion />} />
             {/* Panel de administración (requiere rol autorizado). */}
             <Route path="/admin" element={<AdminDashboard />} />
             {/* Gestión de usuarios operadores (solo admin). */}

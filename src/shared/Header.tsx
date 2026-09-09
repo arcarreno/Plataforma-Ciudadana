@@ -217,6 +217,20 @@ export default function Header({
               >
                 {user ? 'Consultar' : 'Consultar por CURP'}
               </Link>
+              {/* Pestaña de acceso — solo sin sesión (con sesión ya hay Peticiones + logout) */}
+              {!user && (
+                <Link
+                  to="/iniciar-sesion"
+                  data-active={isActive('/iniciar-sesion')}
+                  className={`relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                    isActive('/iniciar-sesion')
+                      ? 'text-white'
+                      : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
+                  }`}
+                >
+                  Iniciar sesión
+                </Link>
+              )}
             </nav>
 
 
