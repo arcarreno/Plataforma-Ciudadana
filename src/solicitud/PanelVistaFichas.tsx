@@ -8,7 +8,7 @@
  *
  * @props solicitudes - Página actual; grupos - racimos; onAbrir - abre el detalle.
  */
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, ExternalLink, Layers, Send } from 'lucide-react'
 import VistaFichaEditable, { bannerPorPeso } from './VistaFichaEditable'
 import type { Solicitud } from '../types/solicitud'
@@ -26,6 +26,8 @@ interface PanelVistaFichasProps {
   ocultarDetalle?: boolean
   /** Abre el modal de envío de fichas como paquete. */
   onEnviarFichas?: () => void
+  /** Título a la izquierda del contador (ej. leyenda del paquete). */
+  titulo?: ReactNode
 }
 
 /** Color del punto de prioridad (misma escala que banners y pines). */
@@ -40,7 +42,7 @@ function colorPunto(peso?: number | null): string {
  * Panel estilo PowerPoint: sidebar de ST + ficha grande con banner por prioridad.
  * Memoizado: solo re-renderiza si cambian página, grupos o el callback.
  */
-function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnviarFichas }: PanelVistaFichasProps) {
+function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnviarFichas, titulo }: PanelVistaFichasProps) {
   /** Mapa id -> racimo para el colapso. */
   const grupoDe = useMemo(() => {
     const m = new Map<number, GrupoCluster>()
@@ -147,8 +149,10 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
       {/* Ficha grande con banner por prioridad + navegación */}
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-gray-institutional/60">
-            Ficha {idx + 1} de {visibles.length}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            {titulo}
+            <p className="text-xs text-gray-institutional/60">
+              Ficha {idx + 1} de {visibles.length}
             {totalGrupo > 0 && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-guinda px-2 py-0.5 text-[10px] font-bold text-white">
                 <Layers className="h-3 w-3" />
@@ -156,6 +160,7 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
               </span>
             )}
           </p>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"

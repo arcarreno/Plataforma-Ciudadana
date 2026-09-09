@@ -65,22 +65,6 @@ export default function PaqueteDetalle() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          to="/paquetes"
-          className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-institutional transition-colors hover:bg-guinda/5 hover:text-guinda"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Paquetes
-        </Link>
-        {info && (
-          <p className="flex items-center gap-2 text-sm text-gray-institutional/60">
-            <Package className="h-4 w-4 text-guinda" />
-            Paquete #{info.id} · de {info.remitente} · {solicitudes.length} ficha(s)
-          </p>
-        )}
-      </div>
-
       {cargando ? (
         <div className="flex items-center justify-center py-24">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-guinda border-t-transparent" />
@@ -88,7 +72,28 @@ export default function PaqueteDetalle() {
       ) : error ? (
         <p className="py-10 text-center text-sm text-red-600">{error}</p>
       ) : (
-        <PanelVistaFichas solicitudes={solicitudes} grupos={grupos} ocultarDetalle />
+        <PanelVistaFichas
+          solicitudes={solicitudes}
+          grupos={grupos}
+          ocultarDetalle
+          titulo={
+            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <Link
+                to="/paquetes"
+                className="flex items-center gap-1.5 rounded-xl px-2 py-1 text-sm font-medium text-gray-institutional transition-colors hover:bg-guinda/5 hover:text-guinda"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Paquetes
+              </Link>
+              {info && (
+                <span className="flex items-center gap-2 text-sm text-gray-institutional/60">
+                  <Package className="h-4 w-4 text-guinda" />
+                  Paquete #{info.id} · de {info.remitente} · {solicitudes.length} ficha(s)
+                </span>
+              )}
+            </span>
+          }
+        />
       )}
     </div>
   )
