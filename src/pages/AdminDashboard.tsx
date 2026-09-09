@@ -42,7 +42,7 @@ import { ESTATUS_ACTIVOS } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
 import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users, Layers, LayoutGrid, Check } from 'lucide-react'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
-import FichaMiniatura from '../solicitud/FichaMiniatura'
+import PanelVistaFichas from '../solicitud/PanelVistaFichas'
 import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 import VistaBtTablasModal from '../shared/VistaBtTablas'
 import { exportarExcel } from '../lib/exportarExcel'
@@ -164,9 +164,11 @@ const handleEstatusChange = async (solicitud: Solicitud, nuevoEstatus: EstatusFa
     )
   }
 
+  /** Abre el detalle (estable para memoizar el panel de fichas). */
+  const abrirDetalle = useCallback((s: Solicitud) => setSelected(s), [])
+
   // Envío en lote a DGPP (modal grupal del detalle): bulk + optimista en lista/selected
-  const handleGrupoEstatusChange = async (ids: number[], nuevo: EstatusFase) => {
-    const res = await actualizarEstatusBulk(ids, nuevo, getToken() ?? undefined)
+  const handleGrupoEstatusChange = async (ids: number[], nuevo: EstatusFase) => {    const res = await actualizarEstatusBulk(ids, nuevo, getToken() ?? undefined)
     const marcadas = new Set(res.actualizadas)
     setSolicitudes(prev => prev.map(s =>
       s.id_solicitud != null && marcadas.has(s.id_solicitud) ? { ...s, estatus_fase: nuevo } : s
@@ -393,30 +395,11 @@ const handleExportarExcel = async () => {
       ) : (
         <>
         {vistaFichas ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {/* Vista de fichas: miniatura con banner por prioridad (mismo colapso de grupo) */}
-          {solicitudes.map(s => {
-            const grupo = s.id_solicitud != null ? grupoDe.get(s.id_solicitud) : undefined
-            const presentes = grupo
-              ? grupo.miembros.filter(m => solicitudes.some(x => x.id_solicitud === m.id_solicitud))
-              : []
-            const esRep = !!grupo && presentes.length >= 2
-              && [...presentes].sort((a, b) => (a.folio_unico || '').localeCompare(b.folio_unico || ''))[0].id_solicitud === s.id_solicitud
-            if (grupo && presentes.length >= 2 && !esRep) return null
-            const totalGrupo = esRep && grupo ? grupo.miembros.length : 0
-            return (
-              <div key={s.id_solicitud} className="relative">
-                {totalGrupo > 0 && (
-                  <span className="absolute -right-2 -top-2 z-10 flex items-center gap-1 rounded-full bg-guinda px-2.5 py-1 text-[10px] font-bold text-white shadow">
-                    <Layers className="h-3 w-3" />
-                    Grupo ×{totalGrupo}
-                  </span>
-                )}
-                <FichaMiniatura solicitud={s} onAbrir={() => setSelected(s)} />
-              </div>
-            )
-          })}
-        </div>
+          <PanelVistaFichas
+            solicitudes={solicitudes}
+            grupos={grupos}
+            onAbrir={abrirDetalle}
+          />
         ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {/* Grid responsive de cards con colores por prioridad y estatus */}

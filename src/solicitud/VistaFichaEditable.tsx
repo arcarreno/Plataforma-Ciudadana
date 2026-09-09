@@ -454,10 +454,7 @@ const generarPdf = async (): Promise<string> => {
           <div className="ficha-map-area">
             <div className="ficha-map-pill" style={{ backgroundColor: BANNERS[banner].color, color: BANNERS[banner].tinta }}>{tipoObraUpper}</div>
             <MapContainer ref={mapRef} center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging={!soloLectura} scrollWheelZoom={!soloLectura} doubleClickZoom={!soloLectura} touchZoom={!soloLectura} keyboard={false} preferCanvas>
-              {/* Sin TileLayer en miniatura: evita ~300 descargas por página (solo vectores) */}
-              {!soloLectura && (
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              )}
               {hasTramo && <Polyline positions={tramoPuntos!.map(p => [p.lat, p.lng])} pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }} />}
               {hasTramo && (
                 <>
