@@ -734,6 +734,8 @@ const generarPdf = async (): Promise<string> => {
           width: 932px; height: 16px;
           background: url('${mosaicosImg}') no-repeat bottom left;
           background-size: 932px 16px;
+          /* El PNG trae fondo blanco: con multiply toma el alabaster de atrás */
+          mix-blend-mode: multiply;
         }
         .ficha-footer-txt {
           position: absolute; bottom: 30px; left: 0; right: 0;
