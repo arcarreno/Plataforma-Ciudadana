@@ -35,6 +35,9 @@ import ConsultarFolio from './pages/ConsultarFolio'
 import Consultar from './pages/Consultar'
 import Verificar from './pages/Verificar'
 import IniciarSesion from './pages/IniciarSesion'
+import Chats from './pages/Chats'
+import Paquetes from './pages/Paquetes'
+import PaqueteDetalle from './pages/PaqueteDetalle'
 import AdminDashboard from './pages/AdminDashboard'
 import GestionUsuarios from './pages/GestionUsuarios'
 
@@ -72,6 +75,11 @@ export default function App() {
             <Route path="/verificar" element={<Verificar />} />
             {/* Pestaña pública de acceso (login/registro sin contenedor). */}
             <Route path="/iniciar-sesion" element={<IniciarSesion />} />
+            {/* Mensajería entre usuarios logueados (WebSocket + respaldo HTTP). */}
+            <Route path="/chats" element={<Chats />} />
+            {/* Paquetes de fichas recibidos/enviados + vista limpia de un paquete. */}
+            <Route path="/paquetes" element={<Paquetes />} />
+            <Route path="/paquetes/:id" element={<PaqueteDetalle />} />
             {/* Panel de administración (requiere rol autorizado). */}
             <Route path="/admin" element={<AdminDashboard />} />
             {/* Gestión de usuarios operadores (solo admin). */}

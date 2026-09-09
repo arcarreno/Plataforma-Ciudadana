@@ -63,10 +63,10 @@ export default function IniciarSesion() {
               <p className="text-xs text-white/70">
                 Reporta, consulta y da seguimiento a las obras de tu ciudad
               </p>
+              <p className="mt-2 text-[11px] font-semibold tracking-widest text-white/60">
+                SECRETARÍA DE MOVILIDAD E INFRAESTRUCTURA
+              </p>
             </div>
-            <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white">
-              SEMOVINFRA
-            </span>
           </div>
         </div>
       )}

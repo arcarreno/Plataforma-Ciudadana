@@ -9,19 +9,23 @@
  * @props solicitudes - Página actual; grupos - racimos; onAbrir - abre el detalle.
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, ExternalLink, Layers } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, Layers, Send } from 'lucide-react'
 import VistaFichaEditable, { bannerPorPeso } from './VistaFichaEditable'
 import type { Solicitud } from '../types/solicitud'
 import type { GrupoCluster } from '../lib/servidor'
 
-/** Props: página actual, racimos y callback para abrir el detalle. */
+/** Props: página actual, racimos y callbacks. */
 interface PanelVistaFichasProps {
-  /** Solicitudes de la página actual. */
+  /** Solicitudes de la página actual (o las del paquete). */
   solicitudes: Solicitud[]
   /** Racimos de concentración (para colapsar igual que en tarjetas). */
   grupos: GrupoCluster[]
-  /** Abre el detalle completo de la petición. */
-  onAbrir: (s: Solicitud) => void
+  /** Abre el detalle completo (ausente = vista de paquete, solo previsualiza). */
+  onAbrir?: (s: Solicitud) => void
+  /** Oculta el botón de detalle (vista de paquete). */
+  ocultarDetalle?: boolean
+  /** Abre el modal de envío de fichas como paquete. */
+  onEnviarFichas?: () => void
 }
 
 /** Color del punto de prioridad (misma escala que banners y pines). */
@@ -36,7 +40,7 @@ function colorPunto(peso?: number | null): string {
  * Panel estilo PowerPoint: sidebar de ST + ficha grande con banner por prioridad.
  * Memoizado: solo re-renderiza si cambian página, grupos o el callback.
  */
-function PanelVistaFichas({ solicitudes, grupos, onAbrir }: PanelVistaFichasProps) {
+function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnviarFichas }: PanelVistaFichasProps) {
   /** Mapa id -> racimo para el colapso. */
   const grupoDe = useMemo(() => {
     const m = new Map<number, GrupoCluster>()
@@ -158,14 +162,26 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir }: PanelVistaFichasProp
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+            {onEnviarFichas && (
+              <button
+                type="button"
+                onClick={onEnviarFichas}
+                className="inline-flex items-center gap-1.5 rounded-xl border-2 border-guinda px-4 py-2 text-sm font-medium text-guinda transition-all hover:bg-guinda/5 active:scale-[0.97]"
+              >
+                <Send className="h-4 w-4" />
+                Enviar fichas
+              </button>
+            )}
+            {!ocultarDetalle && (
             <button
               type="button"
-              onClick={() => actual && onAbrir(actual)}
+              onClick={() => actual && onAbrir?.(actual)}
               className="inline-flex items-center gap-1.5 rounded-xl bg-guinda px-4 py-2 text-sm font-medium text-white shadow-button transition-all hover:brightness-110 active:scale-[0.97]"
             >
               <ExternalLink className="h-4 w-4" />
               Abrir detalle
             </button>
+            )}
           </div>
         </div>
         {actual && (

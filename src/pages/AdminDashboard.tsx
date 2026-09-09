@@ -43,6 +43,7 @@ import type { EstatusFase } from '../core/constants'
 import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users, Layers, LayoutGrid, Check } from 'lucide-react'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
 import PanelVistaFichas from '../solicitud/PanelVistaFichas'
+import ModalEnviarFichas from '../solicitud/ModalEnviarFichas'
 import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 import VistaBtTablasModal from '../shared/VistaBtTablas'
 import { exportarExcel } from '../lib/exportarExcel'
@@ -85,6 +86,8 @@ export default function AdminDashboard() {
   const [grupos, setGrupos] = useState<GrupoCluster[]>([])
   /** Vista de fichas técnicas en lugar de tarjetas (todas las solicitudes de la página). */
   const [vistaFichas, setVistaFichas] = useState(false)
+  /** Modal de envío de fichas como paquete (solo en vista fichas). */
+  const [modalFichas, setModalFichas] = useState(false)
   const [opcionesAbierto, setOpcionesAbierto] = useState(false)
   const [verTablasAbierto, setVerTablasAbierto] = useState(false)
   const [exportando, setExportando] = useState(false)
@@ -399,6 +402,7 @@ const handleExportarExcel = async () => {
             solicitudes={solicitudes}
             grupos={grupos}
             onAbrir={abrirDetalle}
+            onEnviarFichas={() => setModalFichas(true)}
           />
         ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -588,6 +592,12 @@ const handleExportarExcel = async () => {
         onConfirm={handleEliminar}
         onCancel={() => setDeleteTarget(null)}
         loading={deleteLoading}
+      />
+
+      <ModalEnviarFichas
+        isOpen={modalFichas}
+        onClose={() => setModalFichas(false)}
+        cargarTodas={cargarTodasSolicitudes}
       />
 
       <VistaBtTablasModal

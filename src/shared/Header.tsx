@@ -187,6 +187,33 @@ export default function Header({
                   Mapas y Estadísticas
                 </Link>
               )}
+              {/* Chats y Paquetes — todos los perfiles logueados */}
+              {user && (
+                <Link
+                  to="/chats"
+                  data-active={isActive('/chats')}
+                  className={`relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                    isActive('/chats')
+                      ? 'text-white'
+                      : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
+                  }`}
+                >
+                  Chats
+                </Link>
+              )}
+              {user && (
+                <Link
+                  to="/paquetes"
+                  data-active={isActive('/paquetes')}
+                  className={`relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                    isActive('/paquetes')
+                      ? 'text-white'
+                      : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
+                  }`}
+                >
+                  Paquetes
+                </Link>
+              )}
               {/* Links estáticos (Inicio, Nueva Solicitud) */}
               {navLinks.map((link) => {
                 const active = isActive(link.to)
