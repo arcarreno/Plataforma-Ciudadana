@@ -66,6 +66,12 @@ const features: {
     icon: FileText,
     title: 'Acuse y Ficha',
     desc: 'Recibe tus comprobante por correo y descárgalo al instante.',
+    video: {
+      src: '/videos/acuse-ficha.mp4',
+      titulo: 'Acuse y Ficha',
+      descripcion:
+        'Tu ficha y tu oficio viajan por correo hasta tu bandeja: ábrelos y consérvalos.',
+    },
   },
   {
     icon: Shield,
