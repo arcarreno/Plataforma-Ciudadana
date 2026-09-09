@@ -523,6 +523,23 @@ export function actualizarContacto(
   )
 }
 
+/**
+ * Guarda la tabla manual de escuelas ({CCT: {nivel, alumnos}}) en BD.
+ * La ficha técnica lee nivel/total desde aquí (primera fuente).
+ */
+export function actualizarEscuelasDatos(
+  id: number,
+  datos: Record<string, { nivel: string; alumnos: number }>,
+  token?: string
+): Promise<{ ok: boolean; datos: Record<string, { nivel: string; alumnos: number }> }> {
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+  return api.patch<{ ok: boolean; datos: Record<string, { nivel: string; alumnos: number }> }>(
+    `/api/solicitudes/${id}/escuelas-datos`,
+    { datos },
+    headers ? { headers } : undefined
+  )
+}
+
 /** Borra una solicitud (solo admin) */
 export function eliminarSolicitud(id: number): Promise<{ ok: boolean }> {
   return api.delete<{ ok: boolean }>(`/api/solicitudes/${id}`)

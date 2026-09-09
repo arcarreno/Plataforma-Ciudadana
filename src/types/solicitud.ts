@@ -81,6 +81,8 @@ export interface Solicitud {
   cobertura_agua?: boolean
   /** Lista de escuelas cercanas detectadas por proximidad. */
   escuelas_cercanas?: string[]
+  /** Datos manuales por CCT ({ nivel, alumnos }): la ficha lee nivel/total de aquí. */
+  escuelas_datos?: Record<string, { nivel: string; alumnos: number }>
   /** Lista de iglesias cercanas detectadas por proximidad. */
   iglesias_cercanas?: string[]
   /** Lista de transportes cercanos detectados. */

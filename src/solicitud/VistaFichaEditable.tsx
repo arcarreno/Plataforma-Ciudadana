@@ -561,12 +561,15 @@ const generarPdf = async (): Promise<string> => {
                       <tbody>
                         {escuelasCct.map((cct, i) => {
                           const match = sigedMap[cct] ?? (sigedData && sigedData.cct.toUpperCase() === cct ? sigedData : null)
+                          const manual = s.escuelas_datos?.[cct]
+                          const nivel = manual?.nivel || match?.nivel || '—'
+                          const alumnos = manual != null ? manual.alumnos.toLocaleString('es-MX') : (match ? (match.alumnosHombres + match.alumnosMujeres) : '—')
                           return (
                             <tr key={i} className="ficha-esc-row">
                               <td><span contentEditable={!soloLectura} suppressContentEditableWarning>{cct}</span></td>
-                              <td><span contentEditable={!soloLectura} suppressContentEditableWarning>{match ? match.nivel : '—'}</span></td>
+                              <td><span contentEditable={!soloLectura} suppressContentEditableWarning>{nivel}</span></td>
                               <td className="ficha-alumnos-cell">
-                                <span contentEditable={!soloLectura} suppressContentEditableWarning>{match ? (match.alumnosHombres + match.alumnosMujeres) : '—'}</span>
+                                <span contentEditable={!soloLectura} suppressContentEditableWarning>{alumnos}</span>
                                 {!exporting && <button className="ficha-row-del-btn" onClick={() => removeEscuelaRow(cct)}>✕</button>}
                               </td>
                             </tr>
@@ -577,7 +580,7 @@ const generarPdf = async (): Promise<string> => {
                     {sigedCargando ? (
                       <p className="ficha-hint">Validando en SEP…</p>
                     ) : (
-                      escuelasCct.some(c => !sigedMap[c]) && (
+                      escuelasCct.some(c => s.escuelas_datos?.[c] == null && !sigedMap[c]) && (
                         <p className="ficha-hint">CCT sin validar en SEP — editable manual</p>
                       )
                     )}

@@ -35,11 +35,11 @@
  *  - Mutación directa de objeto s (s.calle=...) tras save para reflejar sin refetch (tradeoff).
  *  - Email docs: blur en activeElement contentEditable + 80ms delay para que DOM refleje edición.
  */
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { MapContainer, TileLayer, Polyline, useMap, GeoJSON } from 'react-leaflet'
 import L from 'leaflet'
 import { X, MapPin, Ruler, Eye, EyeOff, Layers, User, Phone, Mail, FileWarning, School, Church, Bus, FileText, Loader2, Navigation, Maximize2, Minimize2, Globe, Map, Pencil, Send, CheckCircle, PersonStanding } from 'lucide-react'
-import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud, grupoConcentracion, enviarDocumentacion, actualizarContacto, esFalloEnvio, FalloEnvioError } from '../lib/servidor'
+import { concentracionVecinos, actualizarGeo, actualizarObra, actualizarTramo, obtenerSolicitud, grupoConcentracion, enviarDocumentacion, actualizarContacto, esFalloEnvio, FalloEnvioError, actualizarEscuelasDatos } from '../lib/servidor'
 import type { MiembroGrupo } from '../lib/servidor'
 import { getToken } from '../lib/auth'
 import { urlEvidencia } from '../lib/api'
@@ -191,6 +191,49 @@ useEffect(() => {
       setDetection(detectarPunto(s.latitud, s.longitud, c))
     })
   }, [s.latitud, s.longitud])
+
+  /** Borrador de la tabla manual de escuelas ({CCT: {nivel, alumnos}}) + guardado. */
+  const [escDraft, setEscDraft] = useState<Record<string, { nivel: string; alumnos: string }>>({})
+  const [guardandoEsc, setGuardandoEsc] = useState(false)
+  const [msgEsc, setMsgEsc] = useState<string | null>(null)
+
+  /** CCTs de la tabla manual: cercadas + las ya guardadas (máx 10). */
+  const cctsManual = useMemo(() => [...new Set([
+    ...(s.escuelas_cercanas ?? []),
+    ...Object.keys(s.escuelas_datos ?? {}),
+  ])].slice(0, 10), [s.id_solicitud])
+
+  /** Sincroniza el borrador al cambiar de solicitud. */
+  useEffect(() => {
+    const d: Record<string, { nivel: string; alumnos: string }> = {}
+    cctsManual.forEach(c => {
+      const g = s.escuelas_datos?.[c]
+      d[c] = { nivel: g?.nivel ?? '', alumnos: g != null ? String(g.alumnos) : '' }
+    })
+    setEscDraft(d)
+    setMsgEsc(null)
+  }, [s.id_solicitud])
+
+  /** Guarda la tabla manual en BD (la ficha lee nivel/total de aquí). */
+  const guardarEscuelas = async () => {
+    if (s.id_solicitud == null) return
+    setGuardandoEsc(true)
+    setMsgEsc(null)
+    try {
+      const datos: Record<string, { nivel: string; alumnos: number }> = {}
+      for (const cct of cctsManual) {
+        const d = escDraft[cct] ?? { nivel: '', alumnos: '' }
+        datos[cct] = { nivel: d.nivel.trim(), alumnos: Math.max(0, parseInt(d.alumnos, 10) || 0) }
+      }
+      const res = await actualizarEscuelasDatos(s.id_solicitud, datos, getToken() ?? undefined)
+      s.escuelas_datos = res.datos ?? datos
+      setMsgEsc('Guardado')
+    } catch (err) {
+      setMsgEsc(err instanceof Error ? err.message : 'No se pudo guardar')
+    } finally {
+      setGuardandoEsc(false)
+    }
+  }
 
   /** Reintento manual de SIGED (mismo flujo que el debounce, sin espera). */
   const reintentarSiged = async () => {
@@ -1440,6 +1483,59 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                             <span className="text-xs text-gray-400">{sigedData.fuente}</span>
                           </div>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Escuelas manual: nivel + alumnos por CCT (persiste en BD, la ficha lee de aquí) */}
+                <Card title="Escuelas (manual)">
+                  <div className="flex flex-col gap-2 text-sm">
+                    <p className="text-xs text-gray-institutional/60">
+                      Nivel y alumnos por escuela — la ficha técnica los muestra desde aquí.
+                    </p>
+                    {cctsManual.length === 0 && (
+                      <p className="text-xs text-gray-institutional/50">Sin escuelas registradas en esta solicitud</p>
+                    )}
+                    {cctsManual.map(cct => (
+                      <div key={cct} className="grid grid-cols-[1fr_1fr_84px] items-center gap-2 text-xs">
+                        <span className="font-mono font-medium text-gray-institutional">{cct}</span>
+                        {puedeEditar ? (
+                          <input
+                            type="text"
+                            value={escDraft[cct]?.nivel ?? ''}
+                            onChange={e => setEscDraft(prev => ({ ...prev, [cct]: { nivel: e.target.value, alumnos: prev[cct]?.alumnos ?? '' } }))}
+                            placeholder="Nivel"
+                            className="min-w-0 rounded-lg border border-gray-200 px-2 py-1.5 outline-none focus:border-guinda"
+                          />
+                        ) : (
+                          <span className="text-gray-institutional">{s.escuelas_datos?.[cct]?.nivel || '—'}</span>
+                        )}
+                        {puedeEditar ? (
+                          <input
+                            type="number"
+                            min={0}
+                            value={escDraft[cct]?.alumnos ?? ''}
+                            onChange={e => setEscDraft(prev => ({ ...prev, [cct]: { nivel: prev[cct]?.nivel ?? '', alumnos: e.target.value } }))}
+                            placeholder="Alum."
+                            className="min-w-0 rounded-lg border border-gray-200 px-2 py-1.5 outline-none focus:border-guinda"
+                          />
+                        ) : (
+                          <span className="text-gray-institutional">{s.escuelas_datos?.[cct] != null ? s.escuelas_datos[cct].alumnos : '—'}</span>
+                        )}
+                      </div>
+                    ))}
+                    {puedeEditar && cctsManual.length > 0 && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={guardarEscuelas}
+                          disabled={guardandoEsc}
+                          className="rounded-xl bg-guinda px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-guinda/90 disabled:opacity-50"
+                        >
+                          {guardandoEsc ? 'Guardando…' : 'Guardar escuelas'}
+                        </button>
+                        {msgEsc && <span className="text-xs text-gray-institutional/60">{msgEsc}</span>}
                       </div>
                     )}
                   </div>
