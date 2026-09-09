@@ -27,7 +27,7 @@
  *
  * Props: solicitud, sigedData?, ref.
  * Helpers: cleanText (innerText trim NBSP), shortRoute (corta en " - ").
- * Assets: ficha-banner.png (gris) + variantes guinda/beige/blanco del pptx (BANNERS,
+ * Assets: ficha-banner.png (verde original) + variantes guinda/beige/blanco del pptx (BANNERS,
  * selector en la píldora con anillo en el actual; `tinta` pinta textos del banner y
  * píldora del mapa; `banner-claro` fuerza verde institucional en banners claros),
  * ficha-mosaicos.png (greca del pptx como footer), banner/footer CSS url.
@@ -46,18 +46,16 @@ import bannerImg from '../assets/ficha-banner.png'
 import bannerGuindaImg from '../assets/ficha-banner-guinda.png'
 import bannerBeigeImg from '../assets/ficha-banner-beige.png'
 import bannerBlancoImg from '../assets/ficha-banner-blanco.png'
-import bannerVerdeImg from '../assets/ficha-banner-verde.png'
 import mosaicosImg from '../assets/ficha-mosaicos.png'
 import pueblaImg from '../assets/Puebla.png'
 import { useFitScale, useElementHeight } from '../lib/useFitScale'
 
-/** Banners disponibles para la ficha (el gris es el actual/por defecto). */
+/** Banners disponibles para la ficha (el verde es el original/por defecto). */
 const BANNERS = {
-  gris: { img: bannerImg, color: '#41504D', nombre: 'Gris', tinta: '#FFFFFF' },
+  verde: { img: bannerImg, color: '#41504D', nombre: 'Verde', tinta: '#FFFFFF' },
   guinda: { img: bannerGuindaImg, color: '#7D2447', nombre: 'Guinda', tinta: '#FFFFFF' },
   beige: { img: bannerBeigeImg, color: '#DBC8B6', nombre: 'Beige', tinta: '#41504D' },
   blanco: { img: bannerBlancoImg, color: '#FFFFFF', nombre: 'Blanco', tinta: '#41504D' },
-  verde: { img: bannerVerdeImg, color: '#41504D', nombre: 'Verde', tinta: '#FFFFFF' },
 } as const
 
 /** Color de banner elegido en la píldora (fuera del área capturada al exportar). */
@@ -110,7 +108,7 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref, banne
   const [colonia] = useState(s.colonia || '')
   const [juntaAux] = useState(s.junta_auxiliar || '')
   /** Banner actual de la ficha (selector en la píldora PDF, o forzado por prioridad). */
-  const [banner, setBanner] = useState<BannerKey>(bannerForzado ?? 'gris')
+  const [banner, setBanner] = useState<BannerKey>(bannerForzado ?? 'verde')
   /** Si viene forzado (vista de fichas), se mantiene sincronizado. */
   useEffect(() => {
     if (bannerForzado) setBanner(bannerForzado)
@@ -617,7 +615,7 @@ const generarPdf = async (): Promise<string> => {
           height: 72px; width: auto; z-index: 2;
           pointer-events: none;
         }
-        /* Banners oscuros (guinda/gris): logo en blanco vía matriz inversa.
+        /* Banners oscuros (guinda/verde): logo en blanco vía matriz inversa.
            brightness(0) colapsa todo a negro e invert(1) lo vuelve blanco,
            conservando la transparencia (el texto calado muestra el banner). */
         .ficha-logo-puebla.blanco { filter: brightness(0) invert(1); }
