@@ -1392,7 +1392,7 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                   </div>
                 </Card>
 
-                <Card title="Datos SIGED (ficha técnica)">
+                <Card title="Datos SIGED">
                   <div className="flex flex-col gap-3 text-sm">
                     <p className="text-xs text-gray-institutional/60">
                       CCT de la escuela — se busca automáticamente para complementar la ficha técnica.
@@ -1489,7 +1489,7 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                 </Card>
 
                 {/* Escuelas manual: nivel + alumnos por CCT (persiste en BD, la ficha lee de aquí) */}
-                <Card title="Escuelas (manual)">
+                <Card title="Escuelas">
                   <div className="flex flex-col gap-2 text-sm">
                     <p className="text-xs text-gray-institutional/60">
                       Nivel y alumnos por escuela — la ficha técnica los muestra desde aquí.
