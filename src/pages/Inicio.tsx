@@ -22,9 +22,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { useSpring } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { ClipboardList, MapPin, FileText, Shield } from 'lucide-react'
+import { ClipboardList, MapPin, FileText, Shield, PlayCircle } from 'lucide-react'
 import Button from '../shared/Button'
 import Card from '../shared/Card'
+import ModalVideo from '../shared/ModalVideo'
 import { useAuth } from '../contexts/AuthContext'
 import { nombreCompleto, esCargoPublico } from '../types/auth'
 import logoSemovinfra from '../assets/Logo_Semovinfra.jpg'
@@ -86,6 +87,8 @@ export default function Inicio() {
   const [activePos, setActivePos] = useState(-1)
   const [rippleActive, setRippleActive] = useState(false)
   const [esMovil, setEsMovil] = useState(() => !window.matchMedia(MQ_DESKTOP).matches)
+  // Modal con el video demo de "Solicita obras" (se abre al hacer clic en su card)
+  const [videoOpen, setVideoOpen] = useState(false)
   const dispRef = useRef<SVGFEDisplacementMapElement>(null)
   const rippleScale = useSpring(3, { stiffness: 180, damping: 15 })
 
@@ -201,7 +204,32 @@ useEffect(() => {
           onMouseEnter={() => setRippleActive(true)}
           onMouseLeave={() => setRippleActive(false)}
         >
-        {features.map((f) => (
+        {features.map((f, i) => (
+          i === 0 ? (
+          <button
+            key={f.title}
+            type="button"
+            onClick={() => setVideoOpen(true)}
+            className="cursor-pointer rounded-2xl text-left transition-transform duration-200 hover:-translate-y-0.5"
+            title="Ver video: cómo solicitar una obra"
+          >
+            <Card hover>
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-guinda/10">
+                  <f.icon className="h-6 w-6 text-guinda" aria-hidden="true" />
+                </div>
+                <h3 className="font-semibold text-guinda">{f.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-gray-institutional/70">
+                  {f.desc}
+                </p>
+                <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-guinda/10 px-3 py-1.5 text-xs font-semibold text-guinda">
+                  <PlayCircle className="h-4 w-4" />
+                  Ver cómo funciona
+                </span>
+              </div>
+            </Card>
+          </button>
+          ) : (
           <Card key={f.title} hover>
             <div className="flex flex-col items-center text-center">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-guinda/10">
@@ -213,9 +241,19 @@ useEffect(() => {
               </p>
             </div>
           </Card>
+          )
         ))}
         </div>
       </section>
+
+      {/* Modal con el video demo de Solicita obras */}
+      <ModalVideo
+        open={videoOpen}
+        onClose={() => setVideoOpen(false)}
+        src="/videos/solicita-obras.mp4"
+        titulo="Solicita obras"
+        descripcion="Así de fácil reportas una obra pública en tu colonia: llena tus datos, marca la ubicación y recibe tu folio."
+      />
 
             {/* Cómo funciona: desktop animado con activePos vs mobile grid estático */}
   <section className="overflow-hidden py-4">
