@@ -21,8 +21,8 @@
  *    juntaAux display.
  *  - Export: snapshotMapa congela la vista en PNG (tiles+tramo+marcadores+píldora,
  *    fallback al mapa vivo) y se pinta sobre el mapa sin desmontarlo; generarPdf usa
- *    flushSync setExporting + html2canvas (scale1.5, bg #F5F0EB) -> jsPDF landscape
- *    px_scaling -> base64, más link clicable sobre la leyenda (pdf.link al Google Maps).
+ *    flushSync setExporting + html-to-image (render real del navegador, JPEG q0.8)
+ *    -> jsPDF landscape px_scaling -> base64, más link clicable sobre la leyenda.
  *    useImperativeHandle expone exportarPdf para envío email en SolicitudDetail.
  *
  * Props: solicitud, sigedData?, ref.
@@ -35,7 +35,7 @@
  */
 import { useState, useRef, useImperativeHandle } from 'react'
 import { flushSync } from 'react-dom'
-import html2canvas from 'html2canvas'
+import { toJpeg } from 'html-to-image'
 import jsPDF from 'jspdf'
 import { MapContainer, TileLayer, Polyline, Marker } from 'react-leaflet'
 import L from 'leaflet'
@@ -288,23 +288,29 @@ const generarPdf = async (): Promise<string> => {
     // Congela el mapa ANTES del flush: el PNG hereda la vista encuadrada actual.
     // Si falla, mapaEstatico queda null y se captura el mapa vivo como antes.
     const estatico = await snapshotMapa().catch(() => null)
-    // Forzar flush síncrono: html2canvas clona el DOM al instante y debe ver
-    // la clase .pdf-export (sin transform/overflow) para capturar a tamaño natural.
+    // Forzar flush síncrono: el clon debe ver la clase .pdf-export (sin transform/
+    // overflow) para capturar a tamaño natural.
     flushSync(() => {
       setExporting(true)
       setMapaEstatico(estatico)
     })
     try {
-      const canvas = await html2canvas(fichaRef.current, {
-        scale: 1.5,
-        useCORS: true,
-        allowTaint: true,
+      // Render real del navegador (SVG foreignObject): idéntico a pantalla,
+      // incluyendo fuentes Poppins y estilos Tailwind/Leaflet empaquetados.
+      const imgData = await toJpeg(fichaRef.current, {
+        quality: 0.8,
         backgroundColor: '#F5F0EB',
-        logging: false,
+        pixelRatio: 1.5,
+        cacheBust: true,
       })
-      const imgData = canvas.toDataURL('image/jpeg', 0.8)
-      const pdfW = canvas.width / 2
-      const pdfH = canvas.height / 2
+      const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+        img.onerror = () => reject(new Error('No se pudo leer la imagen generada'))
+        img.src = imgData
+      })
+      const pdfW = dims.w / 2
+      const pdfH = dims.h / 2
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'px',
