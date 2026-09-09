@@ -201,11 +201,16 @@ const tramoPuntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
       ctx.fillRect(0, 0, W, H)
       const zoom = map.getZoom()
       const pb = map.getPixelBounds()
+      const minX = pb?.min?.x
+      const minY = pb?.min?.y
+      const maxX = pb?.max?.x
+      const maxY = pb?.max?.y
+      if (minX == null || minY == null || maxX == null || maxY == null) return null
       const T = 256
-      const x0 = Math.floor(pb.min.x / T)
-      const x1 = Math.floor(pb.max.x / T)
-      const y0 = Math.floor(pb.min.y / T)
-      const y1 = Math.floor(pb.max.y / T)
+      const x0 = Math.floor(minX / T)
+      const x1 = Math.floor(maxX / T)
+      const y0 = Math.floor(minY / T)
+      const y1 = Math.floor(maxY / T)
       if ((x1 - x0 + 1) * (y1 - y0 + 1) > 48) return null
       const cargar = async (x: number, y: number): Promise<ImageBitmap | null> => {
         try {
@@ -224,7 +229,7 @@ const tramoPuntos = (s.tramo_puntos && s.tramo_puntos.length >= 2)
         }
       }
       for (const { x, y, img } of await Promise.all(pedidos)) {
-        if (img) ctx.drawImage(img, (x * T - pb.min.x) * K, (y * T - pb.min.y) * K, T * K, T * K)
+        if (img) ctx.drawImage(img, (x * T - minX) * K, (y * T - minY) * K, T * K, T * K)
       }
       // Polilínea del tramo + marcadores 1/2 (igual que el mapa vivo)
       if (hasTramo && tramoPuntos) {
