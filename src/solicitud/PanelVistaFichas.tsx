@@ -158,10 +158,7 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir }: PanelVistaFichasProp
           </div>
         </div>
         {actual && (
-          <div
-            className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card"
-            style={{ height: '72vh', minHeight: 540, maxHeight: 780 }}
-          >
+          <div className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
             <VistaFichaEditable
               key={actual.id_solicitud}
               solicitud={actual}
