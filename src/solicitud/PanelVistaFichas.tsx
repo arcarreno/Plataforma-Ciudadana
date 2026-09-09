@@ -66,6 +66,8 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
   const actual = visibles.find(v => v.id_solicitud === selId) ?? visibles[0] ?? null
   /** Altura real de la ficha para topar el sidebar (sin espacios sobrantes ni desbordes). */
   const fichaRef = useRef<HTMLDivElement>(null)
+  /** Contenedor del sidebar: el auto-scroll se queda dentro (nunca mueve la página). */
+  const listaRef = useRef<HTMLDivElement>(null)
   const [altoFicha, setAltoFicha] = useState<number | null>(null)
   useEffect(() => {
     const el = fichaRef.current
@@ -95,6 +97,7 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       {/* Sidebar de ST: misma altura que la ficha, con scroll interno solo si hace falta */}
       <div
+        ref={listaRef}
         className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:w-72 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:pb-0 lg:pr-1"
         style={altoFicha ? { maxHeight: altoFicha } : undefined}
         role="listbox"
@@ -108,7 +111,15 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
               type="button"
               role="option"
               aria-selected={activa}
-              ref={activa ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+              ref={activa ? (el) => {
+                const cont = listaRef.current
+                if (el && cont && cont.scrollHeight > cont.clientHeight) {
+                  cont.scrollTo({
+                    top: Math.max(0, el.offsetTop - cont.clientHeight / 2 + el.clientHeight / 2),
+                    behavior: 'smooth',
+                  })
+                }
+              } : undefined}
               onClick={() => setSelId(s.id_solicitud ?? null)}
               className={`flex min-w-[220px] items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all lg:min-w-0 ${
                 activa

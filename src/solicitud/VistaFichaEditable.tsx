@@ -444,7 +444,7 @@ const generarPdf = async (): Promise<string> => {
       )}
 
       {/* Ficha container */}
-      <div ref={scrollRef} className="ficha-scroll flex flex-1 items-start justify-center overflow-y-auto pt-16 pb-8">
+      <div ref={scrollRef} className={`ficha-scroll flex flex-1 items-start justify-center overflow-y-auto ${soloLectura ? 'py-4' : 'pt-16 pb-8'}`}>
         <div className="fit-wrap" style={{ width: FICHA_W * sFicha, height: docH * sFicha }}>
           <div ref={fichaRef} className={`ficha-gen fit-inner${bannerClaro ? ' banner-claro' : ''}`}
             style={{ transform: sFicha < 1 ? `scale(${sFicha})` : undefined, transformOrigin: 'top left' }}>
