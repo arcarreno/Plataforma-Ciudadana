@@ -529,11 +529,11 @@ export function actualizarContacto(
  */
 export function actualizarEscuelasDatos(
   id: number,
-  datos: Record<string, { nivel: string; alumnos: number }>,
+  datos: Record<string, { nivel: string; alumnos: string }>,
   token?: string
-): Promise<{ ok: boolean; datos: Record<string, { nivel: string; alumnos: number }> }> {
+): Promise<{ ok: boolean; datos: Record<string, { nivel: string; alumnos: string }> }> {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined
-  return api.patch<{ ok: boolean; datos: Record<string, { nivel: string; alumnos: number }> }>(
+  return api.patch<{ ok: boolean; datos: Record<string, { nivel: string; alumnos: string }> }>(
     `/api/solicitudes/${id}/escuelas-datos`,
     { datos },
     headers ? { headers } : undefined

@@ -220,10 +220,10 @@ useEffect(() => {
     setGuardandoEsc(true)
     setMsgEsc(null)
     try {
-      const datos: Record<string, { nivel: string; alumnos: number }> = {}
+      const datos: Record<string, { nivel: string; alumnos: string }> = {}
       for (const cct of cctsManual) {
         const d = escDraft[cct] ?? { nivel: '', alumnos: '' }
-        datos[cct] = { nivel: d.nivel.trim(), alumnos: Math.max(0, parseInt(d.alumnos, 10) || 0) }
+        datos[cct] = { nivel: d.nivel.trim(), alumnos: d.alumnos.trim().slice(0, 20) }
       }
       const res = await actualizarEscuelasDatos(s.id_solicitud, datos, getToken() ?? undefined)
       s.escuelas_datos = res.datos ?? datos
@@ -1513,15 +1513,15 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                         )}
                         {puedeEditar ? (
                           <input
-                            type="number"
-                            min={0}
+                            type="text"
                             value={escDraft[cct]?.alumnos ?? ''}
                             onChange={e => setEscDraft(prev => ({ ...prev, [cct]: { nivel: prev[cct]?.nivel ?? '', alumnos: e.target.value } }))}
-                            placeholder="Alum."
+                            placeholder="186 o Sin dato"
+                            list="opciones-alumnos"
                             className="min-w-0 rounded-lg border border-gray-200 px-2 py-1.5 outline-none focus:border-guinda"
                           />
                         ) : (
-                          <span className="text-gray-institutional">{s.escuelas_datos?.[cct] != null ? s.escuelas_datos[cct].alumnos : '—'}</span>
+                          <span className="text-gray-institutional">{s.escuelas_datos?.[cct] != null ? String(s.escuelas_datos[cct].alumnos || '—') : '—'}</span>
                         )}
                       </div>
                     ))}
@@ -1538,6 +1538,10 @@ const updateLista = (key: 'escuelas' | 'iglesias' | 'rutas', i: number, valor: s
                         {msgEsc && <span className="text-xs text-gray-institutional/60">{msgEsc}</span>}
                       </div>
                     )}
+                    <datalist id="opciones-alumnos">
+                      <option value="Indefinido" />
+                      <option value="Sin dato" />
+                    </datalist>
                   </div>
                 </Card>
               </div>

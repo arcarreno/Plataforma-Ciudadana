@@ -563,7 +563,8 @@ const generarPdf = async (): Promise<string> => {
                           const match = sigedMap[cct] ?? (sigedData && sigedData.cct.toUpperCase() === cct ? sigedData : null)
                           const manual = s.escuelas_datos?.[cct]
                           const nivel = manual?.nivel || match?.nivel || '—'
-                          const alumnos = manual != null ? manual.alumnos.toLocaleString('es-MX') : (match ? (match.alumnosHombres + match.alumnosMujeres) : '—')
+                          const al = manual != null ? String(manual.alumnos ?? '').trim() : ''
+                          const alumnos = al !== '' ? al : (match ? (match.alumnosHombres + match.alumnosMujeres) : '—')
                           return (
                             <tr key={i} className="ficha-esc-row">
                               <td><span contentEditable={!soloLectura} suppressContentEditableWarning>{cct}</span></td>
