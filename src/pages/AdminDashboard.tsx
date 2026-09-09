@@ -40,8 +40,9 @@ import { getToken } from '../lib/auth'
 import type { Solicitud } from '../types/solicitud'
 import { ESTATUS_ACTIVOS } from '../core/constants'
 import type { EstatusFase } from '../core/constants'
-import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users, Layers } from 'lucide-react'
+import { FileText, ArrowUpDown, Search, Ruler, Filter, ChevronLeft, ChevronRight, Trash2, ChevronDown, Table2, FileSpreadsheet, Users, Layers, LayoutGrid, Check } from 'lucide-react'
 import SolicitudDetail from '../solicitud/SolicitudDetail'
+import FichaMiniatura from '../solicitud/FichaMiniatura'
 import DeleteConfirmModal from '../shared/DeleteConfirmModal'
 import VistaBtTablasModal from '../shared/VistaBtTablas'
 import { exportarExcel } from '../lib/exportarExcel'
@@ -82,6 +83,8 @@ export default function AdminDashboard() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   /** Racimos de concentración para colapsar el grid en cards apiladas. */
   const [grupos, setGrupos] = useState<GrupoCluster[]>([])
+  /** Vista de fichas técnicas en lugar de tarjetas (todas las solicitudes de la página). */
+  const [vistaFichas, setVistaFichas] = useState(false)
   const [opcionesAbierto, setOpcionesAbierto] = useState(false)
   const [verTablasAbierto, setVerTablasAbierto] = useState(false)
   const [exportando, setExportando] = useState(false)
@@ -360,6 +363,18 @@ const handleExportarExcel = async () => {
                       </button>
                     </div>
                   )}
+                  {/* Vista de fichas: disponible para todos los perfiles logueados */}
+                  <div className="border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => { setVistaFichas(v => !v); setOpcionesAbierto(false) }}
+                      className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-guinda transition-colors hover:bg-guinda/5"
+                    >
+                      <LayoutGrid className="h-4 w-4 shrink-0" />
+                      <span className="flex-1">{vistaFichas ? 'Ver vista de tarjetas' : 'Ver vista de fichas'}</span>
+                      {vistaFichas && <Check className="h-4 w-4 shrink-0" />}
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -376,6 +391,33 @@ const handleExportarExcel = async () => {
           Ninguna solicitud coincide con la búsqueda.
         </p>
       ) : (
+        <>
+        {vistaFichas ? (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {/* Vista de fichas: miniatura con banner por prioridad (mismo colapso de grupo) */}
+          {solicitudes.map(s => {
+            const grupo = s.id_solicitud != null ? grupoDe.get(s.id_solicitud) : undefined
+            const presentes = grupo
+              ? grupo.miembros.filter(m => solicitudes.some(x => x.id_solicitud === m.id_solicitud))
+              : []
+            const esRep = !!grupo && presentes.length >= 2
+              && [...presentes].sort((a, b) => (a.folio_unico || '').localeCompare(b.folio_unico || ''))[0].id_solicitud === s.id_solicitud
+            if (grupo && presentes.length >= 2 && !esRep) return null
+            const totalGrupo = esRep && grupo ? grupo.miembros.length : 0
+            return (
+              <div key={s.id_solicitud} className="relative">
+                {totalGrupo > 0 && (
+                  <span className="absolute -right-2 -top-2 z-10 flex items-center gap-1 rounded-full bg-guinda px-2.5 py-1 text-[10px] font-bold text-white shadow">
+                    <Layers className="h-3 w-3" />
+                    Grupo ×{totalGrupo}
+                  </span>
+                )}
+                <FichaMiniatura solicitud={s} onAbrir={() => setSelected(s)} />
+              </div>
+            )
+          })}
+        </div>
+        ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {/* Grid responsive de cards con colores por prioridad y estatus */}
           {solicitudes.map(s => {
@@ -526,6 +568,8 @@ const handleExportarExcel = async () => {
             )
           })}
         </div>
+        )}
+        </>
       )}
 
       {totalPages > 1 && (

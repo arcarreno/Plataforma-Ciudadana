@@ -33,7 +33,7 @@
  * ficha-mosaicos.png (greca del pptx como footer), banner/footer CSS url.
  * Estilos: .ficha-gen 960x720, banner absolute, map-area 444x394, panel 432px, etc.
  */
-import { useState, useRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, useImperativeHandle } from 'react'
 import { flushSync } from 'react-dom'
 import { toJpeg } from 'html-to-image'
 import jsPDF from 'jspdf'
@@ -46,6 +46,7 @@ import bannerImg from '../assets/ficha-banner.png'
 import bannerGuindaImg from '../assets/ficha-banner-guinda.png'
 import bannerBeigeImg from '../assets/ficha-banner-beige.png'
 import bannerBlancoImg from '../assets/ficha-banner-blanco.png'
+import bannerVerdeImg from '../assets/ficha-banner-verde.png'
 import mosaicosImg from '../assets/ficha-mosaicos.png'
 import pueblaImg from '../assets/Puebla.png'
 import { useFitScale, useElementHeight } from '../lib/useFitScale'
@@ -56,10 +57,22 @@ const BANNERS = {
   guinda: { img: bannerGuindaImg, color: '#7D2447', nombre: 'Guinda', tinta: '#FFFFFF' },
   beige: { img: bannerBeigeImg, color: '#DBC8B6', nombre: 'Beige', tinta: '#41504D' },
   blanco: { img: bannerBlancoImg, color: '#FFFFFF', nombre: 'Blanco', tinta: '#41504D' },
+  verde: { img: bannerVerdeImg, color: '#41504D', nombre: 'Verde', tinta: '#FFFFFF' },
 } as const
 
 /** Color de banner elegido en la píldora (fuera del área capturada al exportar). */
 type BannerKey = keyof typeof BANNERS
+
+/**
+ * Banner forzado por prioridad (vista de fichas del panel): alta guinda,
+ * media-alta beige, media verde, baja blanco.
+ */
+export function bannerPorPeso(peso?: number | null): BannerKey {
+  if (peso != null && peso >= 15) return 'guinda'
+  if (peso === 12) return 'beige'
+  if (peso === 10) return 'verde'
+  return 'blanco'
+}
 
 // Ancho fijo de ficha 960px para impresión y escala responsive
 const FICHA_W = 960
@@ -75,15 +88,19 @@ function shortRoute(r: string): string {
 }
 
 
-/** Props: solicitud, sigedData opcional y ref para exportar base64. */
+/** Props: solicitud, sigedData opcional, ref para exportar base64, banner forzado y solo lectura. */
 interface Props {
   solicitud: Solicitud
   sigedData?: SigedEscuela | null
   ref?: React.Ref<{ exportarPdf: () => Promise<string> }>
+  /** Fija el banner (ignora el selector de la píldora). */
+  bannerForzado?: BannerKey
+  /** Miniatura de solo lectura: sin píldora, sin edición, mapa no interactivo. */
+  soloLectura?: boolean
 }
 
 // --- Ficha editable: estados largo/ancho, textos, CCTs, mapa y export ---
-export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Props) {
+export default function VistaFichaEditable({ solicitud: s, sigedData, ref, bannerForzado, soloLectura }: Props) {
   // largo/ancho editables; tipoObra/calle/entreCalles; colonia/junta fijas upper
   const [largo, setLargo] = useState(s.distancia_tramo_m ?? 0)
   const [ancho, setAncho] = useState(s.ancho_calle_m ?? 0)
@@ -92,8 +109,12 @@ export default function VistaFichaEditable({ solicitud: s, sigedData, ref }: Pro
   const [entreCalles, setEntreCalles] = useState(s.entre_calles || '')
   const [colonia] = useState(s.colonia || '')
   const [juntaAux] = useState(s.junta_auxiliar || '')
-  /** Banner actual de la ficha (selector en la píldora PDF). */
-  const [banner, setBanner] = useState<BannerKey>('gris')
+  /** Banner actual de la ficha (selector en la píldora PDF, o forzado por prioridad). */
+  const [banner, setBanner] = useState<BannerKey>(bannerForzado ?? 'gris')
+  /** Si viene forzado (vista de fichas), se mantiene sincronizado. */
+  useEffect(() => {
+    if (bannerForzado) setBanner(bannerForzado)
+  }, [bannerForzado])
   /** Banners claros (beige/blanco): textos del banner en verde institucional. */
   const bannerClaro = BANNERS[banner].tinta !== '#FFFFFF'
   /** Instancia Leaflet para congelar la vista en PNG al exportar. */
@@ -355,7 +376,8 @@ const generarPdf = async (): Promise<string> => {
   // --- JSX: banner, tipo obra, calle/entre/colonia, mapa, legend, panel datos técnicos y footer ---
   return (
     <div className={`${exporting ? 'pdf-export ' : ''}flex h-full flex-col bg-[#eaeaea]`}>
-      {/* Floating toolbar pill */}
+      {/* Floating toolbar pill (oculta en solo lectura) */}
+      {!soloLectura && (
       <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
         <div className="flex items-center gap-2 rounded-full border border-white/25 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md">
           {/* Selector de color de banner (no sale en el PDF: está fuera de fichaRef) */}
@@ -381,6 +403,7 @@ const generarPdf = async (): Promise<string> => {
           </button>
         </div>
       </div>
+      )}
 
       {/* Ficha container */}
       <div ref={scrollRef} className="ficha-scroll flex flex-1 items-start justify-center overflow-y-auto pt-16 pb-8">
@@ -397,7 +420,7 @@ const generarPdf = async (): Promise<string> => {
           />
 
           {/* Tipo de obra */}
-          <div className="ficha-tipo-obra" contentEditable suppressContentEditableWarning
+          <div className="ficha-tipo-obra" contentEditable={!soloLectura} suppressContentEditableWarning
             onBlur={e => setTipoObra(cleanText(e.currentTarget))}>
             {tipoObraUpper}
           </div>
@@ -405,14 +428,14 @@ const generarPdf = async (): Promise<string> => {
           {/* Banner texts in flow */}
           <div className="ficha-banner-texts">
             {/* Street */}
-            <div className="ficha-street-text" contentEditable suppressContentEditableWarning
+            <div className="ficha-street-text" contentEditable={!soloLectura} suppressContentEditableWarning
               onBlur={e => setCalle(cleanText(e.currentTarget))}>
               {calle}
             </div>
 
             {/* Entre calles */}
             {entreCalles && (
-              <div className="ficha-entre-calles" contentEditable suppressContentEditableWarning
+              <div className="ficha-entre-calles" contentEditable={!soloLectura} suppressContentEditableWarning
                 onBlur={e => setEntreCalles(cleanText(e.currentTarget))}>
                 {entreCalles}
               </div>
@@ -420,7 +443,7 @@ const generarPdf = async (): Promise<string> => {
 
             {/* Colonia + Junta (todo editable, una sola pieza) */}
             {ubicacionTexto && (
-              <div className="ficha-location-text ficha-editable" contentEditable suppressContentEditableWarning
+              <div className="ficha-location-text ficha-editable" contentEditable={!soloLectura} suppressContentEditableWarning
                 onBlur={e => setUbicacionTexto(cleanText(e.currentTarget))}>
                 {ubicacionTexto}
               </div>
@@ -430,9 +453,11 @@ const generarPdf = async (): Promise<string> => {
           {/* Map */}
           <div className="ficha-map-area">
             <div className="ficha-map-pill" style={{ backgroundColor: BANNERS[banner].color, color: BANNERS[banner].tinta }}>{tipoObraUpper}</div>
-            <MapContainer ref={mapRef} center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging scrollWheelZoom doubleClickZoom touchZoom keyboard={false} preferCanvas>
+            <MapContainer ref={mapRef} center={mapCenter} zoom={17} bounds={boundsFit ?? undefined} boundsOptions={boundsFit ? { padding: [24, 24] } : undefined} className="ficha-map-inner" zoomControl={false} dragging={!soloLectura} scrollWheelZoom={!soloLectura} doubleClickZoom={!soloLectura} touchZoom={!soloLectura} keyboard={false} preferCanvas>
+              {/* Sin TileLayer en miniatura: evita ~300 descargas por página (solo vectores) */}
+              {!soloLectura && (
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              )}
               {hasTramo && <Polyline positions={tramoPuntos!.map(p => [p.lat, p.lng])} pathOptions={{ color: '#7d2447', weight: 4, dashArray: '8 4' }} />}
               {hasTramo && (
                 <>
@@ -462,7 +487,7 @@ const generarPdf = async (): Promise<string> => {
             <div className="ficha-row">
               <div className="ficha-item">
                 <div className="ficha-label">Longitud (m)</div>
-                <div className="ficha-input" contentEditable suppressContentEditableWarning
+                <div className="ficha-input" contentEditable={!soloLectura} suppressContentEditableWarning
                   onBlur={e => setLargo(parseInt(cleanText(e.currentTarget), 10) || 0)}>
                   {largo > 0 ? String(largo) : ''}
                 </div>
@@ -475,7 +500,7 @@ const generarPdf = async (): Promise<string> => {
             <div className="ficha-row">
               <div className="ficha-item">
                 <div className="ficha-label">Ancho (m)</div>
-                <div className="ficha-input" contentEditable suppressContentEditableWarning
+                <div className="ficha-input" contentEditable={!soloLectura} suppressContentEditableWarning
                   onBlur={e => setAncho(parseFloat(cleanText(e.currentTarget)) || 0)}>
                   {ancho > 0 ? String(ancho) : ''}
                 </div>
@@ -503,10 +528,10 @@ const generarPdf = async (): Promise<string> => {
                           const match = sigedData && sigedData.cct.toUpperCase() === cct ? sigedData : null
                           return (
                             <tr key={i} className="ficha-esc-row">
-                              <td><span contentEditable suppressContentEditableWarning>{cct}</span></td>
-                              <td><span contentEditable suppressContentEditableWarning>{match ? match.nivel : '—'}</span></td>
+                              <td><span contentEditable={!soloLectura} suppressContentEditableWarning>{cct}</span></td>
+                              <td><span contentEditable={!soloLectura} suppressContentEditableWarning>{match ? match.nivel : '—'}</span></td>
                               <td className="ficha-alumnos-cell">
-                                <span contentEditable suppressContentEditableWarning>{match ? (match.alumnosHombres + match.alumnosMujeres) : '—'}</span>
+                                <span contentEditable={!soloLectura} suppressContentEditableWarning>{match ? (match.alumnosHombres + match.alumnosMujeres) : '—'}</span>
                                 {!exporting && <button className="ficha-row-del-btn" onClick={() => removeEscuelaRow(cct)}>✕</button>}
                               </td>
                             </tr>
