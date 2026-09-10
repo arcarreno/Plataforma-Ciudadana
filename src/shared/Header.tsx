@@ -25,6 +25,7 @@ import logoPuebla from '../assets/Puebla.png'
 import mosaico from '../assets/mosaico.svg'
 import NavigationPanel from './NavigationPanel'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotificaciones } from '../contexts/NotificacionesContext'
 
 /** Props del Header. */
 interface HeaderProps {
@@ -49,6 +50,8 @@ export default function Header({
 }: HeaderProps) {
   // Contexto de autenticación: usuario actual y función de cierre de sesión
   const { user, cerrarSesion } = useAuth()
+  // No leídos para badges de Chats/Paquetes (los calcula el provider global)
+  const { chatsNuevos, paquetesNuevos } = useNotificaciones()
   const location = useLocation()
   const navigate = useNavigate()
   /** Ref al elemento <nav> para medir posición del indicador. */
@@ -199,6 +202,13 @@ export default function Header({
                   }`}
                 >
                   Chats
+                  {chatsNuevos > 0 && (
+                    <span className={`ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                      isActive('/chats') ? 'bg-white text-guinda' : 'bg-guinda text-white'
+                    }`}>
+                      {chatsNuevos > 99 ? '99+' : chatsNuevos}
+                    </span>
+                  )}
                 </Link>
               )}
               {user && (
@@ -212,6 +222,13 @@ export default function Header({
                   }`}
                 >
                   Paquetes
+                  {paquetesNuevos > 0 && (
+                    <span className={`ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                      isActive('/paquetes') ? 'bg-white text-guinda' : 'bg-guinda text-white'
+                    }`}>
+                      {paquetesNuevos > 99 ? '99+' : paquetesNuevos}
+                    </span>
+                  )}
                 </Link>
               )}
               {/* Links estáticos (Inicio, Nueva Solicitud) */}

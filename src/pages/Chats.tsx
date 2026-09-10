@@ -3,16 +3,18 @@
  * @description Mensajería en tiempo real entre usuarios logueados. Izquierda:
  * buscador + botón de nueva conversación (directorio) + lista de chats con
  * último mensaje y no leídos. Derecha: hilo con burbujas, auto-scroll y caja
- * de envío (Enter). WebSocket primario con reintento; HTTP de respaldo si cae.
- * Refresca la lista cada 20s y ante cada evento (mensaje nuevo o paquete).
+ * de envío (Enter). Usa el WebSocket único del NotificacionesProvider (toasts
+ * y badges globales); HTTP de respaldo si cae. Si la lectura falla (sin
+ * conexión, sesión expirada o modo respaldo) muestra banner explícito en vez
+ * de un vacío engañoso.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { MessageCircle, Search, Send, UserPlus, Wifi, WifiOff } from 'lucide-react'
+import { MessageCircle, Search, Send, TriangleAlert, UserPlus, Wifi, WifiOff } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotificaciones, type MensajeVivo } from '../contexts/NotificacionesContext'
 import { getToken } from '../lib/auth'
 import {
-  conectarChat,
   listarConversaciones,
   listarMensajes,
   listarUsuariosChat,
@@ -28,8 +30,26 @@ function nombreDe(c: { nombres: string; apellidos: string; username: string }): 
   return n || c.username
 }
 
+/** Banner explícito cuando la lectura falla (nunca un vacío silencioso). */
+function BannerFallo({ fallo }: { fallo: 'respaldo' | 'auth' | 'red' }) {
+  const texto =
+    fallo === 'respaldo'
+      ? 'Sesión en modo respaldo: sin conexión con el servidor. Chats no disponibles hasta re-conectar.'
+      : fallo === 'auth'
+        ? 'Sesión expirada o sin permiso. Cierra sesión e inicia de nuevo para ver tus chats.'
+        : 'Sin conexión con el servidor. Revisa tu internet o la URL del servidor.'
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+      <TriangleAlert className="h-4 w-4 shrink-0" />
+      <span>{texto}</span>
+    </div>
+  )
+}
+
 export default function Chats() {
   const { user } = useAuth()
+  // WS único, estado de conexión y fallo de lectura (los maneja el provider global)
+  const { conectado, fallo, enviarMensaje, suscribirHilo, refrescar } = useNotificaciones()
   const token = getToken() ?? undefined
   const [convs, setConvs] = useState<Conversacion[]>([])
   const [usuarios, setUsuarios] = useState<ChatUsuario[]>([])
@@ -38,10 +58,8 @@ export default function Chats() {
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
   const [texto, setTexto] = useState('')
   const [busqueda, setBusqueda] = useState('')
-  const [conectado, setConectado] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [mostrarDir, setMostrarDir] = useState(false)
-  const chatCtl = useRef<ReturnType<typeof conectarChat> | null>(null)
   const hiloRef = useRef<HTMLDivElement>(null)
 
   /** Recarga conversaciones (y limpia no leídos del hilo abierto al pedirlo). */
@@ -79,27 +97,19 @@ export default function Chats() {
     return () => window.clearInterval(id)
   }, [user, token, recargarConvs])
 
-  // WebSocket: mensaje entrante (agrega si es el hilo abierto + refresca lista).
+  // Suscripción al hilo abierto: los mensajes en vivo llegan del WS único
+  // (el provider suprime el toast porque el hilo está a la vista).
   useEffect(() => {
-    if (!user || !token) return
-    const ctl = conectarChat(token, (ev) => {
-      if (ev.tipo === 'mensaje') {
-        setSelId((actual) => {
-          if (actual === ev.conversacion_id) {
-            setMensajes((prev) => [...prev, {
-              id: ev.id, remitente_id: ev.remitente_id, texto: ev.texto, leido: true, fecha: ev.fecha,
-            }])
-          }
-          return actual
-        })
-        void recargarConvs()
-      } else if (ev.tipo === 'paquete') {
-        window.alert(`Paquete de fichas recibido de ${ev.de ?? 'un usuario'} (${ev.total ?? 0}). Revísalo en Paquetes.`)
-      }
-    }, setConectado)
-    chatCtl.current = ctl
-    return () => ctl.cerrar()
-  }, [user, token, recargarConvs])
+    if (!user || selId == null) return
+    return suscribirHilo(selId, (m: MensajeVivo) => {
+      setMensajes((prev) => {
+        if (prev.some((x) => x.id === m.id)) return prev
+        return [...prev, { id: m.id, remitente_id: m.remitente_id, texto: m.texto, leido: true, fecha: m.fecha }]
+      })
+      void recargarConvs()
+      refrescar()
+    })
+  }, [user, selId, suscribirHilo, recargarConvs, refrescar])
 
   // Auto-scroll del hilo al llegar mensajes.
   useEffect(() => {
@@ -132,7 +142,7 @@ export default function Chats() {
     if (!t || otroId == null || enviando) return
     setEnviando(true)
     try {
-      const porWs = chatCtl.current?.enviar(otroId, t) ?? false
+      const porWs = enviarMensaje(otroId, t)
       if (porWs) {
         // El servidor confirma por WS; agregamos optimista con id temporal negativo.
         const tmp = -Date.now()
@@ -150,6 +160,7 @@ export default function Chats() {
           }])
           void recargarConvs()
         }
+        refrescar()
         setTexto('')
       }
     } catch {
@@ -163,6 +174,7 @@ export default function Chats() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 lg:flex-row">
       {/* Columna izquierda: buscador + directorio + conversaciones */}
       <div className="flex shrink-0 flex-col gap-2 lg:w-80">
+        {fallo !== 'ninguno' && <BannerFallo fallo={fallo} />}
         <div className="flex items-center gap-2 rounded-xl border-2 border-alabaster-dark/30 bg-alabaster/30 px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-gray-institutional/40" />
           <input

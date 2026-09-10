@@ -15,6 +15,7 @@
  */
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotificaciones } from '../contexts/NotificacionesContext'
 
 /** Props del panel de navegación móvil. */
 interface NavigationPanelProps {
@@ -37,6 +38,7 @@ const navLinks = [
 export default function NavigationPanel({ open, onClose }: NavigationPanelProps) {
   // Usuario actual para mostrar/ocultar links de administración
   const { user } = useAuth()
+  const { chatsNuevos, paquetesNuevos } = useNotificaciones()
   const location = useLocation()
 
   return (
@@ -149,7 +151,14 @@ export default function NavigationPanel({ open, onClose }: NavigationPanelProps)
                   : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
               }`}
             >
-              Chats
+              <span className="flex-1">Chats</span>
+              {chatsNuevos > 0 && (
+                <span className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                  location.pathname === '/chats' ? 'bg-white text-guinda' : 'bg-guinda text-white'
+                }`}>
+                  {chatsNuevos > 99 ? '99+' : chatsNuevos}
+                </span>
+              )}
             </Link>
           )}
           {user && (
@@ -162,7 +171,14 @@ export default function NavigationPanel({ open, onClose }: NavigationPanelProps)
                   : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
               }`}
             >
-              Paquetes
+              <span className="flex-1">Paquetes</span>
+              {paquetesNuevos > 0 && (
+                <span className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                  location.pathname.startsWith('/paquetes') ? 'bg-white text-guinda' : 'bg-guinda text-white'
+                }`}>
+                  {paquetesNuevos > 99 ? '99+' : paquetesNuevos}
+                </span>
+              )}
             </Link>
           )}
 

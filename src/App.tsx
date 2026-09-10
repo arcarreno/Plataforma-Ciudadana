@@ -27,6 +27,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { NotificacionesProvider } from './contexts/NotificacionesContext'
 import Layout from './shared/Layout'
 import ModalPrecarga from './shared/ModalPrecarga'
 import Inicio from './pages/Inicio'
@@ -60,6 +61,8 @@ export default function App() {
     <BrowserRouter>
       {/* Provee `user`, `iniciarSesion`, `cerrarSesion` a toda la app vía contexto. */}
       <AuthProvider>
+        {/* WS único + contadores + toasts de mensajes/paquetes para toda la sesión. */}
+        <NotificacionesProvider>
         <Routes>
           {/* Ruta padre que renderiza `Layout` (header/nav/footer) y outlet para hijas. */}
           <Route element={<Layout />}>
@@ -99,6 +102,7 @@ export default function App() {
         </Routes>
         {/* Modal global de precarga (ej. voces TalkBack); se monta fuera de Routes pero dentro de AuthProvider. */}
         <ModalPrecarga />
+        </NotificacionesProvider>
       </AuthProvider>
     </BrowserRouter>
   )

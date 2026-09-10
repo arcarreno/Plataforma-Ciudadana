@@ -25,6 +25,7 @@ import { Toaster } from 'sileo'
 import 'sileo/styles.css'
 import type { FontSize, Contrast, VoiceType } from '../core/theme'
 import { useTalkBack } from '../hooks/useTalkBack'
+import { useNotificaciones } from '../contexts/NotificacionesContext'
 import Header from './Header'
 import Footer from './Footer'
 import AccessibilityPanel from './AccessibilityPanel'
@@ -82,6 +83,9 @@ export default function Layout() {
    */
   useTalkBack(talkBackEnabled, voiceType)
 
+  /** Fallo de lectura de chats/paquetes (sesión degradada → banner global). */
+  const { fallo } = useNotificaciones()
+
   /**
    * Efecto: sincroniza el estado `fontSize` con el atributo `data-font-size`
    * en `<html>`. El CSS global reacciona a este atributo para escalar fuentes.
@@ -105,6 +109,13 @@ export default function Layout() {
         navOpen={navOpen}
         onNavToggle={() => setNavOpen((p) => !p)} // Toggle del panel de navegación
       />
+      {/* Banner global: sesión en modo respaldo (chats/paquetes no disponibles) */}
+      {fallo === 'respaldo' && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-800">
+          Sesión en modo respaldo: no hay conexión con el servidor, por eso Chats y Paquetes aparecen vacíos.
+          Revisa la conexión y vuelve a iniciar sesión.
+        </div>
+      )}
             {/* Área principal de contenido — max-width centrado, animada con framer-motion por cambio de ruta */}
             <main className="mx-auto w-full max-w-[1400px] flex-1 overflow-x-hidden px-4 py-6 md:px-8 lg:px-12">
         <motion.div

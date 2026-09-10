@@ -2,12 +2,14 @@
  * @file Paquetes.tsx
  * @description Pestaña limpia de paquetes de fichas: recibidos (con badge de
  * nuevo) y enviados. Abrir uno navega a `/paquetes/:id`, donde se ven
- * únicamente esas fichas. Requiere sesión.
+ * únicamente esas fichas. Requiere sesión. Si la lectura falla muestra banner
+ * explícito (sin conexión / sesión expirada / modo respaldo) en vez de vacío.
  */
 import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { Inbox, Package, Send } from 'lucide-react'
+import { Inbox, Package, Send, TriangleAlert } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotificaciones } from '../contexts/NotificacionesContext'
 import { getToken } from '../lib/auth'
 import { paquetesRecibidos, paquetesEnviados, type PaqueteResumen } from '../lib/chat'
 
@@ -22,6 +24,7 @@ function fechaCorta(iso: string): string {
 
 export default function Paquetes() {
   const { user } = useAuth()
+  const { fallo } = useNotificaciones()
   const [tab, setTab] = useState<'recibidos' | 'enviados'>('recibidos')
   const [recibidos, setRecibidos] = useState<PaqueteResumen[]>([])
   const [enviados, setEnviados] = useState<PaqueteResumen[]>([])
@@ -59,6 +62,19 @@ export default function Paquetes() {
           Cada paquete muestra únicamente las fichas que te enviaron
         </p>
       </div>
+
+      {fallo !== 'ninguno' && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          <TriangleAlert className="h-4 w-4 shrink-0" />
+          <span>
+            {fallo === 'respaldo'
+              ? 'Sesión en modo respaldo: sin conexión con el servidor. Los paquetes no están disponibles hasta re-conectar.'
+              : fallo === 'auth'
+                ? 'Sesión expirada o sin permiso. Cierra sesión e inicia de nuevo para ver tus paquetes.'
+                : 'Sin conexión con el servidor. Revisa tu internet o la URL del servidor.'}
+          </span>
+        </div>
+      )}
 
       <div className="flex gap-2">
         {(['recibidos', 'enviados'] as const).map((t) => (
