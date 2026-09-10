@@ -171,6 +171,8 @@ export function NotificacionesProvider({ children }: { children: ReactNode }) {
         } else if (ev.tipo === 'paquete') {
           if (ev.es_respuesta) {
             toastNotificacion('success', 'Respuesta de paquete recibida', `De ${ev.de ?? 'un usuario'} (${ev.total ?? 0} fichas). Revísala en Paquetes → Respuestas.`)
+          } else if (ev.actualizado) {
+            toastNotificacion('info', 'Paquete actualizado', `El paquete #${ev.paquete_id} ahora tiene ${ev.total ?? 0} ficha(s).`)
           } else {
             toastNotificacion('success', 'Paquete de fichas recibido', `De ${ev.de ?? 'un usuario'} (${ev.total ?? 0}). Revísalo en Paquetes.`)
           }

@@ -51,7 +51,7 @@ export interface Mensaje {
 export type EventoChat =
   | { tipo: 'mensaje'; conversacion_id: number; id: number; remitente_id: number; texto: string; fecha: string }
   | { tipo: 'ok'; id: number; conversacion_id: number; fecha: string }
-  | { tipo: 'paquete'; paquete_id: number; de?: string; total?: number; es_respuesta?: boolean }
+  | { tipo: 'paquete'; paquete_id: number; de?: string; total?: number; es_respuesta?: boolean; actualizado?: boolean }
 
 /** Resumen de paquete recibido/enviado. */
 export interface PaqueteResumen {
@@ -118,6 +118,19 @@ export function paquetesEnviados(token?: string): Promise<{ data: PaqueteResumen
 /** Respuestas a mis paquetes (las contestó el destinatario). */
 export function respuestasRecibidas(token?: string): Promise<{ data: PaqueteResumen[] }> {
   return api.get<{ data: PaqueteResumen[] }>('/api/paquetes/respuestas', auth(token))
+}
+
+/**
+ * Agrega fichas a un paquete enviado (solo el remitente, no respuestas).
+ * @param pid - Paquete a ampliar.
+ * @param ids - IDs a agregar (se ignoran los ya incluidos).
+ */
+export function agregarFichasPaquete(
+  pid: number,
+  ids: number[],
+  token?: string
+): Promise<{ data: { id: number; total: number; agregadas: number } }> {
+  return api.patch(`/api/paquetes/${pid}/fichas`, { agregar_ids: ids }, auth(token))
 }
 
 /**
