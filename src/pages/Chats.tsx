@@ -20,7 +20,7 @@ import { sileo } from 'sileo'
 import { useAuth } from '../contexts/AuthContext'
 import { useNotificaciones, type MensajeVivo } from '../contexts/NotificacionesContext'
 import { getToken } from '../lib/auth'
-import { estadoPush, registrarPush, type EstadoPush } from '../lib/push'
+import { estadoPush, registrarPush, ayudaPush, type EstadoPush } from '../lib/push'
 import {
   listarConversaciones,
   listarMensajes,
@@ -86,38 +86,51 @@ function BotonPush() {
     'sin-llave': 'Push no configurado en este servidor todavía',
   }
 
-  const activar = async () => {
-    if (estado !== 'sin-permiso' || activando) return
+  const alPresionar = async () => {
+    if (activando) return
+    if (estado === 'activas') {
+      toastPush('success', 'Ya están activadas', 'Te avisaremos aunque cierres la app.')
+      return
+    }
+    if (estado !== 'sin-permiso') {
+      // Explica la solución exacta (permiso denegado, iPhone, sin llave…).
+      const motivo = estado === 'bloqueadas' ? 'permiso-denegado' : estado === 'no-disponible' ? 'no-soportado' : estado
+      toastPush('error', 'Notificaciones del sistema', await ayudaPush(motivo))
+      if (estado === 'bloqueadas') {
+        // Relee por si ya lo permitió en Ajustes y volvió.
+        setEstado(await estadoPush())
+      }
+      return
+    }
     setActivando(true)
     try {
-      const ok = await registrarPush(getToken() ?? '')
+      const r = await registrarPush(getToken() ?? '')
       const nuevo = await estadoPush()
-      setEstado(nuevo)
-      if (ok && nuevo === 'activas') {
+      setEstado(r.ok && nuevo === 'activas' ? 'activas' : nuevo)
+      if (r.ok) {
         toastPush('success', 'Notificaciones activadas', 'Te avisaremos aunque cierres la app.')
       } else {
-        toastPush('error', 'No se pudo activar', 'Revisa el permiso en el candado de la URL e inténtalo de nuevo.')
+        toastPush('error', 'No se pudo activar', await ayudaPush(r.motivo))
       }
     } finally {
       setActivando(false)
     }
   }
 
-  const esBoton = estado === 'sin-permiso'
   const cls =
     estado === 'activas'
       ? 'text-green-700 hover:bg-green-50'
-      : esBoton
+      : estado === 'sin-permiso'
         ? 'text-amber-600 hover:bg-amber-50'
-        : 'text-gray-400'
+        : 'text-gray-400 hover:bg-gray-100'
   return (
     <button
       type="button"
-      onClick={esBoton ? () => void activar() : undefined}
+      onClick={() => void alPresionar()}
       disabled={activando}
       title={ayuda[estado]}
       aria-label="Estado de notificaciones del sistema"
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${cls} ${esBoton ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors ${cls}`}
     >
       {estado === 'activas'
         ? <BellRing className="h-[18px] w-[18px]" />
