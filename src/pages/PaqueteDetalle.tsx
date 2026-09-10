@@ -205,6 +205,7 @@ export default function PaqueteDetalle() {
             solicitudes={solicitudes}
             grupos={grupos}
             ocultarDetalle
+            sinColapsar
             seleccionRespuesta={modoRespuesta ? { seleccionados: aceptadas, onToggle: alternar } : null}
             aceptadas={veredictos}
             titulo={

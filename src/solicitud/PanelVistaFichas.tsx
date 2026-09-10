@@ -28,6 +28,8 @@ interface PanelVistaFichasProps {
   onEnviarFichas?: () => void
   /** Título a la izquierda del contador (ej. leyenda del paquete). */
   titulo?: ReactNode
+  /** Sin colapso de grupos: muestra TODAS (para paquetes, donde cada elegida cuenta). */
+  sinColapsar?: boolean
   /** Checklist de respuesta: checkbox por ST + toggle (ausente = sin checklist). */
   seleccionRespuesta?: { seleccionados: Set<number>; onToggle: (id: number) => void } | null
   /** Veredictos de una respuesta enviada: ids aceptados (los demás = rechazados). */
@@ -46,7 +48,7 @@ function colorPunto(peso?: number | null): string {
  * Panel estilo PowerPoint: sidebar de ST + ficha grande con banner por prioridad.
  * Memoizado: solo re-renderiza si cambian página, grupos o el callback.
  */
-function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnviarFichas, titulo, seleccionRespuesta, aceptadas }: PanelVistaFichasProps) {
+function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnviarFichas, titulo, sinColapsar, seleccionRespuesta, aceptadas }: PanelVistaFichasProps) {
   /** Mapa id -> racimo para el colapso. */
   const grupoDe = useMemo(() => {
     const m = new Map<number, GrupoCluster>()
@@ -54,8 +56,11 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
     return m
   }, [grupos])
 
-  /** Representantes (misma regla que tarjetas: menor folio presente del racimo). */
-  const visibles = useMemo(() => solicitudes.filter(s => {
+  /** Representantes (misma regla que tarjetas: menor folio presente del racimo).
+   * Con sinColapsar (vista de paquete) se muestran todas: cada elegida cuenta. */
+  const visibles = useMemo(() => {
+    if (sinColapsar) return solicitudes
+    return solicitudes.filter(s => {
     const grupo = s.id_solicitud != null ? grupoDe.get(s.id_solicitud) : undefined
     const presentes = grupo
       ? grupo.miembros.filter(x => solicitudes.some(r => r.id_solicitud === x.id_solicitud))
@@ -65,7 +70,8 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
       if (s.id_solicitud !== rep.id_solicitud) return false
     }
     return true
-  }), [solicitudes, grupoDe])
+    })
+  }, [solicitudes, grupoDe, sinColapsar])
 
   /** ST seleccionada (por defecto la primera; si sale de la lista, vuelve a la primera). */
   const [selId, setSelId] = useState<number | null>(null)
