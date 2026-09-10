@@ -57,3 +57,36 @@ export async function registrarPush(token: string): Promise<boolean> {
     return false
   }
 }
+
+/** Estado del push en este navegador (para el icono de campana). */
+export type EstadoPush =
+  | 'activas'       // Hay suscripción: llegan con la app cerrada.
+  | 'sin-permiso'   // Sin suscripción aún (o permiso sin pedir): se puede activar.
+  | 'bloqueadas'    // Permiso denegado: solo se arregla en el navegador.
+  | 'no-disponible' // Sin SW/PushManager (ej. iPhone sin agregar a inicio).
+  | 'sin-llave'     // Falta VITE_VAPID_PUBLIC_KEY en el deploy.
+
+/**
+ * Revisa si este navegador puede recibir push del sistema.
+ * No pide permiso ni registra nada; solo diagnostica.
+ */
+export async function estadoPush(): Promise<EstadoPush> {
+  try {
+    if (!VAPID_PUBLIC_KEY) return 'sin-llave'
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      return 'no-disponible'
+    }
+    if (Notification.permission === 'denied') return 'bloqueadas'
+    const regs = await navigator.serviceWorker.getRegistrations()
+    for (const reg of regs) {
+      try {
+        if (await reg.pushManager.getSubscription()) return 'activas'
+      } catch {
+        /* sigue buscando en otros registros */
+      }
+    }
+    return 'sin-permiso'
+  } catch {
+    return 'no-disponible'
+  }
+}

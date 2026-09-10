@@ -80,6 +80,8 @@ export default function App() {
             <Route path="/iniciar-sesion" element={<IniciarSesion />} />
             {/* Mensajería entre usuarios logueados (WebSocket + respaldo HTTP). */}
             <Route path="/chats" element={<Chats />} />
+            {/* Hilo dedicado (vista móvil a todo lo alto; en desktop selecciona el panel). */}
+            <Route path="/chats/:id" element={<Chats />} />
             {/* Paquetes de fichas recibidos/enviados + vista limpia de un paquete. */}
             <Route path="/paquetes" element={<Paquetes />} />
             <Route path="/paquetes/:id" element={<PaqueteDetalle />} />
