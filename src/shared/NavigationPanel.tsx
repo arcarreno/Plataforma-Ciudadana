@@ -140,13 +140,13 @@ export default function NavigationPanel({ open, onClose }: NavigationPanelProps)
             {user ? 'Consultar' : 'Consultar por CURP'}
           </Link>
 
-          {/* Chats y Paquetes — todos los perfiles logueados (drawer) */}
+          {/* Chats y Paquetes — todos los perfiles logueados (drawer, incluye hilo/detalle) */}
           {user && (
             <Link
               to="/chats"
               onClick={onClose}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-                location.pathname === '/chats'
+                location.pathname === '/chats' || location.pathname.startsWith('/chats/')
                   ? 'bg-guinda text-white shadow-button'
                   : 'text-gray-institutional hover:bg-guinda/10 hover:text-guinda'
               }`}

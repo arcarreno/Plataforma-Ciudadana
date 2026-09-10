@@ -72,11 +72,14 @@ export default function Header({
 
   /**
    * Determina si un path está activo para resaltar el link.
-   * Caso especial: '/admin' se considera activo para cualquier subruta de /admin
-   * excepto /admin/mapas (que tiene su propio link).
+   * Casos especiales: '/admin' abarca sus subrutas (menos mapas);
+   * '/chats' y '/paquetes' abarcan su vista de hilo/detalle (/:id).
    */
   function isActive(path: string) {
     if (path === '/admin') return location.pathname.startsWith('/admin') && location.pathname !== '/admin/mapas'
+    if (path === '/chats' || path === '/paquetes') {
+      return location.pathname === path || location.pathname.startsWith(`${path}/`)
+    }
     return location.pathname === path
   }
 
@@ -119,6 +122,10 @@ export default function Header({
     document.fonts?.ready.then(alCambiarLayout).catch(() => {})
     document.fonts?.addEventListener('loadingdone', alCambiarLayout)
     window.addEventListener('resize', alCambiarLayout)
+    // Si la nav cambia de tamaño (badges de no-leídos que aparecen/desaparecen,
+    // zoom, fuentes), el pill se re-mide para no quedar más ancho/angosto que el link.
+    const ro = new ResizeObserver(alCambiarLayout)
+    if (navRef.current) ro.observe(navRef.current)
     // Observa cambios de atributos de accesibilidad en <html> (font-size / contrast)
     const obs = new MutationObserver(alCambiarLayout)
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-font-size', 'data-contrast'] })
@@ -126,6 +133,7 @@ export default function Header({
       clearTimeout(t)
       document.fonts?.removeEventListener('loadingdone', alCambiarLayout)
       window.removeEventListener('resize', alCambiarLayout)
+      ro.disconnect()
       obs.disconnect()
     }
   }, [location.pathname, user])
