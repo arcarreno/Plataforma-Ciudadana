@@ -51,7 +51,7 @@ export interface Mensaje {
 export type EventoChat =
   | { tipo: 'mensaje'; conversacion_id: number; id: number; remitente_id: number; texto: string; fecha: string }
   | { tipo: 'ok'; id: number; conversacion_id: number; fecha: string }
-  | { tipo: 'paquete'; paquete_id: number; de?: string; total?: number }
+  | { tipo: 'paquete'; paquete_id: number; de?: string; total?: number; es_respuesta?: boolean }
 
 /** Resumen de paquete recibido/enviado. */
 export interface PaqueteResumen {
@@ -63,6 +63,8 @@ export interface PaqueteResumen {
   fecha: string
   leido: boolean
   total: number
+  /** Solo en respuestas: paquete original que se contestó. */
+  paquete_origen_id?: number | null
 }
 
 /** Helpers de auth: header Bearer si hay token. */
@@ -108,9 +110,27 @@ export function paquetesRecibidos(token?: string): Promise<{ data: PaqueteResume
   return api.get<{ data: PaqueteResumen[] }>('/api/paquetes/recibidos', auth(token))
 }
 
-/** Paquetes enviados por mí. */
+/** Paquetes enviados por mí (sin respuestas: esas viven en la otra pestaña). */
 export function paquetesEnviados(token?: string): Promise<{ data: PaqueteResumen[] }> {
   return api.get<{ data: PaqueteResumen[] }>('/api/paquetes/enviados', auth(token))
+}
+
+/** Respuestas a mis paquetes (las contestó el destinatario). */
+export function respuestasRecibidas(token?: string): Promise<{ data: PaqueteResumen[] }> {
+  return api.get<{ data: PaqueteResumen[] }>('/api/paquetes/respuestas', auth(token))
+}
+
+/**
+ * Responde un paquete recibido con el checklist contestado.
+ * @param pid - Paquete original (debo ser su destinatario).
+ * @param aceptadasIds - IDs aceptados (subset de las fichas del paquete).
+ */
+export function responderPaquete(
+  pid: number,
+  aceptadasIds: number[],
+  token?: string
+): Promise<{ data: { id: number; fecha: string; total: number; aceptadas: number } }> {
+  return api.post(`/api/paquetes/${pid}/responder`, { aceptadas_ids: aceptadasIds }, auth(token))
 }
 
 /**

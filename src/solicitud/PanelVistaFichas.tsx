@@ -28,6 +28,10 @@ interface PanelVistaFichasProps {
   onEnviarFichas?: () => void
   /** Título a la izquierda del contador (ej. leyenda del paquete). */
   titulo?: ReactNode
+  /** Checklist de respuesta: checkbox por ST + toggle (ausente = sin checklist). */
+  seleccionRespuesta?: { seleccionados: Set<number>; onToggle: (id: number) => void } | null
+  /** Veredictos de una respuesta enviada: ids aceptados (los demás = rechazados). */
+  aceptadas?: number[] | null
 }
 
 /** Color del punto de prioridad (misma escala que banners y pines). */
@@ -42,7 +46,7 @@ function colorPunto(peso?: number | null): string {
  * Panel estilo PowerPoint: sidebar de ST + ficha grande con banner por prioridad.
  * Memoizado: solo re-renderiza si cambian página, grupos o el callback.
  */
-function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnviarFichas, titulo }: PanelVistaFichasProps) {
+function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnviarFichas, titulo, seleccionRespuesta, aceptadas }: PanelVistaFichasProps) {
   /** Mapa id -> racimo para el colapso. */
   const grupoDe = useMemo(() => {
     const m = new Map<number, GrupoCluster>()
@@ -107,6 +111,11 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
       >
         {visibles.map(s => {
           const activa = actual?.id_solicitud === s.id_solicitud
+          const idNum = s.id_solicitud ?? -1
+          const conCheck = seleccionRespuesta != null && s.id_solicitud != null
+          const veredicto = aceptadas != null && s.id_solicitud != null
+            ? (aceptadas.includes(s.id_solicitud) ? 'si' : 'no')
+            : null
           return (
             <button
               key={s.id_solicitud}
@@ -133,6 +142,16 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
                 className="h-3 w-3 shrink-0 rounded-full border border-black/10"
                 style={{ backgroundColor: colorPunto(s.peso_ranking) }}
               />
+              {conCheck && (
+                <input
+                  type="checkbox"
+                  checked={seleccionRespuesta.seleccionados.has(idNum)}
+                  onChange={(e) => { e.stopPropagation(); seleccionRespuesta.onToggle(idNum) }}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Aceptar ${s.folio_unico}`}
+                  className="h-4 w-4 shrink-0 accent-[#7D2447]"
+                />
+              )}
               <span className="min-w-0 flex-1">
                 <span className={`block truncate font-mono text-xs font-bold tracking-wide ${activa ? 'text-white' : 'text-guinda'}`}>
                   {s.folio_unico}
@@ -141,6 +160,13 @@ function PanelVistaFichas({ solicitudes, grupos, onAbrir, ocultarDetalle, onEnvi
                   {s.tipo_solicitud}
                 </span>
               </span>
+              {veredicto && (
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                  veredicto === 'si' ? 'bg-green-700 text-white' : 'bg-red-100 text-red-700'
+                }`}>
+                  {veredicto === 'si' ? '✓ Sí' : '✗ No'}
+                </span>
+              )}
             </button>
           )
         })}

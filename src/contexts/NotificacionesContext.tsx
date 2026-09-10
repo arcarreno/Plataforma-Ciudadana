@@ -21,7 +21,7 @@ import { sileo } from 'sileo'
 import { useAuth } from './AuthContext'
 import { getToken } from '../lib/auth'
 import { ApiError } from '../lib/api'
-import { conectarChat, listarConversaciones, paquetesRecibidos, type EventoChat } from '../lib/chat'
+import { conectarChat, listarConversaciones, paquetesRecibidos, respuestasRecibidas, type EventoChat } from '../lib/chat'
 import { registrarPush } from '../lib/push'
 
 /** Causa del fallo de lectura (para banners): ninguno = todo sano. */
@@ -119,10 +119,11 @@ export function NotificacionesProvider({ children }: { children: ReactNode }) {
     Promise.all([
       listarConversaciones(t).then((r) => r.data ?? []),
       paquetesRecibidos(t).then((r) => r.data ?? []),
+      respuestasRecibidas(t).then((r) => r.data ?? []),
     ]).then(
-      ([convs, paqs]) => {
+      ([convs, paqs, resps]) => {
         setChatsNuevos(convs.reduce((a, c) => a + (c.no_leidos ?? 0), 0))
-        setPaquetesNuevos(paqs.filter((p) => !p.leido).length)
+        setPaquetesNuevos(paqs.filter((p) => !p.leido).length + resps.filter((p) => !p.leido).length)
         const nombres = new Map<number, string>()
         for (const c of convs) {
           const n = `${c.nombres ?? ''} ${c.apellidos ?? ''}`.trim()
@@ -168,7 +169,11 @@ export function NotificacionesProvider({ children }: { children: ReactNode }) {
             void refrescar()
           }
         } else if (ev.tipo === 'paquete') {
-          toastNotificacion('success', 'Paquete de fichas recibido', `De ${ev.de ?? 'un usuario'} (${ev.total ?? 0}). Revísalo en Paquetes.`)
+          if (ev.es_respuesta) {
+            toastNotificacion('success', 'Respuesta de paquete recibida', `De ${ev.de ?? 'un usuario'} (${ev.total ?? 0} fichas). Revísala en Paquetes → Respuestas.`)
+          } else {
+            toastNotificacion('success', 'Paquete de fichas recibido', `De ${ev.de ?? 'un usuario'} (${ev.total ?? 0}). Revísalo en Paquetes.`)
+          }
           void refrescar()
         }
       },
