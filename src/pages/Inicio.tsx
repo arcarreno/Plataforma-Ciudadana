@@ -77,6 +77,12 @@ const features: {
     icon: Shield,
     title: 'Seguimiento',
     desc: 'Consulta el estatus de tu solicitud con tu CURP en cualquier momento.',
+    video: {
+      src: '/videos/seguimiento.mp4',
+      titulo: 'Seguimiento',
+      descripcion:
+        'Escribe tu CURP y mira tu solicitud con su supervisor, las fotos de la visita y el checklist, paso a paso.',
+    },
   },
 ]
 
