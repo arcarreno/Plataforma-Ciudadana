@@ -598,6 +598,7 @@ const handleExportarExcel = async () => {
         isOpen={modalFichas}
         onClose={() => setModalFichas(false)}
         cargarTodas={cargarTodasSolicitudes}
+        grupos={grupos}
       />
 
       <VistaBtTablasModal

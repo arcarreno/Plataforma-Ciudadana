@@ -3,18 +3,21 @@
  * @description Modal para enviar un paquete de fichas a otro usuario: checklist
  * de fichas (todas las solicitudes, con buscar + todas/ninguna), selector de
  * destinatario (directorio), vista previa de lo elegido y envío como paquete.
+ * Las fichas en grupo de concentración van AGRUPADAS: bloque con cabecera
+ * ("Grupo ×N") + miembros indentados abajo; elegir 1 selecciona a todas.
  * El destinatario lo abre en la pestaña Paquetes y ve únicamente esas fichas.
  *
- * @props isOpen, onClose, cargarTodas (todas las solicitudes) — el token se lee aquí.
+ * @props isOpen, onClose, cargarTodas (todas las solicitudes), grupos (racimos).
  */
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckSquare, ListChecks, Package, Search, Send, Square, X } from 'lucide-react'
 import { getToken } from '../lib/auth'
 import { crearPaquete, listarUsuariosChat, type ChatUsuario } from '../lib/chat'
+import type { GrupoCluster } from '../lib/servidor'
 import type { Solicitud } from '../types/solicitud'
 
-/** Props: visibilidad, cierre y cargador de todas las solicitudes. */
+/** Props: visibilidad, cierre, cargador de solicitudes y racimos para agrupar. */
 interface ModalEnviarFichasProps {
   /** Si el modal está visible. */
   isOpen: boolean
@@ -22,6 +25,8 @@ interface ModalEnviarFichasProps {
   onClose: () => void
   /** Carga las solicitudes candidatas (respetando filtros de rol). */
   cargarTodas: () => Promise<Solicitud[]>
+  /** Racimos de concentración (agrupan visualmente y seleccionan en bloque). */
+  grupos?: GrupoCluster[]
 }
 
 /** Nombre mostrable de usuario o solicitud. */
@@ -30,7 +35,7 @@ function nombreUsuario(u: ChatUsuario): string {
   return n || u.username
 }
 
-export default function ModalEnviarFichas({ isOpen, onClose, cargarTodas }: ModalEnviarFichasProps) {
+export default function ModalEnviarFichas({ isOpen, onClose, cargarTodas, grupos = [] }: ModalEnviarFichasProps) {
   const [todas, setTodas] = useState<Solicitud[]>([])
   const [cargando, setCargando] = useState(true)
   const [usuarios, setUsuarios] = useState<ChatUsuario[]>([])
@@ -72,22 +77,80 @@ export default function ModalEnviarFichas({ isOpen, onClose, cargarTodas }: Moda
     }
   }, [isOpen, cargarTodas])
 
-  const fichasFiltradas = useMemo(() => {
+  /** Bloque del checklist: un grupo (cabecera + miembros) o una ficha sola. */
+  type Bloque =
+    | { tipo: 'grupo'; key: string; calle: string; miembros: Solicitud[] }
+    | { tipo: 'sola'; s: Solicitud }
+
+  /** Grupos primero (cabecera arriba + miembros indentados), solas después. */
+  const bloques: Bloque[] = useMemo(() => {
     const q = qFichas.trim().toLowerCase()
-    if (!q) return todas
-    return todas.filter((s) =>
+    const coincide = (s: Solicitud) =>
+      !q ||
       [s.folio_unico, s.tipo_solicitud, s.nombre_solicitante, s.calle, s.colonia]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    )
-  }, [todas, qFichas])
+        .some((v) => String(v).toLowerCase().includes(q))
+    // id -> miembros del racimo PRESENTES en la lista (solo racimos de 2+)
+    const enGrupo = new Map<number, Solicitud[]>()
+    for (const g of grupos) {
+      const presentes = g.miembros
+        .map((m) => todas.find((s) => s.id_solicitud === m.id_solicitud))
+        .filter((s): s is Solicitud => s != null)
+        .sort((a, b) => (a.folio_unico || '').localeCompare(b.folio_unico || ''))
+      if (presentes.length >= 2) {
+        for (const s of presentes) {
+          if (s.id_solicitud != null) enGrupo.set(s.id_solicitud, presentes)
+        }
+      }
+    }
+    const vistos = new Set<number>()
+    const gr: Bloque[] = []
+    for (const s of todas) {
+      if (s.id_solicitud == null || vistos.has(s.id_solicitud)) continue
+      const fam = enGrupo.get(s.id_solicitud)
+      if (fam) {
+        fam.forEach((m) => { if (m.id_solicitud != null) vistos.add(m.id_solicitud) })
+        const vis = fam.filter(coincide)
+        if (vis.length > 0) {
+          gr.push({
+            tipo: 'grupo',
+            key: vis.map((m) => m.id_solicitud).join('-'),
+            calle: fam[0].calle || '',
+            miembros: vis,
+          })
+        }
+      }
+    }
+    const solas: Bloque[] = todas
+      .filter((s) => (s.id_solicitud == null || !enGrupo.has(s.id_solicitud)) && coincide(s))
+      .map((s) => ({ tipo: 'sola' as const, s }))
+    return [...gr, ...solas]
+  }, [todas, qFichas, grupos])
 
   const qu = qUser.trim().toLowerCase()
   const usuariosFiltrados = usuarios.filter(
     (u) => !qu || nombreUsuario(u).toLowerCase().includes(qu) || u.username.toLowerCase().includes(qu),
   )
 
+  /** Alterna un bloque completo: si todas están, quita todas; si no, pone todas. */
+  const alternarGrupo = (miembros: Solicitud[]) => {
+    const ids = miembros.map((m) => m.id_solicitud).filter((x): x is number => x != null)
+    setSeleccionados((prev) => {
+      const next = new Set(prev)
+      if (ids.every((x) => next.has(x))) ids.forEach((x) => next.delete(x))
+      else ids.forEach((x) => next.add(x))
+      return next
+    })
+  }
+
+  /** Alterna una ficha; si está en grupo arrastra a todas sus compañeras. */
   const alternar = (id: number) => {
+    for (const b of bloques) {
+      if (b.tipo === 'grupo' && b.miembros.some((m) => m.id_solicitud === id)) {
+        alternarGrupo(b.miembros)
+        return
+      }
+    }
     setSeleccionados((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -192,29 +255,82 @@ export default function ModalEnviarFichas({ isOpen, onClose, cargarTodas }: Moda
                   {cargando ? (
                     <p className="px-2 py-3 text-xs text-gray-400">Cargando fichas…</p>
                   ) : (
-                    fichasFiltradas.map((s) => (
-                      <label
-                        key={s.id_solicitud}
-                        className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-guinda/5"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={seleccionados.has(s.id_solicitud!)}
-                          onChange={() => alternar(s.id_solicitud!)}
-                          className="h-4 w-4 shrink-0 accent-[#7D2447]"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-mono text-xs font-bold text-guinda">
-                            {s.folio_unico}
-                          </span>
-                          <span className="block truncate text-xs text-gray-institutional/70">
-                            {s.tipo_solicitud} · {s.calle || 'Sin calle'}
-                          </span>
-                        </span>
-                      </label>
-                    ))
+                    bloques.map((b) => {
+                      if (b.tipo === 'sola') {
+                        const s = b.s
+                        return (
+                          <label
+                            key={s.id_solicitud}
+                            className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-guinda/5"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={seleccionados.has(s.id_solicitud!)}
+                              onChange={() => alternar(s.id_solicitud!)}
+                              className="h-4 w-4 shrink-0 accent-[#7D2447]"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-mono text-xs font-bold text-guinda">
+                                {s.folio_unico}
+                              </span>
+                              <span className="block truncate text-xs text-gray-institutional/70">
+                                {s.tipo_solicitud} · {s.calle || 'Sin calle'}
+                              </span>
+                            </span>
+                          </label>
+                        )
+                      }
+                      const marcadas = b.miembros.filter((m) => seleccionados.has(m.id_solicitud!)).length
+                      const todasDentro = marcadas === b.miembros.length
+                      return (
+                        <div key={b.key} className="mb-1 overflow-hidden rounded-lg border border-guinda/25 bg-guinda/[0.03]">
+                          {/* Cabecera del grupo: una arriba, marca/desmarca a todas */}
+                          <label className="flex cursor-pointer items-center gap-2.5 px-2.5 py-2 transition-colors hover:bg-guinda/5">
+                            <input
+                              type="checkbox"
+                              checked={todasDentro}
+                              ref={(el) => { if (el) el.indeterminate = marcadas > 0 && !todasDentro }}
+                              onChange={() => alternarGrupo(b.miembros)}
+                              className="h-4 w-4 shrink-0 accent-[#7D2447]"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-bold text-guinda">
+                                Grupo ×{b.miembros.length}{b.calle ? ` · ${b.calle}` : ''}
+                              </span>
+                              <span className="block truncate text-[11px] text-gray-institutional/60">
+                                {marcadas}/{b.miembros.length} elegidas · elegir 1 elige a todas
+                              </span>
+                            </span>
+                          </label>
+                          {/* Miembros indentados abajo (tab) */}
+                          <div className="ml-5 border-l-2 border-guinda/20 pl-1 pb-1">
+                            {b.miembros.map((s) => (
+                              <label
+                                key={s.id_solicitud}
+                                className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-guinda/5"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={seleccionados.has(s.id_solicitud!)}
+                                  onChange={() => alternar(s.id_solicitud!)}
+                                  className="h-4 w-4 shrink-0 accent-[#7D2447]"
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-mono text-xs font-bold text-guinda">
+                                    {s.folio_unico}
+                                  </span>
+                                  <span className="block truncate text-xs text-gray-institutional/70">
+                                    {s.tipo_solicitud} · {s.calle || 'Sin calle'}
+                                  </span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })
                   )}
-                  {!cargando && fichasFiltradas.length === 0 && (
+                  {!cargando && bloques.length === 0 && (
                     <p className="px-2 py-3 text-xs text-gray-400">Sin resultados</p>
                   )}
                 </div>
